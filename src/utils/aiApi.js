@@ -1,0 +1,216 @@
+export const PROVIDERS = {
+  google: {
+    name: 'Google AI Studio',
+    keyPlaceholder: 'AIza...',
+    models: [
+      { id: 'gemma-3-27b-it',      label: 'Gemma 3 27B' },
+      { id: 'gemma-3-12b-it',      label: 'Gemma 3 12B' },
+      { id: 'gemma-3-4b-it',       label: 'Gemma 3 4B' },
+      { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
+      { id: 'gemini-1.5-pro',      label: 'Gemini 1.5 Pro' },
+      { id: 'gemini-1.5-flash',    label: 'Gemini 1.5 Flash' },
+    ],
+    defaultModel: 'gemma-3-27b-it',
+  },
+  anthropic: {
+    name: 'Anthropic',
+    keyPlaceholder: 'sk-ant-...',
+    models: [
+      { id: 'claude-sonnet-4-6',          label: 'Claude Sonnet 4.6' },
+      { id: 'claude-opus-4-7',            label: 'Claude Opus 4.7' },
+      { id: 'claude-haiku-4-5-20251001',  label: 'Claude Haiku 4.5' },
+    ],
+    defaultModel: 'claude-sonnet-4-6',
+  },
+  openai: {
+    name: 'OpenAI-compatible',
+    keyPlaceholder: 'sk-...',
+    hasBaseUrl: true,
+    models: [
+      { id: 'gpt-4o',                    label: 'GPT-4o' },
+      { id: 'gpt-4o-mini',               label: 'GPT-4o mini' },
+      { id: 'mistral-large-latest',      label: 'Mistral Large' },
+      { id: 'llama-3.3-70b-versatile',   label: 'Llama 3.3 70B (Groq)' },
+    ],
+    defaultModel: '',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+  },
+}
+
+// ── Shared SSE reader ─────────────────────────────────────────────────────────
+
+async function readSSE(body, onEvent) {
+  const reader  = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (!data || data === '[DONE]') continue
+      try {
+        const stop = onEvent(JSON.parse(data))
+        if (stop) return
+      } catch (_) { /* ignore parse errors */ }
+    }
+  }
+}
+
+// ── Provider implementations ──────────────────────────────────────────────────
+
+async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError }) {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model, max_tokens: 4096, stream: true, system: systemPrompt, messages }),
+    })
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      return onError(msg)
+    }
+    await readSSE(res.body, (parsed) => {
+      if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') onChunk(parsed.delta.text)
+      if (parsed.type === 'message_stop') { onDone(); return true }
+    })
+    onDone()
+  } catch (e) { onError(e.message || 'Network error') }
+}
+
+async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError }) {
+  try {
+    const contents = messages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
+    const body = { contents, generationConfig: { maxOutputTokens: 4096 } }
+    if (systemPrompt) body.systemInstruction = { parts: [{ text: systemPrompt }] }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      return onError(msg)
+    }
+    await readSSE(res.body, (parsed) => {
+      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text
+      if (text) onChunk(text)
+      if (parsed.candidates?.[0]?.finishReason === 'STOP') { onDone(); return true }
+    })
+    onDone()
+  } catch (e) { onError(e.message || 'Network error') }
+}
+
+async function streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError }) {
+  try {
+    const url        = `${(baseUrl || PROVIDERS.openai.defaultBaseUrl).replace(/\/$/, '')}/chat/completions`
+    const apiMessages = [{ role: 'system', content: systemPrompt }, ...messages]
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, max_tokens: 4096, stream: true, messages: apiMessages }),
+    })
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      return onError(msg)
+    }
+    await readSSE(res.body, (parsed) => {
+      const text = parsed.choices?.[0]?.delta?.content
+      if (text) onChunk(text)
+      if (parsed.choices?.[0]?.finish_reason === 'stop') { onDone(); return true }
+    })
+    onDone()
+  } catch (e) { onError(e.message || 'Network error') }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError }) {
+  if (!apiKey)              return onError('No API key configured.')
+  if (provider === 'anthropic') return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'google')    return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'openai')    return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError })
+  onError(`Unknown provider: ${provider}`)
+}
+
+export function buildSystemPrompt(novel, context, store) {
+  const lines = [
+    `You are a creative writing assistant for the novel "${novel?.title || 'Untitled'}".`,
+    novel?.description ? `Premise: ${novel.description}` : '',
+    'Help with writing, plot, character development, world-building, and any creative task.',
+  ].filter(Boolean)
+
+  const { characterIds, locationIds, loreEntryIds, chapterIds, customInstruction } = context
+
+  if (characterIds?.length) {
+    const chars = (store.characters || []).filter(c => characterIds.includes(c.id))
+    if (chars.length) {
+      lines.push('\n--- CHARACTERS ---')
+      chars.forEach(c => {
+        lines.push(`\n${c.name}${c.role ? ` — ${c.role}` : ''}`)
+        if (c.familyGroup) lines.push(`Family: ${c.familyGroup}`)
+        if (c.bio) lines.push(c.bio)
+        if (c.keywords?.length) lines.push(`Also known as: ${c.keywords.join(', ')}`)
+      })
+    }
+  }
+
+  if (locationIds?.length) {
+    const locs = (store.locations || []).filter(l => locationIds.includes(l.id))
+    if (locs.length) {
+      lines.push('\n--- LOCATIONS ---')
+      locs.forEach(l => {
+        lines.push(`\n${l.name}${l.category ? ` (${l.category})` : ''}`)
+        if (l.description) lines.push(l.description)
+      })
+    }
+  }
+
+  if (loreEntryIds?.length) {
+    const entries = (store.loreEntries || []).filter(e => loreEntryIds.includes(e.id))
+    if (entries.length) {
+      lines.push('\n--- LORE ---')
+      entries.forEach(e => {
+        lines.push(`\n${e.title}${e.category ? ` (${e.category})` : ''}`)
+        if (e.content) lines.push(e.content)
+      })
+    }
+  }
+
+  if (chapterIds?.length) {
+    lines.push('\n--- MANUSCRIPT ---')
+    chapterIds.forEach(chapId => {
+      const chap = (store.chapters || []).find(c => c.id === chapId)
+      if (!chap) return
+      const num = (store.chapters || []).findIndex(c => c.id === chapId) + 1
+      lines.push(`\n[Chapter ${num}${chap.title ? `: ${chap.title}` : ''}]`)
+      ;(store.scenes || []).filter(s => s.chapterId === chapId).forEach(s => {
+        if (s.content?.trim()) lines.push(s.content)
+      })
+    })
+  }
+
+  if (customInstruction?.trim()) {
+    lines.push(`\n--- ADDITIONAL CONTEXT ---\n${customInstruction.trim()}`)
+  }
+
+  return lines.join('\n')
+}
