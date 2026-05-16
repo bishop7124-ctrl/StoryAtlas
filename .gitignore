@@ -8,9 +8,19 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+node_modules.broken-*/
 dist
 dist-ssr
+dist-test
 *.local
+
+# Vite
+.vite/
+vite.config.mjs.timestamp*
+
+# Backup / quarantine folders (do not commit)
+backup-before-*/
+broken-files/
 
 # Editor directories and files
 .vscode/*

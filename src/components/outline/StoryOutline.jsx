@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { getProjectType } from '../../constants/projectTypes'
 
 const ChevronIcon = ({ open }) => (
   <svg
@@ -24,11 +25,11 @@ const MoveBtn = ({ onClick, title, disabled, children }) => (
   </button>
 )
 
-const DeleteBtn = ({ onClick }) => (
+const DeleteBtn = ({ onClick, title = 'Delete' }) => (
   <button
     onClick={onClick}
     className="opacity-0 group-hover:opacity-100 p-0.5 text-[var(--text-muted)] hover:text-red-400 transition-all"
-    title="Delete"
+    title={title}
   >
     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
@@ -95,7 +96,7 @@ const InlineTitle = ({ value, onSave, className }) => {
   )
 }
 
-const SceneRow = ({ scene, sceneIdx, isFirst, isLast, chapterScenes, updateScene, reorderScene, deleteScene }) => {
+const SceneRow = ({ scene, sceneIdx, isFirst, isLast, updateScene, reorderScene, deleteScene, labels }) => {
   const wordCount = useMemo(() => {
     return scene.content?.trim().split(/\s+/).filter(Boolean).length || 0
   }, [scene.content])
@@ -110,11 +111,11 @@ const SceneRow = ({ scene, sceneIdx, isFirst, isLast, chapterScenes, updateScene
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest flex-shrink-0">
-            Scene {sceneIdx + 1}
+            {labels.level3} {sceneIdx + 1}
           </span>
           <InlineTitle
             value={scene.title === 'Scene' ? '' : scene.title}
-            onSave={t => updateScene(scene.id, { title: t || 'Scene' })}
+            onSave={t => updateScene(scene.id, { title: t || labels.level3 })}
             className="text-sm text-[var(--text-muted)] italic flex-1"
           />
           {wordCount > 0 && (
@@ -124,24 +125,31 @@ const SceneRow = ({ scene, sceneIdx, isFirst, isLast, chapterScenes, updateScene
         <AutoTextarea
           value={scene.synopsis}
           onChange={v => updateScene(scene.id, { synopsis: v })}
-          placeholder="Scene synopsis — what happens, who's involved, what changes…"
+          placeholder={`${labels.level3} synopsis — what happens, who's involved, what changes…`}
           className="text-xs opacity-80 pl-0"
         />
       </div>
 
-      <DeleteBtn onClick={() => deleteScene(scene.id)} />
+      <DeleteBtn
+        title={`Delete ${labels.level3.toLowerCase()}`}
+        onClick={() => {
+          if (!confirm(`Delete this ${labels.level3.toLowerCase()} from both the outline and manuscript?`)) return
+          deleteScene(scene.id)
+        }}
+      />
     </div>
   )
 }
 
-const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene }) => {
+const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels }) => {
   const [open, setOpen] = useState(true)
   const chapterScenes = useMemo(() => scenes.filter(s => s.chapterId === chapter.id), [scenes, chapter.id])
   const wordCount = useMemo(() => chapterScenes.reduce((n, s) => n + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0), [chapterScenes])
 
-  const title = !chapter.title || chapter.title.toLowerCase().startsWith('chapter')
-    ? `Chapter ${chapterNum}`
-    : `Chapter ${chapterNum}: ${chapter.title}`
+  const l2lower = labels.level2.toLowerCase()
+  const title = !chapter.title || chapter.title.toLowerCase().startsWith(l2lower)
+    ? `${labels.level2} ${chapterNum}`
+    : `${labels.level2} ${chapterNum}: ${chapter.title}`
 
   return (
     <div className="ml-6 border-l border-[var(--border)] pl-4">
@@ -162,18 +170,26 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
               onSave={t => updateChapter(chapter.id, { title: t })}
               className="text-sm font-semibold text-[var(--text-main)]"
             />
-            <span className="text-[10px] text-[var(--text-muted)] opacity-60">{chapterScenes.length} scene{chapterScenes.length !== 1 ? 's' : ''}</span>
+            <span className="text-[10px] text-[var(--text-muted)] opacity-60">{chapterScenes.length} {labels.level3.toLowerCase()}{chapterScenes.length !== 1 ? 's' : ''}</span>
             {wordCount > 0 && <span className="text-[10px] font-mono text-[var(--accent)] opacity-60">{wordCount.toLocaleString()}w</span>}
           </div>
           <AutoTextarea
             value={chapter.synopsis}
             onChange={v => updateChapter(chapter.id, { synopsis: v })}
-            placeholder="Chapter synopsis…"
+            placeholder={`${labels.level2} synopsis…`}
             className="text-xs opacity-70 mt-1"
           />
         </div>
 
-        <DeleteBtn onClick={() => deleteChapter(chapter.id)} />
+        <DeleteBtn
+          title={`Delete ${labels.level2.toLowerCase()}`}
+          onClick={() => {
+            const count = chapterScenes.length
+            const detail = count ? ` This will also delete ${count} ${labels.level3.toLowerCase()}${count === 1 ? '' : 's'}.` : ''
+            if (!confirm(`Delete this ${labels.level2.toLowerCase()} from both the outline and manuscript?${detail}`)) return
+            deleteChapter(chapter.id)
+          }}
+        />
       </div>
 
       {open && (
@@ -185,17 +201,17 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
               sceneIdx={idx}
               isFirst={idx === 0}
               isLast={idx === chapterScenes.length - 1}
-              chapterScenes={chapterScenes}
               updateScene={updateScene}
               reorderScene={reorderScene}
               deleteScene={deleteScene}
+              labels={labels}
             />
           ))}
           <button
-            onClick={() => addScene(chapter.id, 'Scene')}
+            onClick={() => addScene(chapter.id, labels.level3)}
             className="ml-3 text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--accent)] uppercase tracking-wider transition-colors py-1"
           >
-            + Scene
+            + {labels.level3}
           </button>
         </div>
       )}
@@ -203,7 +219,7 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
   )
 }
 
-const ActCard = ({ act, actIdx, chapterGlobalNums, chapters, scenes, isFirst, isLast, updateAct, reorderAct, deleteAct, addChapter, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene }) => {
+const ActCard = ({ act, chapterGlobalNums, chapters, scenes, isFirst, isLast, updateAct, reorderAct, deleteAct, addChapter, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels }) => {
   const [open, setOpen] = useState(true)
   const actChapters = useMemo(() => chapters.filter(c => c.actId === act.id), [chapters, act.id])
   const wordCount = useMemo(() => {
@@ -230,18 +246,28 @@ const ActCard = ({ act, actIdx, chapterGlobalNums, chapters, scenes, isFirst, is
               onSave={t => updateAct(act.id, { title: t })}
               className="text-xs font-black text-[var(--text-main)] uppercase tracking-widest"
             />
-            <span className="text-[10px] text-[var(--text-muted)] opacity-60">{actChapters.length} ch</span>
+            <span className="text-[10px] text-[var(--text-muted)] opacity-60">{actChapters.length} {labels.level2.toLowerCase().slice(0,3)}</span>
             {wordCount > 0 && <span className="text-[10px] font-mono text-[var(--accent)] opacity-60">{wordCount.toLocaleString()}w</span>}
           </div>
           <AutoTextarea
             value={act.synopsis}
             onChange={v => updateAct(act.id, { synopsis: v })}
-            placeholder="Act synopsis — the arc, the stakes, how it ends…"
+            placeholder={`${labels.level1} synopsis — the arc, the stakes, how it ends…`}
             className="text-xs opacity-70 mt-1"
           />
         </div>
 
-        <DeleteBtn onClick={() => deleteAct(act.id)} />
+        <DeleteBtn
+          title={`Delete ${labels.level1.toLowerCase()}`}
+          onClick={() => {
+            const sceneCount = actChapters.reduce((n, chap) => n + scenes.filter(s => s.chapterId === chap.id).length, 0)
+            const detail = actChapters.length || sceneCount
+              ? ` This will also delete ${actChapters.length} ${labels.level2.toLowerCase()}${actChapters.length === 1 ? '' : 's'} and ${sceneCount} ${labels.level3.toLowerCase()}${sceneCount === 1 ? '' : 's'}.`
+              : ''
+            if (!confirm(`Delete this ${labels.level1.toLowerCase()} from both the outline and manuscript?${detail}`)) return
+            deleteAct(act.id)
+          }}
+        />
       </div>
 
       {open && (
@@ -261,13 +287,14 @@ const ActCard = ({ act, actIdx, chapterGlobalNums, chapters, scenes, isFirst, is
               updateScene={updateScene}
               reorderScene={reorderScene}
               deleteScene={deleteScene}
+              labels={labels}
             />
           ))}
           <button
             onClick={() => addChapter(act.id, '')}
             className="ml-10 text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--accent)] uppercase tracking-wider transition-colors py-1"
           >
-            + Chapter
+            + {labels.level2}
           </button>
         </div>
       )}
@@ -280,7 +307,10 @@ export default function StoryOutline({ store }) {
     acts, addAct, updateAct, deleteAct, reorderAct,
     chapters, addChapter, updateChapter, deleteChapter, reorderChapter,
     scenes, addScene, updateScene, deleteScene, reorderScene,
+    activeNovel,
   } = store
+
+  const labels = getProjectType(activeNovel?.type).structure
 
   const totalWords = useMemo(() => scenes.reduce((n, s) => n + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0), [scenes])
   const totalScenes = scenes.length
@@ -298,37 +328,38 @@ export default function StoryOutline({ store }) {
   return (
     <div className="h-full flex flex-col bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 px-8 py-5 border-b border-[var(--border)] flex items-center justify-between bg-[var(--bg-nav)]">
+      <div className="studio-topbar flex-shrink-0 px-8 py-5 flex items-center justify-between">
         <div>
-          <h1 className="text-xs font-black uppercase tracking-widest text-[var(--text-muted)]">Story Outline</h1>
+          <p className="eyebrow">Structure</p>
+          <h1 className="font-serif text-2xl font-bold text-[var(--text-main)]">Story Outline</h1>
           <div className="flex gap-4 mt-1 text-[11px] text-[var(--text-muted)]">
-            <span>{acts.length} act{acts.length !== 1 ? 's' : ''}</span>
-            <span>{totalChapters} chapter{totalChapters !== 1 ? 's' : ''}</span>
-            <span>{totalScenes} scene{totalScenes !== 1 ? 's' : ''}</span>
+            <span>{acts.length} {labels.level1.toLowerCase()}{acts.length !== 1 ? 's' : ''}</span>
+            <span>{totalChapters} {labels.level2.toLowerCase()}{totalChapters !== 1 ? 's' : ''}</span>
+            <span>{totalScenes} {labels.level3.toLowerCase()}{totalScenes !== 1 ? 's' : ''}</span>
             {totalWords > 0 && <span className="text-[var(--accent)] font-mono font-bold">{totalWords.toLocaleString()} words</span>}
           </div>
         </div>
         <button
-          onClick={() => addAct(`Act ${acts.length + 1}`)}
-          className="text-xs font-bold uppercase tracking-wider text-[var(--bg-main)] bg-[var(--accent)] px-4 py-2 rounded hover:opacity-90 transition-opacity"
+          onClick={() => addAct(`${labels.level1} ${acts.length + 1}`)}
+          className="btn btn-primary"
         >
-          + Act
+          + {labels.level1}
         </button>
       </div>
 
       {/* Outline tree */}
       <div className="flex-1 overflow-y-auto p-8">
         {acts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <p className="text-[var(--text-muted)] text-sm">No acts yet.</p>
+          <div className="empty-state mx-auto mt-12 max-w-lg">
+            <p className="text-[var(--text-muted)] text-sm">No {labels.level1.toLowerCase()}s yet.</p>
             <p className="text-[var(--text-muted)] text-xs opacity-60 max-w-xs">
-              Add your first act to start building the outline. Acts, chapters, and scenes created here are reflected instantly in the Manuscript, and vice versa.
+              Add your first {labels.level1.toLowerCase()} to start building the outline. {labels.level1}s, {labels.level2.toLowerCase()}s, and {labels.level3.toLowerCase()}s created here are reflected instantly in the writing view, and vice versa.
             </p>
             <button
-              onClick={() => addAct('Act 1')}
-              className="text-xs font-bold uppercase tracking-wider text-[var(--bg-main)] bg-[var(--accent)] px-5 py-2 rounded hover:opacity-90 transition-opacity mt-2"
+              onClick={() => addAct(`${labels.level1} 1`)}
+              className="btn btn-primary mt-4"
             >
-              + Add First Act
+              + Add First {labels.level1}
             </button>
           </div>
         ) : (
@@ -337,7 +368,6 @@ export default function StoryOutline({ store }) {
               <ActCard
                 key={act.id}
                 act={act}
-                actIdx={idx}
                 chapterGlobalNums={chapterGlobalNums}
                 chapters={chapters}
                 scenes={scenes}
@@ -354,6 +384,7 @@ export default function StoryOutline({ store }) {
                 updateScene={updateScene}
                 reorderScene={reorderScene}
                 deleteScene={deleteScene}
+                labels={labels}
               />
             ))}
           </div>

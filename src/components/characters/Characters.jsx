@@ -2,10 +2,11 @@ import { useState } from 'react'
 import Modal from '../shared/Modal'
 import { FACTION_ICONS } from '../../constants/factionIcons'
 import { REL_TYPES } from '../../constants/Constants'
+import { StudioSplit, StudioIndex, StudioRecord, StudioDetail, StudioButton, StudioEmpty, StudioPageHeader, StudioNote } from '../presentation/Studio'
 
 // The Fix: uses theme variables so all 4 themes apply correctly
-const INPUT = 'w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] outline-none transition-colors placeholder:text-[var(--text-muted)]'
-const LABEL = 'block text-xs text-[var(--text-muted)] uppercase tracking-widest mb-1.5'
+const INPUT = 'field w-full px-3 py-2 text-sm placeholder:text-[var(--text-muted)]'
+const LABEL = 'block form-label mb-1.5'
 
 function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
   const [form, setForm] = useState({
@@ -20,8 +21,17 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
     spouseIds: initial?.spouseIds || [],
     relationships: initial?.relationships || [],
     keywords: initial?.keywords || [],
+    image: initial?.image || '',
   })
   const [keywordInput, setKeywordInput] = useState('')
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => setForm(prev => ({ ...prev, image: ev.target.result }))
+    reader.readAsDataURL(file)
+  }
 
   const handleChange = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }))
   const toggleArrayValue = (field, value) => {
@@ -143,6 +153,24 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
       </div>
 
       <div>
+        <label className={LABEL}>Character Portrait</label>
+        <div className="flex items-center gap-4">
+          {form.image && (
+            <img src={form.image} alt="Portrait" className="w-20 h-20 rounded-lg object-cover border border-[var(--border)] flex-shrink-0" />
+          )}
+          <div className="flex items-center gap-2">
+            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="char-image-upload" />
+            <label htmlFor="char-image-upload" className="cursor-pointer text-xs text-[var(--accent)] border border-[var(--accent)]/30 hover:border-[var(--accent)] px-3 py-1.5 rounded transition-colors">
+              {form.image ? 'Change Image' : 'Upload Image'}
+            </label>
+            {form.image && (
+              <button type="button" onClick={() => setForm(prev => ({ ...prev, image: '' }))} className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors">Remove</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div>
         <label className={LABEL}>Biography</label>
         <textarea className={INPUT + ' h-48 resize-none'} value={form.bio} onChange={handleChange('bio')} placeholder="Describe their history..." />
       </div>
@@ -236,82 +264,91 @@ export default function Characters({ store }) {
   }
 
   return (
-    <div className="flex h-full bg-[var(--bg-main)] text-left">
-      <div className="w-64 bg-[var(--bg-nav)]/40 border-r border-[var(--border)] flex flex-col">
-        <div className="p-3 border-b border-[var(--border)] space-y-2">
-          <div className="flex justify-between items-center text-[var(--text-main)]">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Characters</h2>
-            <button onClick={() => { setEditTarget(null); setShowForm(true); }} className="text-xs text-[var(--accent)] font-bold">+ NEW</button>
-          </div>
+    <StudioSplit variant="dossier">
+      <StudioIndex
+        eyebrow="Characters"
+        title="Dossiers"
+        tools={<StudioButton tone="primary" size="sm" onClick={() => { setEditTarget(null); setShowForm(true); }}>New</StudioButton>}
+      >
           <input
             value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search..." className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
+            placeholder="Search..." className="field w-full px-2 py-1.5 text-xs placeholder:text-[var(--text-muted)]"
           />
-        </div>
-        <div className="flex-1 overflow-y-auto">
           {filtered.map(c => (
-            <button
+            <StudioRecord
               key={c.id}
               onClick={() => setSelectedCharacterId(c.id)}
-              className={`w-full text-left px-4 py-3 border-b border-[var(--border)] transition-all ${selectedCharacterId === c.id ? 'bg-[var(--accent-fade)] border-l-2 border-[var(--accent)]' : 'hover:bg-[var(--bg-hover)]'}`}
+              active={selectedCharacterId === c.id}
             >
-              <div className="text-sm font-medium text-[var(--text-main)]">{c.name}</div>
-              <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{c.role || 'Supporting'}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex-1 p-10 overflow-y-auto">
-        {!selected ? (
-          <div className="h-full flex items-center justify-center text-[var(--text-muted)] italic">Select a character</div>
-        ) : (
-          <div className="max-w-2xl">
-            <div className="flex justify-between items-start mb-6 text-left">
-              <div className="flex gap-4">
-                {getFactionIconUrl(selected) && (
-                  <img src={getFactionIconUrl(selected)} alt="Faction Icon" className="w-14 h-14 opacity-60 mt-1 flex-shrink-0" />
+              <div className="flex items-center gap-2.5">
+                {c.image ? (
+                  <img src={c.image} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border)]" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-[var(--accent-fade)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-[var(--accent)]">{c.name.charAt(0)}</span>
+                  </div>
                 )}
                 <div>
-                  <h1 className="text-4xl font-bold text-[var(--text-main)]">{selected.name}</h1>
-                  <p className="text-[var(--accent)] font-medium mt-1">{selected.role || 'Character'}</p>
-
-                  <div className="flex gap-3 mt-3">
-                    {selected.familyGroup && (
-                      <span className="text-[var(--text-muted)] text-xs uppercase bg-[var(--bg-nav)] px-2 py-1 rounded">House {selected.familyGroup}</span>
-                    )}
-                    {selected.factionId && factions.find(f => f.id === selected.factionId) && (
-                      <span className="text-[var(--accent)] text-xs uppercase bg-[var(--accent-fade)] border border-[var(--accent)]/20 px-2 py-1 rounded">
-                        {factions.find(f => f.id === selected.factionId).name}
-                      </span>
-                    )}
-                  </div>
+                  <div className="text-sm font-medium text-[var(--text-main)]">{c.name}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{c.role || 'Supporting'}</div>
                 </div>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => { setEditTarget(selected); setShowForm(true); }} className="text-xs text-[var(--text-muted)] border border-[var(--border)] px-3 py-1 rounded hover:text-[var(--text-main)] transition-colors">Edit</button>
-                <button onClick={() => { if(confirm("Delete?")) { deleteCharacter(selected.id); setSelectedCharacterId(null); } }} className="text-xs text-red-500/60 border border-[var(--border)] px-3 py-1 rounded hover:text-red-500 transition-colors">Delete</button>
+            </StudioRecord>
+          ))}
+      </StudioIndex>
+
+      <StudioDetail>
+        {!selected ? (
+          <StudioEmpty title="Select a dossier" body="Choose a character from the characters list." />
+        ) : (
+          <div className="max-w-5xl">
+            <StudioPageHeader
+              eyebrow="Character dossier"
+              title={selected.name}
+              meta={selected.role || 'Character'}
+              actions={(
+                <>
+                  <StudioButton tone="secondary" size="sm" onClick={() => { setEditTarget(selected); setShowForm(true); }}>Edit</StudioButton>
+                  <StudioButton tone="secondary" size="sm" onClick={() => { if(confirm("Delete?")) { deleteCharacter(selected.id); setSelectedCharacterId(null); } }}>Delete</StudioButton>
+                </>
+              )}
+            >
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                {selected.image && (
+                  <img src={selected.image} alt={selected.name} className="w-24 h-24 rounded-xl object-cover border border-[var(--border)] flex-shrink-0" />
+                )}
+                {getFactionIconUrl(selected) && (
+                  <img src={getFactionIconUrl(selected)} alt="Faction Icon" className="w-10 h-10 opacity-60 flex-shrink-0" />
+                )}
+                {selected.familyGroup && (
+                  <span className="chip">House {selected.familyGroup}</span>
+                )}
+                {selected.factionId && factions.find(f => f.id === selected.factionId) && (
+                  <span className="chip chip-accent">
+                    {factions.find(f => f.id === selected.factionId).name}
+                  </span>
+                )}
               </div>
-            </div>
-            <div className="border-t border-[var(--border)] pt-8 text-left space-y-8">
+            </StudioPageHeader>
+            <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
               {selected.keywords?.length > 0 && (
-                <div>
+                <StudioNote>
                   <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-3">Manuscript Keywords</h3>
                   <div className="flex flex-wrap gap-2">
                     {selected.keywords.map(kw => (
                       <span key={kw} className="bg-[var(--accent-fade)] border border-[var(--accent)]/30 text-[var(--accent)] px-2 py-0.5 rounded text-xs">{kw}</span>
                     ))}
                   </div>
-                </div>
+                </StudioNote>
               )}
-              <div>
+              <StudioNote className={selected.keywords?.length > 0 ? '' : 'lg:col-span-2'}>
                 <h3 className="text-xs text-[var(--text-muted)] uppercase tracking-widest mb-4">Biography</h3>
                 <p className="text-[var(--text-main)] whitespace-pre-wrap leading-relaxed text-lg">{selected.bio || "No biography provided."}</p>
-              </div>
+              </StudioNote>
             </div>
           </div>
         )}
-      </div>
+      </StudioDetail>
 
       {showForm && (
         <Modal title={editTarget ? `Edit ${editTarget.name}` : "Create Character"} onClose={() => setShowForm(false)} wide>
@@ -324,6 +361,6 @@ export default function Characters({ store }) {
           />
         </Modal>
       )}
-    </div>
+    </StudioSplit>
   )
 }

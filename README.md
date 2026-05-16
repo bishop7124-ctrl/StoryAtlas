@@ -1,6 +1,6 @@
-# NovelForge
+# StoryAtlas
 
-NovelForge is a local-first worldbuilding and writing workspace for planning novels.
+StoryAtlas is a local-first worldbuilding and writing workspace for planning novels.
 It includes modules for character management, factions, locations, timeline/history, map building, and manuscript drafting.
 
 ## Features

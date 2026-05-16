@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { getRelType } from "../../constants/Constants";
 import { FACTION_ICONS } from "../../constants/factionIcons";
 
@@ -40,6 +41,15 @@ export default function FamilyTree({ store }) {
   }, [characters]);
 
   const selectedCharacter = characters.find((c) => c.id === selectedCharacterId) || null;
+  const hoveredCharacter = hoveredCharId ? characters.find((c) => c.id === hoveredCharId) : null;
+
+  const updateHoverPosition = (target) => {
+    const rect = target.getBoundingClientRect();
+    setHoverPosition({
+      x: Math.min(Math.max(rect.left + rect.width / 2, 148), window.innerWidth - 148),
+      y: Math.max(rect.top - 10, 16),
+    });
+  };
 
   const generations = useMemo(() => {
     const gen = new Map();
@@ -198,7 +208,7 @@ export default function FamilyTree({ store }) {
                     </div>
                   </div>
 
-                  <div className="overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg-main)] tree-container relative">
+                  <div className="overflow-auto rounded-lg border border-[var(--border)] bg-[var(--bg-main)] tree-container relative" onScroll={() => setHoveredCharId(null)}>
                     <svg width={section.width} height={section.height} className="block min-w-full">
                       {section.generationRows.map((row) => (
                         <text
@@ -289,58 +299,48 @@ export default function FamilyTree({ store }) {
                         const ageLabel = getAgeLabel(char);
                         const faction = factions.find((f) => f.id === char.factionId);
                         const icon = FACTION_ICONS.find((i) => i.id === faction?.iconId)?.url;
+                        const hasPhoto = Boolean(char.image);
+                        const photoSize = 46;
+                        const photoX = p.x + 7;
+                        const photoY = p.y + (NODE_H - photoSize) / 2;
+                        const textX = hasPhoto ? p.x + photoSize + 14 : p.x + 10;
+                        const clipId = `clip-${char.id}`;
                         return (
                           <g
                             key={`node-${char.id}`}
                             className="tree-node"
                             style={{ cursor: "pointer" }}
                             onMouseEnter={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              const containerRect = e.currentTarget.closest('.tree-container')?.getBoundingClientRect() || rect;
-                              setHoverPosition({
-                                x: rect.left - containerRect.left + NODE_W / 2,
-                                y: rect.top - containerRect.top - 8
-                              });
+                              updateHoverPosition(e.currentTarget);
+                              setHoveredCharId(char.id);
+                            }}
+                            onMouseMove={(e) => {
+                              updateHoverPosition(e.currentTarget);
                               setHoveredCharId(char.id);
                             }}
                             onMouseLeave={() => setHoveredCharId(null)}
                           >
+                            {hasPhoto && (
+                              <defs>
+                                <clipPath id={clipId}>
+                                  <rect x={photoX} y={photoY} width={photoSize} height={photoSize} rx="6" />
+                                </clipPath>
+                              </defs>
+                            )}
                             <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill="var(--bg-nav)" stroke={selectedCharacterId === char.id ? "var(--accent)" : "var(--border)"} strokeWidth={selectedCharacterId === char.id ? "2.6" : "1.4"} onClick={() => setSelectedCharacterId(char.id)} />
-                            <text x={p.x + 10} y={p.y + 21} fill="var(--text-main)" fontSize="12" fontWeight="700">{char.name}</text>
-                            <text x={p.x + 10} y={p.y + 38} fill="var(--text-muted)" fontSize="10">{char.role || "Character"}</text>
-                            {ageLabel && <text x={p.x + 10} y={p.y + 56} fill="var(--accent)" fontSize="10" fontWeight="600">Age: {ageLabel}</text>}
+                            {hasPhoto && (
+                              <>
+                                <image href={char.image} x={photoX} y={photoY} width={photoSize} height={photoSize} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
+                                <rect x={photoX} y={photoY} width={photoSize} height={photoSize} rx="6" fill="none" stroke="var(--border)" strokeWidth="1" style={{ pointerEvents: "none" }} />
+                              </>
+                            )}
+                            <text x={textX} y={p.y + 22} fill="var(--text-main)" fontSize="12" fontWeight="700">{char.name}</text>
+                            <text x={textX} y={p.y + 38} fill="var(--text-muted)" fontSize="10">{char.role || "Character"}</text>
+                            {ageLabel && <text x={textX} y={p.y + 54} fill="var(--accent)" fontSize="10" fontWeight="600">Age: {ageLabel}</text>}
                           </g>
                         );
                       })}
                     </svg>
-                    {/* Floating hover card - rendered outside SVG for proper z-index */}
-                    {hoveredCharId && (() => {
-                      const char = characters.find(c => c.id === hoveredCharId);
-                      if (!char) return null;
-                      const faction = factions.find(f => f.id === char.factionId);
-                      const icon = FACTION_ICONS.find(i => i.id === faction?.iconId)?.url;
-                      return (
-                        <div
-                          className="absolute z-50 pointer-events-none"
-                          style={{
-                            left: hoverPosition.x,
-                            top: hoverPosition.y,
-                            transform: 'translate(-50%, -100%)'
-                          }}
-                        >
-                          <div className="w-64 bg-slate-900/95 backdrop-blur-md border-2 border-amber-500/60 rounded-xl p-4 shadow-2xl">
-                            <div className="flex items-center gap-2 mb-2">
-                              {icon && <img src={icon} alt="" className="w-5 h-5 opacity-80" />}
-                              <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">{faction?.name || "No Faction"}</span>
-                            </div>
-                            <div className="text-sm text-white font-bold mb-1">{char.name}</div>
-                            <p className="text-[11px] text-slate-300 leading-relaxed">{char.bio?.trim() || "No biography snippet available."}</p>
-                          </div>
-                          {/* Arrow pointer */}
-                          <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-4 h-4 bg-slate-900/95 backdrop-blur-md border-r-2 border-b-2 border-amber-500/60 rotate-45"></div>
-                        </div>
-                      );
-                    })()}
                   </div>
                 </section>
               ))}
@@ -353,8 +353,17 @@ export default function FamilyTree({ store }) {
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <div className="text-xs text-[var(--text-muted)]">Selected</div>
-                    <div className="text-sm text-[var(--text-main)] font-semibold">{selectedCharacter.name}</div>
+                    <div className="text-xs text-[var(--text-muted)] mb-1">Selected</div>
+                    <div className="flex items-center gap-2">
+                      {selectedCharacter.image ? (
+                        <img src={selectedCharacter.image} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border)]" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[var(--accent-fade)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[10px] font-bold text-[var(--accent)]">{selectedCharacter.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <div className="text-sm text-[var(--text-main)] font-semibold">{selectedCharacter.name}</div>
+                    </div>
                   </div>
                   <select value={relTargetId} onChange={(e) => setRelTargetId(e.target.value)} className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-2 py-1.5 text-xs text-[var(--text-main)]">
                     <option value="">Select target character</option>
@@ -394,6 +403,33 @@ export default function FamilyTree({ store }) {
           </div>
         )}
       </div>
+      {hoveredCharacter && createPortal((() => {
+        const faction = factions.find(f => f.id === hoveredCharacter.factionId);
+        const icon = FACTION_ICONS.find(i => i.id === faction?.iconId)?.url;
+        return (
+          <div
+            className="fixed z-[9999] pointer-events-none"
+            style={{
+              left: hoverPosition.x,
+              top: hoverPosition.y,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            <div className="w-64 bg-[var(--bg-nav)]/95 backdrop-blur-md border-2 border-[var(--accent)]/60 rounded-xl p-4 shadow-2xl text-left">
+              {hoveredCharacter.image && (
+                <img src={hoveredCharacter.image} alt={hoveredCharacter.name} className="w-full h-28 object-cover rounded-lg mb-3" />
+              )}
+              <div className="flex items-center gap-2 mb-2">
+                {icon && <img src={icon} alt="" className="w-5 h-5 opacity-80" />}
+                <span className="text-[10px] uppercase tracking-wider text-[var(--accent)] font-semibold">{faction?.name || "No Faction"}</span>
+              </div>
+              <div className="text-sm text-[var(--text-main)] font-bold mb-1">{hoveredCharacter.name}</div>
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">{hoveredCharacter.bio?.trim() || "No biography snippet available."}</p>
+            </div>
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-4 h-4 bg-[var(--bg-nav)] border-r-2 border-b-2 border-[var(--accent)]/60 rotate-45" />
+          </div>
+        );
+      })(), document.body)}
     </div>
   );
 }

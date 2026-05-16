@@ -3,15 +3,31 @@ export const PROVIDERS = {
     name: 'Google AI Studio',
     keyPlaceholder: 'AIza...',
     models: [
-      { id: 'gemma-3-27b-it',      label: 'Gemma 3 27B' },
-      { id: 'gemma-3-12b-it',      label: 'Gemma 3 12B' },
-      { id: 'gemma-3-4b-it',       label: 'Gemma 3 4B' },
-      { id: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.0-flash',      label: 'Gemini 2.0 Flash' },
       { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
-      { id: 'gemini-1.5-pro',      label: 'Gemini 1.5 Pro' },
-      { id: 'gemini-1.5-flash',    label: 'Gemini 1.5 Flash' },
+      { id: 'gemini-1.5-pro',        label: 'Gemini 1.5 Pro' },
+      { id: 'gemini-1.5-flash',      label: 'Gemini 1.5 Flash' },
+      { id: 'gemma-3-27b-it',        label: 'Gemma 3 27B' },
+      { id: 'gemma-3-12b-it',        label: 'Gemma 3 12B' },
+      { id: 'gemma-3-4b-it',         label: 'Gemma 3 4B' },
     ],
-    defaultModel: 'gemma-3-27b-it',
+    defaultModel: 'gemini-2.0-flash',
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    keyPlaceholder: 'sk-or-...',
+    models: [
+      { id: 'google/gemma-3-27b-it',              label: 'Gemma 3 27B' },
+      { id: 'google/gemma-3-12b-it',              label: 'Gemma 3 12B' },
+      { id: 'google/gemma-3-4b-it',               label: 'Gemma 3 4B' },
+      { id: 'meta-llama/llama-3.3-70b-instruct',  label: 'Llama 3.3 70B' },
+      { id: 'mistralai/mistral-large',             label: 'Mistral Large' },
+      { id: 'deepseek/deepseek-r1',               label: 'DeepSeek R1' },
+      { id: 'openai/gpt-4o',                      label: 'GPT-4o' },
+      { id: 'anthropic/claude-sonnet-4-5',        label: 'Claude Sonnet 4.5' },
+    ],
+    defaultModel: 'google/gemma-3-27b-it',
+    hasBaseUrl: false,
   },
   anthropic: {
     name: 'Anthropic',
@@ -118,13 +134,13 @@ async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, on
   } catch (e) { onError(e.message || 'Network error') }
 }
 
-async function streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError }) {
+async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt, messages, onChunk, onDone, onError }) {
   try {
     const url        = `${(baseUrl || PROVIDERS.openai.defaultBaseUrl).replace(/\/$/, '')}/chat/completions`
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...messages]
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, ...extraHeaders },
       body: JSON.stringify({ model, max_tokens: 4096, stream: true, messages: apiMessages }),
     })
     if (!res.ok) {
@@ -145,9 +161,14 @@ async function streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, on
 
 export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError }) {
   if (!apiKey)              return onError('No API key configured.')
-  if (provider === 'anthropic') return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
-  if (provider === 'google')    return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
-  if (provider === 'openai')    return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'anthropic')   return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'openrouter')  return streamOpenAI({
+    apiKey, model, systemPrompt, messages, onChunk, onDone, onError,
+    baseUrl: 'https://openrouter.ai/api/v1',
+    extraHeaders: { 'HTTP-Referer': 'https://story-atlas.app', 'X-Title': 'Story Atlas' },
+  })
+  if (provider === 'openai')      return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError })
   onError(`Unknown provider: ${provider}`)
 }
 

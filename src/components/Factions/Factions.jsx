@@ -48,22 +48,25 @@ export default function Factions({ store }) {
   }
 
   return (
-    <div className="h-full p-10 bg-[var(--bg-main)] overflow-y-auto text-left">
-      <div className="max-w-5xl mx-auto">
+    <div className="workspace-page text-left">
+      <div className="workspace-inner max-w-5xl">
 
-        <div className="flex justify-between items-center mb-10">
+        <div className="page-header mb-8">
           <div>
             <div className="flex items-center gap-2 mb-1">
               {selectedFactionId && (
-                <button onClick={() => setSelectedFactionId(null)} className="text-[var(--accent)] hover:underline text-sm font-bold mr-2">
-                  ← BACK TO ALL
+                <button onClick={() => setSelectedFactionId(null)} className="btn btn-secondary btn-sm mr-2">
+                  Back
                 </button>
               )}
-              <h1 className="text-3xl font-bold text-[var(--text-main)]">
+              <div>
+              <p className="eyebrow">Allegiances</p>
+              <h1 className="page-title">
                 {activeFaction ? activeFaction.name : 'Factions & Allegiances'}
               </h1>
+              </div>
             </div>
-            <p className="text-[var(--text-muted)]">
+            <p className="page-copy mt-2">
               {activeFaction
                 ? 'Review the history and membership of this organization.'
                 : 'Manage the organizations, kingdoms, and guilds of your world.'}
@@ -72,9 +75,9 @@ export default function Factions({ store }) {
           {!selectedFactionId && (
             <button
               onClick={openCreate}
-              className="bg-[var(--accent)] text-[var(--bg-main)] font-bold px-4 py-2 rounded hover:opacity-90 transition-colors"
+              className="btn btn-primary"
             >
-              + Create Faction
+              Create Faction
             </button>
           )}
         </div>
@@ -85,14 +88,14 @@ export default function Factions({ store }) {
               <div
                 key={faction.id}
                 onClick={() => setSelectedFactionId(faction.id)}
-                className="bg-[var(--bg-nav)] border border-[var(--border)] rounded-xl p-5 flex items-start gap-5 hover:border-[var(--accent)]/50 cursor-pointer transition-all group"
+                className="panel p-5 flex items-start gap-5 hover:border-[var(--accent)]/50 cursor-pointer transition-all group"
               >
                 <div className="w-16 h-16 flex items-center justify-center rounded-lg border border-[var(--border)] bg-[#0c0c12] flex-shrink-0">
                   <FactionLogo shapes={faction.logo} size={52} />
                 </div>
                 <div className="flex-1">
                   <div className="flex justify-between">
-                    <h3 className="text-xl font-bold text-[var(--text-main)]">{faction.name}</h3>
+                    <h3 className="font-serif text-xl font-bold text-[var(--text-main)]">{faction.name}</h3>
                     <span className="text-[10px] text-[var(--text-muted)] font-bold uppercase mt-1">
                       {characters.filter(c => c.factionId === faction.id).length} Members
                     </span>
@@ -108,7 +111,7 @@ export default function Factions({ store }) {
           </div>
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-[var(--bg-nav)]/50 border border-[var(--border)] p-8 rounded-2xl flex gap-8">
+            <div className="panel p-8 flex gap-8">
               <div className="w-32 h-32 flex items-center justify-center rounded-xl border border-[var(--border)] bg-[#0c0c12] flex-shrink-0">
                 <FactionLogo shapes={activeFaction.logo} size={110} />
               </div>
@@ -125,7 +128,7 @@ export default function Factions({ store }) {
                 Active Membership <span className="h-px flex-1 bg-[var(--border)]"></span>
               </h3>
               {factionMembers.length === 0 ? (
-                <div className="p-10 border border-dashed border-[var(--border)] rounded-xl text-center text-[var(--text-muted)] italic">
+                <div className="empty-state">
                   No characters are currently aligned with this faction.
                 </div>
               ) : (
@@ -134,7 +137,7 @@ export default function Factions({ store }) {
                     <button
                       key={member.id}
                       onClick={() => teleportToCharacter(member.id)}
-                      className="flex items-center justify-between p-4 bg-[var(--bg-nav)] border border-[var(--border)] rounded-lg hover:border-[var(--accent)]/50 hover:bg-[var(--bg-hover)] transition-all text-left group"
+                      className="panel-soft flex items-center justify-between p-4 hover:border-[var(--accent)]/50 hover:bg-[var(--bg-hover)] transition-all text-left group"
                     >
                       <div>
                         <div className="text-sm font-bold text-[var(--text-main)] group-hover:text-[var(--accent)]">{member.name}</div>

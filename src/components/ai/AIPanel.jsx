@@ -7,9 +7,10 @@ const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
 const DEFAULT_SETTINGS = {
   activeProvider: 'google',
-  google:    { apiKey: '', model: 'gemma-3-27b-it' },
-  anthropic: { apiKey: '', model: 'claude-sonnet-4-6' },
-  openai:    { apiKey: '', model: '', baseUrl: 'https://api.openai.com/v1' },
+  google:      { apiKey: '', model: 'gemini-2.0-flash' },
+  anthropic:   { apiKey: '', model: 'claude-sonnet-4-6' },
+  openrouter:  { apiKey: '', model: 'google/gemma-3-27b-it' },
+  openai:      { apiKey: '', model: '', baseUrl: 'https://api.openai.com/v1' },
 }
 
 // ── Provider Settings ─────────────────────────────────────────────────────────
@@ -140,10 +141,17 @@ function Section({ title, children, defaultOpen = false }) {
   )
 }
 
-function CheckItem({ label, sub, checked, onChange }) {
+function CheckItem({ label, sub, checked, onChange, image }) {
   return (
-    <label className="flex items-start gap-2 cursor-pointer group py-0.5">
-      <input type="checkbox" checked={checked} onChange={onChange} className="mt-0.5 accent-[var(--accent)] flex-shrink-0" />
+    <label className="flex items-center gap-2 cursor-pointer group py-0.5">
+      <input type="checkbox" checked={checked} onChange={onChange} className="accent-[var(--accent)] flex-shrink-0" />
+      {image ? (
+        <img src={image} alt="" className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+      ) : sub !== undefined && (
+        <div className="w-5 h-5 rounded-full bg-[var(--accent-fade)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
+          <span className="text-[8px] font-bold text-[var(--accent)]">{label.charAt(0)}</span>
+        </div>
+      )}
       <span className="text-sm text-[var(--text-main)] group-hover:text-[var(--accent)] transition-colors leading-tight">
         {label}
         {sub && <span className="block text-[11px] text-[var(--text-muted)]">{sub}</span>}
@@ -198,7 +206,7 @@ function ContextSelector({ store, onStart, onCancel, initialContext }) {
               <button type="button" onClick={() => selectAll('characterIds', characters.map(c => c.id))} className="text-[10px] text-[var(--accent)] hover:underline">All</button>
               <button type="button" onClick={() => clearAll('characterIds')} className="text-[10px] text-[var(--text-muted)] hover:underline">None</button>
             </div>
-            {characters.map(c => <CheckItem key={c.id} label={c.name} sub={c.role} checked={ctx.characterIds.includes(c.id)} onChange={() => toggle('characterIds', c.id)} />)}
+            {characters.map(c => <CheckItem key={c.id} label={c.name} sub={c.role} image={c.image} checked={ctx.characterIds.includes(c.id)} onChange={() => toggle('characterIds', c.id)} />)}
           </Section>
         )}
 
@@ -270,15 +278,52 @@ function ContextSelector({ store, onStart, onCancel, initialContext }) {
 
 function Message({ msg }) {
   const isUser = msg.role === 'user'
+  const [copied, setCopied] = useState(false)
+
+  const copyMessage = async () => {
+    if (!msg.content) return
+    try {
+      await navigator.clipboard.writeText(msg.content)
+    } catch {
+      const textArea = document.createElement('textarea')
+      textArea.value = msg.content
+      textArea.setAttribute('readonly', '')
+      textArea.style.position = 'fixed'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+    }
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1200)
+  }
+
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
-      <div className={`max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${
-        isUser
-          ? 'bg-[var(--accent)] text-[var(--bg-main)] rounded-br-sm'
-          : 'bg-[var(--bg-nav)] border border-[var(--border)] text-[var(--text-main)] rounded-bl-sm'
-      } ${msg.error ? 'border-red-500/50 text-red-400 bg-transparent' : ''}`}>
-        {msg.content}
-        {msg.streaming && <span className="inline-block w-1.5 h-3.5 bg-[var(--accent)] ml-0.5 animate-pulse rounded-sm align-middle" />}
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3 group/message`}>
+      <div className={`max-w-[88%] min-w-0 ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+        <div className={`w-full px-3 py-2 rounded-xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+          isUser
+            ? 'bg-[var(--accent)] text-[var(--bg-main)] rounded-br-sm'
+            : 'bg-[var(--bg-nav)] border border-[var(--border)] text-[var(--text-main)] rounded-bl-sm'
+        } ${msg.error ? 'border-red-500/50 text-red-400 bg-transparent' : ''}`}>
+          {msg.content}
+          {msg.streaming && <span className="inline-block w-1.5 h-3.5 bg-[var(--accent)] ml-0.5 animate-pulse rounded-sm align-middle" />}
+        </div>
+        <button
+          type="button"
+          onClick={copyMessage}
+          disabled={!msg.content}
+          title={copied ? 'Copied' : `Copy ${isUser ? 'prompt' : 'answer'}`}
+          className={`h-6 px-2 inline-flex items-center gap-1 rounded border text-[10px] font-bold transition-all ${
+            isUser
+              ? 'border-[var(--accent)]/30 text-[var(--text-main)] bg-[var(--bg-nav)] hover:border-[var(--accent)]'
+              : 'border-[var(--border)] text-[var(--text-muted)] bg-[var(--bg-main)] hover:text-[var(--text-main)] hover:border-[var(--accent)]'
+          } ${msg.content ? 'opacity-100' : 'opacity-40 cursor-not-allowed'}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
       </div>
     </div>
   )
@@ -403,7 +448,7 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
 
 // ── Session List ──────────────────────────────────────────────────────────────
 
-function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete, onSettings }) {
+function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
   const provider  = aiSettings.activeProvider
   const provLabel = PROVIDERS[provider]?.name || provider
   const model     = aiSettings[provider]?.model || PROVIDERS[provider]?.defaultModel
@@ -464,23 +509,27 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete, onSettin
 
 // ── Root Panel ────────────────────────────────────────────────────────────────
 
-export default function AIPanel({ store, open, onClose, initialContext }) {
+export default function AIPanel({ store, open, onClose, initialContext, docked = false, onPopOut }) {
   const novelId = store.activeNovelId
-  const [aiSettings, setAiSettings] = useState(() => load('nf_aiSettings', DEFAULT_SETTINGS))
+  const [aiSettings, setAiSettings] = useState(() => ({ ...DEFAULT_SETTINGS, ...load('nf_aiSettings', {}) }))
   const [sessions,   setSessions]   = useState(() => load(`nf_chats_${novelId}`, []))
   const [view,       setView]       = useState('sessions') // 'sessions' | 'settings' | 'context' | 'chat'
   const [activeId,   setActiveId]   = useState(null)
+  const [fullscreen, setFullscreen] = useState(() => load('nf_aiFullscreen', false))
 
   useEffect(() => { save('nf_aiSettings', aiSettings) }, [aiSettings])
   useEffect(() => { save(`nf_chats_${novelId}`, sessions) }, [sessions, novelId])
+  useEffect(() => { save('nf_aiFullscreen', fullscreen) }, [fullscreen])
 
   const activeProvider = aiSettings.activeProvider
   const hasKey = !!aiSettings[activeProvider]?.apiKey?.trim()
 
   // Auto-show settings if active provider has no key
   useEffect(() => {
-    if (open && !hasKey && view === 'sessions') setView('settings')
-  }, [open, hasKey])
+    if (open && !hasKey && view === 'sessions') {
+      queueMicrotask(() => setView('settings'))
+    }
+  }, [open, hasKey, view])
 
   const handleSaveSettings = (newSettings) => {
     setAiSettings(newSettings)
@@ -511,18 +560,39 @@ export default function AIPanel({ store, open, onClose, initialContext }) {
 
   if (!open) return null
 
+  const panelMode = fullscreen
+    ? 'fixed inset-3 sm:inset-5 rounded-xl'
+    : docked
+      ? 'ai-panel-docked rounded-lg'
+      : 'fixed right-3 bottom-3 left-3 top-20 sm:left-auto sm:top-auto sm:right-5 sm:bottom-5 sm:w-[430px] sm:h-[min(680px,calc(100vh-7rem))] rounded-xl'
+
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="fixed top-0 right-0 h-full w-[400px] bg-[var(--bg-nav)] border-l border-[var(--border)] z-50 flex flex-col shadow-2xl">
+    <div
+      className={`z-50 bg-[var(--bg-nav)] border border-[var(--border)] flex flex-col shadow-2xl overflow-hidden transition-all duration-200 ${panelMode}`}
+      role="dialog"
+      aria-label="AI chat"
+    >
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-[var(--accent)]">✦</span>
-            <span className="text-sm font-bold text-[var(--text-main)] uppercase tracking-wider">AI</span>
+            <div className="min-w-0">
+              <span className="block text-sm font-bold text-[var(--text-main)] uppercase tracking-wider leading-tight">AI Chat</span>
+              <span className="block text-[10px] text-[var(--text-muted)] leading-tight">{fullscreen ? 'Full screen' : 'Popup'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {docked && !fullscreen && (
+              <button
+                type="button"
+                onClick={onPopOut}
+                title="Pop out"
+                className="h-7 w-7 inline-flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] hover:text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 3h7v7" /><path d="M21 3l-9 9" /><path d="M10 5H5v14h14v-5" /></svg>
+              </button>
+            )}
             <button
               onClick={() => setView(v => v === 'settings' ? (hasKey ? 'sessions' : 'settings') : 'settings')}
               className={`text-[10px] font-bold border px-2 py-0.5 rounded transition-colors ${
@@ -533,9 +603,23 @@ export default function AIPanel({ store, open, onClose, initialContext }) {
             >
               {PROVIDERS[activeProvider]?.name.split(' ')[0] || 'Settings'}
             </button>
-            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <button
+              type="button"
+              onClick={() => setFullscreen(v => !v)}
+              title={fullscreen ? 'Exit full screen' : 'Full screen'}
+              className="h-7 w-7 inline-flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] hover:text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-colors"
+            >
+              {fullscreen ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M8 3v5H3" /><path d="M16 3v5h5" /><path d="M8 21v-5H3" /><path d="M16 21v-5h5" /></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M8 3H3v5" /><path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M16 21h5v-5" /></svg>
+              )}
             </button>
+            {!docked && (
+              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -576,6 +660,5 @@ export default function AIPanel({ store, open, onClose, initialContext }) {
           )}
         </div>
       </div>
-    </>
   )
 }

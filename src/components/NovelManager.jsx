@@ -1,108 +1,277 @@
 import { useState } from 'react'
+import UserMenu from './auth/UserMenu'
+import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
 
-// The Fix: uses theme variables so all 4 themes apply correctly
+const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
+
+const COVER_GRADIENTS = [
+  'linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+  'linear-gradient(160deg, #1c0c2a 0%, #2d1b4e 60%, #1a0d33 100%)',
+  'linear-gradient(160deg, #0d1f2d 0%, #1a3a4a 55%, #0a2030 100%)',
+  'linear-gradient(160deg, #1a0c0c 0%, #2d1212 50%, #3a1a1a 100%)',
+  'linear-gradient(160deg, #0d2013 0%, #1a3a20 50%, #0a1a0d 100%)',
+  'linear-gradient(160deg, #0c1a24 0%, #1a2e3a 50%, #0a1520 100%)',
+  'linear-gradient(160deg, #1a1208 0%, #2e2010 50%, #3a2a18 100%)',
+  'linear-gradient(160deg, #0c0c1a 0%, #1a1a30 50%, #0a0a18 100%)',
+]
+
+const getCoverGradient = (title) => {
+  const n = (title || '?').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return COVER_GRADIENTS[n % COVER_GRADIENTS.length]
+}
+
+function NovelCard({ stats, onOpen, onDelete }) {
+  const [hovered, setHovered] = useState(false)
+  const novel = stats.project
+  const cfg = getProjectType(novel.type)
+
+  return (
+    <div
+      className="novel-card"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Cover */}
+      <div
+        className="novel-card-cover"
+        onClick={() => onOpen(novel.id)}
+        style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title) }}
+      >
+        {novel.coverPhoto ? (
+          <img src={novel.coverPhoto} alt="" />
+        ) : (
+          <>
+            <span
+              style={{
+                position: 'absolute', bottom: 10, right: 12,
+                fontSize: 72, fontWeight: 900, lineHeight: 1,
+                color: 'rgba(255,255,255,0.07)', userSelect: 'none', pointerEvents: 'none',
+              }}
+            >
+              {novel.title[0]?.toUpperCase()}
+            </span>
+            <span
+              style={{
+                position: 'absolute', top: 10, left: 10,
+                fontSize: 18, lineHeight: 1,
+              }}
+              title={cfg.label}
+            >
+              {cfg.icon}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Title */}
+      <div className="novel-card-foot" onClick={() => onOpen(novel.id)}>
+        <p>{novel.title}</p>
+        <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginTop: 2 }}>
+          {cfg.label} · {stats.updatedLabel}
+        </p>
+      </div>
+
+      {/* Hover popup */}
+      {hovered && (
+        <div className="novel-card-popup">
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 8, minHeight: 32 }}>
+            {novel.description || 'No description yet.'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            <span>{stats.characters.length} chars</span>
+            <span>{stats.scenes.length} scenes</span>
+            <span>{stats.manuscriptWords.toLocaleString()} words</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <button
+              onClick={() => onOpen(novel.id)}
+              style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              Open →
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(novel.id) }}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NewCard({ onClick }) {
+  return (
+    <button className="novel-card novel-card-new" onClick={onClick}>
+      <span style={{ fontSize: 28, lineHeight: 1 }}>+</span>
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>New Project</span>
+    </button>
+  )
+}
+
 export default function NovelManager({ store }) {
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '' })
+  const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
+  const [seriesFilter, setSeriesFilter] = useState(null)
 
   const handleCreate = (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
-    store.addNovel(form)
-    setForm({ title: '', description: '' })
+    store.addNovel({ ...form, seriesId: seriesFilter || null })
+    setForm({ title: '', description: '', type: DEFAULT_TYPE })
     setShowForm(false)
   }
 
   const handleDelete = (id) => {
-    if (confirm('Delete this novel and all its content? This cannot be undone.')) {
+    if (confirm('Delete this project and all its content? This cannot be undone.')) {
       store.deleteNovel(id)
     }
   }
 
-  return (
-    <div className="min-h-screen bg-[var(--bg-main)] text-[var(--text-main)] flex flex-col items-center justify-center p-8">
-      <div className="w-full max-w-xl">
-        <div className="mb-10 text-center">
-          <h1 className="text-4xl font-bold text-[var(--accent)] mb-2 tracking-tight">NovelForge</h1>
-          <p className="text-[var(--text-muted)] text-sm">Your world. Your story.</p>
-        </div>
+  const visibleStats = seriesFilter
+    ? store.allProjectStats.filter(s => s.project.seriesId === seriesFilter)
+    : store.allProjectStats
 
-        {store.novels.length > 0 && (
-          <div className="mb-6 space-y-2">
-            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Your novels</p>
-            {store.novels.map(n => (
-              <div
-                key={n.id}
-                className="flex items-center justify-between bg-[var(--bg-nav)] border border-[var(--border)] rounded-lg px-4 py-3 group"
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
+
+      {/* Top bar */}
+      <div className="library-top-bar">
+        <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 900, fontSize: 18, color: 'var(--accent)' }}>StoryAtlas</span>
+        <UserMenu />
+      </div>
+
+      {/* Content */}
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '36px 28px' }}>
+
+        {/* Series filter strip */}
+        {store.series.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, alignItems: 'center' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>Series</span>
+            <button
+              onClick={() => setSeriesFilter(null)}
+              style={{
+                padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                border: `1px solid ${seriesFilter === null ? 'var(--accent)' : 'var(--border)'}`,
+                background: seriesFilter === null ? 'var(--accent-fade)' : 'transparent',
+                color: seriesFilter === null ? 'var(--accent)' : 'var(--text-muted)',
+              }}
+            >
+              All
+            </button>
+            {store.series.map(s => (
+              <button key={s.id}
+                onClick={() => setSeriesFilter(seriesFilter === s.id ? null : s.id)}
+                style={{
+                  padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                  border: `1px solid ${seriesFilter === s.id ? 'var(--accent)' : 'var(--border)'}`,
+                  background: seriesFilter === s.id ? 'var(--accent-fade)' : 'transparent',
+                  color: seriesFilter === s.id ? 'var(--accent)' : 'var(--text-muted)',
+                }}
               >
-                <div className="min-w-0">
-                  <div className="font-medium truncate text-[var(--text-main)]">{n.title}</div>
-                  {n.description && (
-                    <div className="text-sm text-[var(--text-muted)] mt-0.5 truncate">{n.description}</div>
-                  )}
-                </div>
-                <div className="flex gap-2 ml-3 flex-shrink-0">
-                  <button
-                    onClick={() => store.setActiveNovelId(n.id)}
-                    className="text-sm px-3 py-1.5 bg-[var(--accent)] hover:opacity-90 text-[var(--bg-main)] font-semibold rounded transition-colors"
-                  >
-                    Open
-                  </button>
-                  <button
-                    onClick={() => handleDelete(n.id)}
-                    className="text-sm px-2 py-1.5 text-[var(--text-muted)] hover:text-red-400 rounded transition-colors opacity-0 group-hover:opacity-100"
-                    title="Delete novel"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
+                {s.name}
+              </button>
             ))}
           </div>
         )}
 
-        {showForm ? (
-          <form onSubmit={handleCreate} className="bg-[var(--bg-nav)] border border-[var(--border)] rounded-lg p-5 space-y-3">
+        {/* Card grid */}
+        <div className="novel-grid">
+          {visibleStats.map(stats => (
+            <NovelCard
+              key={stats.project.id}
+              stats={stats}
+              onOpen={store.setActiveNovelId}
+              onDelete={handleDelete}
+            />
+          ))}
+          <NewCard onClick={() => setShowForm(true)} />
+        </div>
+
+        {/* Empty state */}
+        {store.novels.length === 0 && (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
+            Create your first project to get started.
+          </p>
+        )}
+      </div>
+
+      {/* New project modal */}
+      {showForm && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={e => e.target === e.currentTarget && setShowForm(false)}
+        >
+          <form
+            onSubmit={handleCreate}
+            style={{
+              width: '100%', maxWidth: 420, padding: 24,
+              background: 'var(--bg-nav)', border: '1px solid var(--border)',
+              borderRadius: 14, boxShadow: '0 24px 60px rgba(0,0,0,.4)',
+              display: 'flex', flexDirection: 'column', gap: 14,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-main)' }}>New Project</p>
+
             <input
               autoFocus
-              placeholder="Novel title *"
+              placeholder="Title *"
               value={form.title}
               onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)] placeholder:text-[var(--text-muted)]"
               required
+              style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 14, color: 'var(--text-main)', outline: 'none' }}
             />
+
             <textarea
-              placeholder="Short description (optional)"
+              placeholder="Description (optional)"
               value={form.description}
               onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
               rows={2}
-              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)] resize-none placeholder:text-[var(--text-muted)]"
+              style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-main)', resize: 'none', outline: 'none' }}
             />
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 py-2 bg-[var(--accent)] hover:opacity-90 text-[var(--bg-main)] font-semibold rounded text-sm transition-colors"
-              >
-                Create Novel
+
+            {/* Project type */}
+            <div>
+              <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Type</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {TYPE_OPTIONS.map(t => (
+                  <button key={t.id} type="button" onClick={() => setForm(p => ({ ...p, type: t.id }))}
+                    style={{
+                      textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                      border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                      background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 14 }}>{t.icon}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{t.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button type="submit"
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 7, border: 'none',
+                  background: 'var(--accent)', color: 'var(--bg-main)',
+                  fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                }}>
+                Create
               </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-main)] text-sm transition-colors"
-              >
+              <button type="button" onClick={() => setShowForm(false)}
+                style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
                 Cancel
               </button>
             </div>
           </form>
-        ) : (
-          <button
-            onClick={() => setShowForm(true)}
-            className="w-full py-3 border-2 border-dashed border-[var(--border)] hover:border-[var(--accent)] text-[var(--text-muted)] hover:text-[var(--accent)] rounded-lg text-sm transition-colors"
-          >
-            + Create new novel
-          </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

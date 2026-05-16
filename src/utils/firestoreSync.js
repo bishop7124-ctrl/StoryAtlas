@@ -1,40 +1,41 @@
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { supabase } from '../supabase'
 
-// Load all data for a user from Firestore
-export async function loadUserData(uid) {
-  const [appDataSnap, scenesSnap] = await Promise.all([
-    getDoc(doc(db, 'users', uid, 'data', 'appData')),
-    getDocs(collection(db, 'users', uid, 'scenes'))
+export async function loadUserData(userId) {
+  const [{ data: appData }, { data: scenesData }] = await Promise.all([
+    supabase.from('user_data').select('data').eq('user_id', userId).maybeSingle(),
+    supabase.from('scenes').select('data').eq('user_id', userId)
   ])
 
-  const d = appDataSnap.exists() ? appDataSnap.data() : {}
+  const d = appData?.data ?? {}
   return {
-    novels:       d.novels       ?? [],
-    characters:   d.characters   ?? [],
-    factions:     d.factions     ?? [],
-    locations:    d.locations    ?? [],
-    timeline:     d.timeline     ?? [],
-    worldHistory: d.worldHistory ?? [],
-    acts:         d.acts         ?? [],
-    chapters:     d.chapters     ?? [],
-    loreEntries:  d.loreEntries  ?? [],
-    currentYear:  d.currentYear  ?? 0,
+    novels:        d.novels        ?? [],
+    characters:    d.characters    ?? [],
+    factions:      d.factions      ?? [],
+    locations:     d.locations     ?? [],
+    timeline:      d.timeline      ?? [],
+    worldHistory:  d.worldHistory  ?? [],
+    acts:          d.acts          ?? [],
+    chapters:      d.chapters      ?? [],
+    loreEntries:   d.loreEntries   ?? [],
+    ideaEntries:   d.ideaEntries   ?? [],
+    maps:          d.maps          ?? [],
+    activeMapByNovel: d.activeMapByNovel ?? {},
+    whiteboards:   d.whiteboards   ?? [],
+    series:        d.series        ?? [],
+    currentYear:   d.currentYear   ?? 0,
     activeNovelId: d.activeNovelId ?? null,
-    scenes: scenesSnap.docs.map(s => s.data())
+    scenes: (scenesData ?? []).map(s => s.data)
   }
 }
 
-// Save everything except scene content as one document
-export async function saveAppData(uid, data) {
-  await setDoc(doc(db, 'users', uid, 'data', 'appData'), data)
+export async function saveAppData(userId, data) {
+  await supabase.from('user_data').upsert({ user_id: userId, data })
 }
 
-// Save a single scene document (called per scene to avoid 1MB doc limits)
-export async function saveSceneDoc(uid, scene) {
-  await setDoc(doc(db, 'users', uid, 'scenes', scene.id), scene)
+export async function saveSceneDoc(userId, scene) {
+  await supabase.from('scenes').upsert({ user_id: userId, scene_id: scene.id, data: scene })
 }
 
-export async function deleteSceneDoc(uid, sceneId) {
-  await deleteDoc(doc(db, 'users', uid, 'scenes', sceneId))
+export async function deleteSceneDoc(userId, sceneId) {
+  await supabase.from('scenes').delete().eq('user_id', userId).eq('scene_id', sceneId)
 }

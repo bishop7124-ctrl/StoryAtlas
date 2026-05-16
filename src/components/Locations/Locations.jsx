@@ -1,9 +1,27 @@
 import { useState } from 'react'
 import Modal from '../shared/Modal'
+import { StudioSplit, StudioIndex, StudioRecord, StudioDetail, StudioButton, StudioEmpty, StudioPageHeader, StudioNote } from '../presentation/Studio'
+
+const loadJ = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
+
+function removeLocationFromAllMaps(locationId) {
+  const maps = loadJ('nf_maps_list', []);
+  maps.forEach(map => {
+    const mk = `nf_markers_${map.id}`;
+    const rk = `nf_regions_${map.id}`;
+    const ik = `nf_icons_${map.id}`;
+    const markers = loadJ(mk, []).filter(x => x.locationId !== locationId);
+    const regions = loadJ(rk, []).filter(x => x.locationId !== locationId);
+    const icons   = loadJ(ik, []).filter(x => x.locationId !== locationId);
+    localStorage.setItem(mk, JSON.stringify(markers));
+    localStorage.setItem(rk, JSON.stringify(regions));
+    localStorage.setItem(ik, JSON.stringify(icons));
+  });
+}
 
 // The Fix: uses theme variables so all 4 themes apply correctly
 const CATS = ['Kingdom/Region', 'City', 'Town', 'Village', 'Landmark', 'Ruins', 'Feature', 'Other']
-const IN = 'w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] focus:border-[var(--accent)] outline-none placeholder:text-[var(--text-muted)]'
+const IN = 'field w-full px-3 py-2 text-sm placeholder:text-[var(--text-muted)]'
 
 function LocationForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState({
@@ -26,24 +44,24 @@ function LocationForm({ initial, onSave, onCancel }) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSave(form) }} className="space-y-4 text-left">
       <div>
-        <label className="text-xs text-[var(--text-muted)]">Name</label>
+        <label className="form-label">Name</label>
         <input value={form.name} onChange={e=>setForm(p=>({...p, name:e.target.value}))} className={IN} required />
       </div>
       <div>
-        <label className="text-xs text-[var(--text-muted)]">Category</label>
+        <label className="form-label">Category</label>
         <select value={form.category} onChange={e=>setForm(p=>({...p, category:e.target.value}))} className={IN}>
           {CATS.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
       <div>
-        <label className="text-xs text-[var(--text-muted)]">Description</label>
+        <label className="form-label">Description</label>
         <textarea value={form.description} onChange={e=>setForm(p=>({...p, description:e.target.value}))} rows={6} className={IN + ' resize-none'} />
       </div>
       <div>
-        <label className="text-xs text-[var(--text-muted)]">Tags</label>
+        <label className="form-label">Tags</label>
         <div className="flex flex-wrap gap-1 mb-2">
           {form.tags.map(t => (
-            <span key={t} className="bg-[var(--bg-nav)] border border-[var(--border)] px-2 py-0.5 rounded text-xs text-[var(--text-main)] flex items-center gap-1">
+            <span key={t} className="chip">
               {t}
               <button type="button" onClick={()=>setForm(p=>({...p, tags:p.tags.filter(x=>x!==t)}))}>×</button>
             </span>
@@ -52,7 +70,7 @@ function LocationForm({ initial, onSave, onCancel }) {
         <input value={tagInput} onChange={e=>setTagInput(e.target.value)} onKeyDown={addTag} className={IN} placeholder="Enter tags..." />
       </div>
       <div className="flex gap-2 pt-4 border-t border-[var(--border)]">
-        <button type="submit" className="flex-1 py-2 bg-[var(--accent)] text-[var(--bg-main)] font-bold rounded">Save</button>
+        <button type="submit" className="btn btn-primary flex-1 justify-center">Save</button>
         <button type="button" onClick={onCancel} className="px-4 py-2 text-[var(--text-muted)]">Cancel</button>
       </div>
     </form>
@@ -69,54 +87,52 @@ export default function Locations({ store }) {
   const selected = (locations || []).find(l => l.id === selectedLocationId)
 
   return (
-    <div className="flex h-full bg-[var(--bg-main)]">
-      <div className="w-64 border-r border-[var(--border)] flex flex-col bg-[var(--bg-nav)]/20 text-left">
-        <div className="p-3 border-b border-[var(--border)] space-y-2">
-          <div className="flex justify-between items-center text-[var(--text-main)]">
-            <h2 className="text-sm font-bold">Atlas</h2>
-            <button onClick={()=>{setEditTarget(null);setShowForm(true)}} className="text-xs text-[var(--accent)] hover:opacity-80">+ New</button>
-          </div>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--text-main)] placeholder:text-[var(--text-muted)]" />
-        </div>
-        <div className="flex-1 overflow-y-auto">
+    <StudioSplit>
+      <StudioIndex
+        eyebrow="Atlas wall"
+        title="Field Notes"
+        tools={<StudioButton tone="primary" size="sm" onClick={()=>{setEditTarget(null);setShowForm(true)}}>New</StudioButton>}
+      >
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="field w-full px-2 py-1.5 text-xs placeholder:text-[var(--text-muted)]" />
           {filtered.map(l => (
-            <button
+            <StudioRecord
               key={l.id}
               onClick={()=>setSelectedLocationId(l.id)}
-              className={`w-full text-left px-4 py-3 border-b border-[var(--border)] transition-all ${selectedLocationId===l.id ? 'bg-[var(--bg-hover)] border-l-2 border-[var(--accent)]' : 'hover:bg-[var(--bg-hover)]'}`}
+              active={selectedLocationId===l.id}
             >
               <div className="text-sm font-medium text-[var(--text-main)]">{l.name}</div>
               <div className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">{l.category}</div>
-            </button>
+            </StudioRecord>
           ))}
-        </div>
-      </div>
+      </StudioIndex>
 
-      <div className="flex-1 p-8 overflow-y-auto text-left">
+      <StudioDetail>
         {!selected ? (
-          <div className="h-full flex items-center justify-center text-[var(--text-muted)] italic">Select a location from the map or list</div>
+          <StudioEmpty title="Select a field note" body="Choose a location from the atlas wall." />
         ) : (
-          <div className="max-w-2xl">
-            <div className="flex justify-between items-start mb-6 text-left">
-              <div>
-                <h1 className="text-3xl font-bold text-[var(--text-main)]">{selected.name}</h1>
-                <span className="inline-block mt-2 px-2 py-0.5 bg-[var(--accent-fade)] text-[var(--accent)] text-xs font-bold rounded border border-[var(--accent)]/20">{selected.category}</span>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={()=>{setEditTarget(selected);setShowForm(true)}} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors px-2 py-1 border border-[var(--border)] rounded">Edit</button>
-                <button onClick={()=>{if(confirm("Delete?")) { deleteLocation(selected.id); setSelectedLocationId(null) }}} className="text-xs text-red-500/60 hover:text-red-500 transition-colors px-2 py-1 border border-[var(--border)] rounded">Delete</button>
-              </div>
-            </div>
-            <p className="text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">{selected.description || 'No description provided yet.'}</p>
+          <div className="max-w-4xl">
+            <StudioPageHeader
+              eyebrow="Atlas field note"
+              title={selected.name}
+              actions={(
+                <>
+                <StudioButton tone="secondary" size="sm" onClick={()=>{setEditTarget(selected);setShowForm(true)}}>Edit</StudioButton>
+                <StudioButton tone="secondary" size="sm" onClick={()=>{if(confirm("Delete?")) { deleteLocation(selected.id); if (loadJ('nf_linked_delete', false)) removeLocationFromAllMaps(selected.id); setSelectedLocationId(null) }}}>Delete</StudioButton>
+                </>
+              )}
+            >
+              <span className="chip chip-accent mt-3">{selected.category}</span>
+            </StudioPageHeader>
+            <StudioNote className="text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">{selected.description || 'No description provided yet.'}</StudioNote>
           </div>
         )}
-      </div>
+      </StudioDetail>
 
       {showForm && (
         <Modal title={editTarget ? "Edit Location" : "New Location"} onClose={() => setShowForm(false)} wide>
           <LocationForm initial={editTarget} onSave={(d) => { saveLocation(d, editTarget?.id); setShowForm(false) }} onCancel={() => setShowForm(false)} />
         </Modal>
       )}
-    </div>
+    </StudioSplit>
   )
 }

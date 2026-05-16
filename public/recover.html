@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StoryAtlas Recovery</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: #f3ead7;
+        color: #231f1a;
+      }
+
+      main {
+        width: min(520px, calc(100vw - 32px));
+        padding: 28px;
+        border: 1px solid #d8c8aa;
+        border-radius: 8px;
+        background: #fff8e8;
+        box-shadow: 0 20px 50px rgb(72 51 20 / 0.14);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.8rem;
+      }
+
+      p {
+        line-height: 1.55;
+      }
+
+      button {
+        width: 100%;
+        margin-top: 16px;
+        padding: 13px 16px;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5948;
+        color: white;
+        font: 700 1rem ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.7;
+      }
+
+      #status {
+        min-height: 1.5em;
+        margin-top: 16px;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>StoryAtlas Recovery</h1>
+      <p>This will restore the recovered Aurethos draft into this browser's StoryAtlas storage.</p>
+      <button id="restore">Restore recovered data</button>
+      <div id="status" role="status"></div>
+    </main>
+    <script>
+      const keys = {
+        novels: 'nf_novels',
+        activeNovelId: 'nf_activeNovel',
+        characters: 'nf_characters',
+        factions: 'nf_factions',
+        locations: 'nf_locations',
+        timeline: 'nf_timeline',
+        worldHistory: 'nf_worldHistory',
+        acts: 'nf_acts',
+        chapters: 'nf_chapters',
+        scenes: 'nf_scenes',
+        loreEntries: 'nf_loreEntries',
+        currentYear: 'nf_currentYear'
+      }
+
+      const restore = document.getElementById('restore')
+      const status = document.getElementById('status')
+
+      restore.addEventListener('click', async () => {
+        restore.disabled = true
+        status.textContent = 'Restoring...'
+
+        try {
+          const response = await fetch('/story-atlas-recovered-data.json', { cache: 'no-store' })
+          if (!response.ok) throw new Error(`Recovery file returned ${response.status}`)
+          const data = await response.json()
+
+          Object.entries(keys).forEach(([dataKey, storageKey]) => {
+            localStorage.setItem(storageKey, JSON.stringify(data[dataKey] ?? null))
+          })
+
+          localStorage.setItem('nf_recovered_at', JSON.stringify(new Date().toISOString()))
+          status.textContent = `Restored ${data.characters?.length ?? 0} characters. Reloading...`
+          setTimeout(() => window.location.replace('/'), 700)
+        } catch (error) {
+          restore.disabled = false
+          status.textContent = error.message || 'Recovery failed.'
+        }
+      })
+    </script>
+  </body>
+</html>

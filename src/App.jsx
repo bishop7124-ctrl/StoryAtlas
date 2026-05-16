@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { Component, useState, useEffect, useRef } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useStore } from './store/useStore'
 import { loadUserData } from './utils/firestoreSync'
@@ -6,38 +6,109 @@ import NovelManager from './components/NovelManager'
 import Layout from './components/Layout'
 import LoginPage from './components/auth/LoginPage'
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-[#0f1115] flex flex-col items-center justify-center gap-4 p-8 text-center">
+          <span className="text-[#f59e0b] font-black text-2xl tracking-tighter">StoryAtlas</span>
+          <p className="text-[#f8fafc] font-semibold">Something went wrong.</p>
+          <p className="text-[#64748b] text-sm max-w-sm">{this.state.error?.message}</p>
+          <button
+            onClick={() => { this.setState({ error: null }); window.location.reload() }}
+            className="mt-2 px-4 py-2 rounded-lg bg-[#f59e0b] text-[#0f1115] font-bold text-sm"
+          >
+            Reload
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+const DATA_KEYS = [
+  'nf_novels',
+  'nf_characters',
+  'nf_factions',
+  'nf_locations',
+  'nf_timeline',
+  'nf_worldHistory',
+  'nf_acts',
+  'nf_chapters',
+  'nf_scenes',
+  'nf_loreEntries',
+  'nf_ideaEntries',
+  'nf_whiteboards'
+]
+
+const hasEntries = (value) => Array.isArray(value) && value.length > 0
+
+const hasRemoteData = (data) => {
+  if (!data) return false
+  if (DATA_KEYS.some(key => hasEntries(data[key.replace('nf_', '')]))) return true
+  return Boolean(data.activeNovelId || data.currentYear)
+}
+
+const hasLocalData = () => {
+  try {
+    return DATA_KEYS.some(key => hasEntries(JSON.parse(localStorage.getItem(key)))) ||
+      Boolean(JSON.parse(localStorage.getItem('nf_activeNovel'))) ||
+      Boolean(JSON.parse(localStorage.getItem('nf_currentYear')))
+  } catch {
+    return false
+  }
+}
+
 function AppInner() {
   const { user, loading: authLoading } = useAuth()
-  const store = useStore(user?.uid)
+  const userId = user?.uid || user?.id || null
+  const store = useStore(userId)
+  const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
-  const [section, setSection] = useState('characters')
+  const [section, setSection] = useState('dashboard')
   const loadedUid = useRef(null)
 
   useEffect(() => {
     if (!user) {
-      // User signed out — clear local state so next user starts fresh
-      if (loadedUid.current) {
-        store.clearData()
-        loadedUid.current = null
-      }
+      loadedUid.current = null
+      finishRemoteLoad()
       return
     }
 
     // Don't reload if we already fetched for this uid
-    if (loadedUid.current === user.uid) return
-    loadedUid.current = user.uid
+    if (loadedUid.current === userId) return
+    loadedUid.current = userId
 
     setDataLoading(true)
-    loadUserData(user.uid)
-      .then(data => store.importData(data))
-      .catch(console.error)
+    loadUserData(userId)
+      .then(data => {
+        if (!hasRemoteData(data) && hasLocalData()) {
+          finishRemoteLoad()
+          return
+        }
+        importData(data)
+      })
+      .catch(error => {
+        console.error(error)
+        finishRemoteLoad()
+      })
       .finally(() => setDataLoading(false))
-  }, [user])
+  }, [user, userId, importData, finishRemoteLoad])
 
   if (authLoading || dataLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-main)] flex flex-col items-center justify-center gap-4">
-        <span className="text-[var(--accent)] font-black text-2xl tracking-tighter">NovelForge</span>
+        <span className="text-[var(--accent)] font-black text-2xl tracking-tighter">StoryAtlas</span>
         <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -52,8 +123,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppInner />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }

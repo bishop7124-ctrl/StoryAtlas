@@ -5,19 +5,27 @@ import Modal from '../shared/Modal'
 const INPUT = 'w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] focus:outline-none focus:border-[var(--accent)] placeholder:text-[var(--text-muted)]'
 const LABEL = 'block text-xs text-[var(--text-muted)] mb-1.5'
 
-function parseDate(str) {
-  if (!str) return Infinity
-  const m = str.match(/-?\d+/)
-  return m ? parseInt(m[0], 10) : Infinity
+function parseTimelineYear(value) {
+  if (!value) return null
+  const date = value.toString().replace(/[−–—]/g, '-')
+  const yearMatch = date.match(/\byears?\s*(-?\d+)/i)
+  const firstNumber = yearMatch || date.match(/-?\d+/)
+  if (!firstNumber) return null
+
+  let year = parseInt(firstNumber[1] ?? firstNumber[0], 10)
+  if (!Number.isFinite(year)) return null
+  if (/\b(?:bc|bce)\b/i.test(date) && year > 0) year = -year
+  return year
 }
 
-function EventForm({ initial, characters, onSave, onCancel }) {
+function EventForm({ initial, characters = [], locations = [], onSave, onCancel }) {
   const [form, setForm] = useState({
     title: initial?.title ?? '',
     date: initial?.date ?? '',
     description: initial?.description ?? '',
     tags: initial?.tags ?? [],
     linkedCharacters: initial?.linkedCharacters ?? [],
+    linkedLocations: initial?.linkedLocations ?? [],
   })
   const [tagInput, setTagInput] = useState('')
   const field = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }))
@@ -34,6 +42,12 @@ function EventForm({ initial, characters, onSave, onCancel }) {
     linkedCharacters: p.linkedCharacters.includes(id)
       ? p.linkedCharacters.filter(x => x !== id)
       : [...p.linkedCharacters, id],
+  }))
+  const toggleLocation = (id) => setForm(p => ({
+    ...p,
+    linkedLocations: p.linkedLocations.includes(id)
+      ? p.linkedLocations.filter(x => x !== id)
+      : [...p.linkedLocations, id],
   }))
 
   return (
@@ -81,6 +95,20 @@ function EventForm({ initial, characters, onSave, onCancel }) {
           </div>
         </div>
       )}
+      {locations.length > 0 && (
+        <div>
+          <label className={LABEL}>Linked locations</label>
+          <div className="max-h-32 overflow-y-auto bg-[var(--bg-main)] border border-[var(--border)] rounded p-2 space-y-1.5">
+            {locations.map(l => (
+              <label key={l.id} className="flex items-center gap-2 text-sm cursor-pointer text-[var(--text-main)] hover:text-[var(--text-main)]">
+                <input type="checkbox" checked={form.linkedLocations.includes(l.id)} onChange={() => toggleLocation(l.id)}
+                  className="accent-[var(--accent)]" />
+                {l.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="flex gap-2 pt-1 border-t border-[var(--border)]">
         <button type="submit" className="px-5 py-2 bg-[var(--accent)] hover:opacity-90 text-[var(--bg-main)] font-semibold rounded text-sm transition-colors">Save</button>
         <button type="button" onClick={onCancel} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-main)] text-sm transition-colors">Cancel</button>
@@ -89,34 +117,51 @@ function EventForm({ initial, characters, onSave, onCancel }) {
   )
 }
 
-const SPINE_Y    = 160
-const EV_SPACING = 200
-const LEFT_PAD   = 80
-const SVG_HEIGHT = 320
-const DOT_R      = 7
+function compareEventsByYear(a, b) {
+  const aYear = parseTimelineYear(a.date)
+  const bYear = parseTimelineYear(b.date)
+  const safeA = Number.isFinite(aYear) ? aYear : Infinity
+  const safeB = Number.isFinite(bYear) ? bYear : Infinity
+  return safeA - safeB || (a.title || '').localeCompare(b.title || '')
+}
+
+function isWorldHistoryEvent(event) {
+  return event.sourceType === 'history' || event.isWorldHistory
+}
 
 export default function Timeline({ store }) {
-  const { timeline, worldHistory, characters, addEvent, updateEvent, deleteEvent } = store
+  const { timeline, worldHistory, characters = [], locations = [], addEvent, updateEvent, deleteEvent } = store
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const allEvents = useMemo(() => {
+    const timelineIds = new Set((timeline || []).map(e => e.id))
+    const historyIds = new Set((worldHistory || []).map(h => h.id))
+    const linkedHistoryByEvent = new Map(
+      (worldHistory || [])
+        .filter(h => h.timelineEventId)
+        .map(h => [h.timelineEventId, h])
+    )
     const manual = (timeline || []).map(e => ({
       ...e,
       sourceType: 'timeline',
+      isWorldHistory: Boolean((e.worldHistoryEntryId && historyIds.has(e.worldHistoryEntryId)) || linkedHistoryByEvent.has(e.id)),
       readOnly: false,
     }))
-    const history = (worldHistory || []).map(h => ({
-      id: `history-${h.id}`,
-      title: h.title,
-      date: h.dateRange || h.era || '',
-      description: h.content || '',
-      tags: h.tags || [],
-      linkedCharacters: [],
-      sourceType: 'history',
-      readOnly: true,
-    }))
+    const history = (worldHistory || [])
+      .filter(h => !h.timelineEventId || !timelineIds.has(h.timelineEventId))
+      .map(h => ({
+        id: `history-${h.id}`,
+        title: h.title,
+        date: h.dateRange || h.era || '',
+        description: h.content || '',
+        tags: h.tags || [],
+        linkedCharacters: [],
+        linkedLocations: [],
+        sourceType: 'history',
+        readOnly: true,
+      }))
     const birthdays = (characters || [])
       .filter(c => c.birthDate && c.birthDate.toString().trim())
       .map(c => ({
@@ -126,19 +171,22 @@ export default function Timeline({ store }) {
         description: c.role ? `${c.role}` : 'Character birth',
         tags: ['birthday'],
         linkedCharacters: [c.id],
+        linkedLocations: [],
         sourceType: 'birthday',
         readOnly: true,
       }))
 
-    return [...manual, ...history, ...birthdays].sort((a, b) => parseDate(a.date) - parseDate(b.date))
+    return [...manual, ...history, ...birthdays].sort(compareEventsByYear)
   }, [timeline, worldHistory, characters])
 
-  const filtered = allEvents
-    .filter(e =>
-      e.title.toLowerCase().includes(search.toLowerCase()) ||
-      (e.description || '').toLowerCase().includes(search.toLowerCase()) ||
-      (e.date || '').toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() => {
+    const query = search.toLowerCase()
+    return allEvents.filter(e =>
+      (e.title || '').toLowerCase().includes(query) ||
+      (e.description || '').toLowerCase().includes(query) ||
+      (e.date || '').toLowerCase().includes(query)
     )
+  }, [allEvents, search])
 
   const closeForm = () => { setShowForm(false); setEditTarget(null) }
   const handleSave = (data) => {
@@ -149,141 +197,91 @@ export default function Timeline({ store }) {
   const handleDelete = (id) => {
     if (!confirm('Delete this event?')) return
     deleteEvent(id)
-    if (expandedId === id) setExpandedId(null)
+    if (expandedId === id) {
+      setExpandedId(null)
+    }
   }
-  const getCharName = (id) => characters.find(c => c.id === id)?.name
-
-  const totalWidth = LEFT_PAD + filtered.length * EV_SPACING + 80
-
-  const handleDotClick = (evId) => {
-    if (expandedId === evId) {
+  const handleTileClick = (event) => {
+    if (expandedId === event.id) {
       setExpandedId(null)
     } else {
-      setExpandedId(evId)
+      setExpandedId(event.id)
     }
   }
 
+  const jumpTo = (target, clickEvent) => {
+    clickEvent?.stopPropagation()
+    if (target.section === 'characters') store.setSelectedCharacterId(target.id)
+    if (target.section === 'locations') store.setSelectedLocationId(target.id)
+    if (target.section === 'lore') store.setSelectedLoreEntryId(target.id)
+    if (target.section === 'ideas') store.setSelectedIdeaEntryId(target.id)
+    window.dispatchEvent(new CustomEvent('switch-section', { detail: { section: target.section } }))
+  }
+
   const expandedEvent = expandedId ? filtered.find(e => e.id === expandedId) : null
-  const expandedIdx   = expandedId ? filtered.findIndex(e => e.id === expandedId) : -1
 
   return (
     <div className="h-full flex flex-col bg-[var(--bg-main)]">
-      <div className="px-5 py-3 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 bg-[var(--bg-main)]">
-        <h2 className="text-sm font-semibold text-[var(--text-main)]">Timeline</h2>
+      <div className="studio-topbar px-5 py-3 flex items-center justify-between flex-shrink-0">
+        <div>
+          <p className="eyebrow">Chronicle</p>
+          <h2 className="font-serif text-xl font-bold text-[var(--text-main)]">Timeline</h2>
+        </div>
         <div className="flex items-center gap-3">
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search events…"
-            className="bg-[var(--bg-nav)] border border-[var(--border)] rounded px-3 py-1.5 text-xs text-[var(--text-main)] w-44 focus:outline-none focus:border-[var(--accent)] placeholder:text-[var(--text-muted)]"
+            className="field px-3 py-1.5 text-xs w-44 placeholder:text-[var(--text-muted)]"
           />
           <button
             onClick={() => { setEditTarget(null); setShowForm(true) }}
-            className="text-xs text-[var(--accent)] border border-[var(--accent)]/30 hover:border-[var(--accent)] px-3 py-1.5 rounded transition-colors"
+            className="btn btn-primary btn-sm"
           >
-            + New Event
+            New Event
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="timeline-scroll flex-1 overflow-y-auto" onScroll={() => {}}>
         {filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full text-[var(--text-muted)]">
-            <div className="text-center">
-              <div className="text-5xl mb-3 opacity-60">⏳</div>
+            <div className="empty-state">
               <p className="text-sm">{allEvents.length === 0 ? 'No events yet.' : 'No matches.'}</p>
             </div>
           </div>
         ) : (
-          <div className="relative" style={{ minHeight: SVG_HEIGHT + 'px' }}>
-            <svg
-              width={totalWidth}
-              height={SVG_HEIGHT}
-              style={{ display: 'block', minWidth: '100%' }}
-            >
-              <line x1={LEFT_PAD - 20} y1={SPINE_Y} x2={totalWidth - 60} y2={SPINE_Y}
-                stroke="var(--border)" strokeWidth="2" />
-
-              <polygon
-                points={`${totalWidth - 54},${SPINE_Y - 7} ${totalWidth - 36},${SPINE_Y} ${totalWidth - 54},${SPINE_Y + 7}`}
-                fill="var(--text-muted)"
-              />
-              <text x={totalWidth - 30} y={SPINE_Y + 4} fill="var(--text-muted)" fontSize="10" fontWeight="600">latest</text>
-
-              {filtered.map((ev, idx) => {
-                const x     = LEFT_PAD + idx * EV_SPACING
-                const above = idx % 2 === 0
-                const labelY = above ? SPINE_Y - 28 : SPINE_Y + 38
-                const tickY1 = above ? SPINE_Y - DOT_R - 2 : SPINE_Y + DOT_R + 2
-                const tickY2 = above ? SPINE_Y - 20 : SPINE_Y + 20
-                const isExpanded = expandedId === ev.id
-                const sourceColor =
-                  ev.sourceType === 'history'
-                    ? 'var(--text-main)'
-                    : ev.sourceType === 'birthday'
-                      ? '#f472b6'
-                      : 'var(--accent)'
-
-                return (
-                  <g key={ev.id} onClick={() => handleDotClick(ev.id)} style={{ cursor: 'pointer' }}>
-                    <line x1={x} y1={tickY1} x2={x} y2={tickY2} stroke="var(--text-muted)" strokeWidth="1.5" />
-
-                    <circle cx={x} cy={SPINE_Y} r={DOT_R + 4} fill={isExpanded ? 'var(--accent-fade)' : 'transparent'} />
-                    <circle cx={x} cy={SPINE_Y} r={DOT_R}
-                      fill={isExpanded ? sourceColor : 'var(--bg-nav)'}
-                      stroke={isExpanded ? sourceColor : 'var(--text-muted)'}
-                      strokeWidth="2"
-                    />
-                    {isExpanded && <circle cx={x} cy={SPINE_Y} r={DOT_R - 2} fill={sourceColor} opacity="0.6" />}
-
-                    <text
-                      x={x} y={labelY}
-                      textAnchor="middle"
-                      fill={isExpanded ? sourceColor : 'var(--text-muted)'}
-                      fontSize="11"
-                      fontWeight={isExpanded ? '600' : '400'}
-                    >
-                      {ev.title.length > 18 ? ev.title.slice(0, 17) + '…' : ev.title}
-                    </text>
-
-                    {ev.date && (
-                      <text
-                        x={x} y={above ? labelY - 14 : labelY + 14}
-                        textAnchor="middle"
-                        fill={sourceColor}
-                        fontSize="10"
-                      >
-                        {ev.date}
-                      </text>
-                    )}
-                  </g>
-                )
-              })}
-            </svg>
-
-            {expandedEvent && expandedIdx >= 0 && (() => {
-              const x = LEFT_PAD + expandedIdx * EV_SPACING
-              const above = expandedIdx % 2 === 0
-              const cardW = 260
-              const cardLeft = Math.max(8, x - cardW / 2)
-
+          <div className="timeline-list">
+            {filtered.map(ev => {
+              const isBirthday = ev.sourceType === 'birthday'
+              const isHistory = isWorldHistoryEvent(ev)
+              const isExpanded = expandedId === ev.id
               return (
-                <div
-                  className="absolute z-20 bg-[var(--bg-nav)] border border-[var(--border)] rounded-xl shadow-2xl p-4"
-                  style={{
-                    width: cardW,
-                    left: cardLeft,
-                    ...(above
-                      ? { bottom: SVG_HEIGHT - SPINE_Y + DOT_R + 14 }
-                      : { top: SPINE_Y + DOT_R + 14 }),
-                  }}
+                <article
+                  key={ev.id}
+                  className={`timeline-item ${isExpanded ? 'is-expanded' : ''} ${isHistory ? 'is-history' : ''} ${isBirthday ? 'is-birthday' : ''}`}
                 >
+                  <button
+                    type="button"
+                    className="timeline-item-main"
+                    onClick={() => handleTileClick(ev)}
+                  >
+                    <span className="timeline-dot" />
+                    <span className="timeline-item-copy">
+                      <span className="timeline-date">{ev.date || 'Undated'}</span>
+                      <strong>{ev.title}</strong>
+                      {ev.description && <small>{ev.description}</small>}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="timeline-detail">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <span className="font-semibold text-sm text-[var(--text-main)] leading-snug">{expandedEvent.title}</span>
-                    <button onClick={() => setExpandedId(null)} className="text-[var(--text-muted)] hover:text-[var(--text-main)] text-sm flex-shrink-0 leading-none mt-0.5">✕</button>
+                    <button onClick={() => { setExpandedId(null) }} className="text-[var(--text-muted)] hover:text-[var(--text-main)] text-sm flex-shrink-0 leading-none mt-0.5">✕</button>
                   </div>
                   <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-2">
-                    {expandedEvent.sourceType === 'timeline' && 'Timeline event'}
-                    {expandedEvent.sourceType === 'history' && 'World history'}
+                    {expandedEvent.sourceType === 'timeline' && !isWorldHistoryEvent(expandedEvent) && 'Timeline event'}
+                    {isWorldHistoryEvent(expandedEvent) && 'World history'}
                     {expandedEvent.sourceType === 'birthday' && 'Character birthday'}
                   </div>
                   {expandedEvent.date && (
@@ -295,11 +293,53 @@ export default function Timeline({ store }) {
                     </p>
                   )}
                   {expandedEvent.linkedCharacters?.length > 0 && (
-                    <div className="text-xs text-[var(--text-muted)] mb-2">
-                      <span className="uppercase tracking-wider">Characters: </span>
-                      <span className="text-[var(--text-main)]">
-                        {expandedEvent.linkedCharacters.map(id => getCharName(id)).filter(Boolean).join(', ')}
-                      </span>
+                    <div className="mb-2">
+                      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">Characters</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {expandedEvent.linkedCharacters.map(id => {
+                          const char = characters.find(c => c.id === id)
+                          if (!char) return null
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={(e) => jumpTo({ section: 'characters', id }, e)}
+                              className="timeline-reference"
+                            >
+                              {char.image ? (
+                                <img src={char.image} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-4 h-4 rounded-full bg-[var(--accent-fade)] flex items-center justify-center flex-shrink-0">
+                                  <span className="text-[7px] font-bold text-[var(--accent)]">{char.name.charAt(0)}</span>
+                                </div>
+                              )}
+                              <span className="text-xs text-[var(--text-main)]">{char.name}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {expandedEvent.linkedLocations?.length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1.5">Locations</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {expandedEvent.linkedLocations.map(id => {
+                          const location = locations.find(l => l.id === id)
+                          if (!location) return null
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={(e) => jumpTo({ section: 'locations', id }, e)}
+                              className="timeline-reference"
+                            >
+                              <span className="timeline-reference-icon">L</span>
+                              <span className="text-xs text-[var(--text-main)]">{location.name}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                   {expandedEvent.tags?.length > 0 && (
@@ -321,16 +361,18 @@ export default function Timeline({ store }) {
                       >Delete</button>
                     </div>
                   )}
-                </div>
+                    </div>
+                  )}
+                </article>
               )
-            })()}
+            })}
           </div>
         )}
       </div>
 
       {showForm && (
         <Modal title={editTarget ? `Edit — ${editTarget.title}` : 'New Timeline Event'} onClose={closeForm} wide>
-          <EventForm initial={editTarget} characters={characters} onSave={handleSave} onCancel={closeForm} />
+          <EventForm initial={editTarget} characters={characters} locations={locations} onSave={handleSave} onCancel={closeForm} />
         </Modal>
       )}
     </div>
