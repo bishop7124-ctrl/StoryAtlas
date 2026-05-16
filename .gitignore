@@ -32,3 +32,4 @@ broken-files/
 *.njsproj
 *.sln
 *.sw?
+.claude/
