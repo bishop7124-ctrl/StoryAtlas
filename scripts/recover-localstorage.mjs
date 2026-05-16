@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 
 const input = process.argv[2]
-const output = process.argv[3] || 'novelforge-recovery.json'
+const output = process.argv[3] || 'story-atlas-recovery.json'
 
 if (!input) {
   console.error('Usage: node scripts/recover-localstorage.mjs <leveldb-file> [output]')

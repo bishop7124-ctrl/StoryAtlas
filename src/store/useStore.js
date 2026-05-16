@@ -6,7 +6,23 @@ const load = (key, def) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? def }
   catch { return def }
 }
-const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
+const save = (key, val) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(val))
+  } catch (error) {
+    if (key === 'nf_novels' && Array.isArray(val)) {
+      try {
+        const withoutCovers = val.map(item => ({ ...item, coverPhoto: null }))
+        localStorage.setItem(key, JSON.stringify(withoutCovers))
+        console.warn('Project data was saved without cover photos because browser storage is full.', error)
+        return
+      } catch {
+        // Fall through to the shared warning below.
+      }
+    }
+    console.warn(`Could not save ${key} to browser storage.`, error)
+  }
+}
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36)
 const countWords = value => {
   if (!value || typeof value !== 'string') return 0
@@ -56,6 +72,7 @@ export function useStore(userId = null) {
   const [activeMapByNovel, setActiveMapByNovel] = useState(() => load('nf_activeMapByNovel', {}))
   const [whiteboards, setWhiteboards] = useState(() => load('nf_whiteboards', []))
   const [series, setSeries] = useState(() => load('nf_series', []))
+  const [storySchedule, setStorySchedule] = useState(() => load('nf_storySchedule', []))
 
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const [selectedLocationId, setSelectedLocationId] = useState(null)
@@ -92,6 +109,7 @@ export function useStore(userId = null) {
   useEffect(() => save('nf_activeMapByNovel', activeMapByNovel), [activeMapByNovel])
   useEffect(() => save('nf_whiteboards', whiteboards), [whiteboards])
   useEffect(() => save('nf_series', series), [series])
+  useEffect(() => save('nf_storySchedule', storySchedule), [storySchedule])
 
   // Debounced Firestore save for all non-scene data (2s delay)
   const debouncedSaveAppData = useMemo(
@@ -111,11 +129,11 @@ export function useStore(userId = null) {
     debouncedSaveAppData(userId, {
       novels, characters, factions, locations, timeline,
       worldHistory, acts, chapters, loreEntries, ideaEntries,
-      maps, activeMapByNovel, whiteboards, series,
+      maps, activeMapByNovel, whiteboards, series, storySchedule,
       currentYear, activeNovelId
     })
   }, [userId, novels, characters, factions, locations, timeline,
-      worldHistory, acts, chapters, loreEntries, ideaEntries, maps, activeMapByNovel, whiteboards, series, currentYear, activeNovelId, debouncedSaveAppData])
+      worldHistory, acts, chapters, loreEntries, ideaEntries, maps, activeMapByNovel, whiteboards, series, storySchedule, currentYear, activeNovelId, debouncedSaveAppData])
 
   // Bulk import from Firestore after login
   const importData = useCallback((data) => {
@@ -136,6 +154,7 @@ export function useStore(userId = null) {
     setActiveMapByNovel(data.activeMapByNovel ?? {})
     setWhiteboards(data.whiteboards ?? [])
     setSeries(data.series ?? [])
+    setStorySchedule(data.storySchedule ?? [])
     setCurrentYear(data.currentYear ?? 0)
     setActiveNovelId(data.activeNovelId ?? null)
     // Allow effects to settle before re-enabling Firestore saves
@@ -171,6 +190,7 @@ export function useStore(userId = null) {
         activeMapByNovel: data.activeMapByNovel ?? {},
         whiteboards: data.whiteboards ?? [],
         series: data.series ?? [],
+        storySchedule: data.storySchedule ?? [],
         currentYear: data.currentYear ?? 0,
         activeNovelId: data.activeNovelId ?? null
       }).catch(console.error)
@@ -187,7 +207,7 @@ export function useStore(userId = null) {
     remoteReady.current = false
     setNovels([]); setCharacters([]); setFactions([]); setLocations([])
     setTimeline([]); setWorldHistory([]); setActs([]); setChapters([])
-    setScenes([]); setLoreEntries([]); setIdeaEntries([]); setMaps([]); setActiveMapByNovel({}); setWhiteboards([]); setSeries([]); setCurrentYear(0); setActiveNovelId(null)
+    setScenes([]); setLoreEntries([]); setIdeaEntries([]); setMaps([]); setActiveMapByNovel({}); setWhiteboards([]); setSeries([]); setStorySchedule([]); setCurrentYear(0); setActiveNovelId(null)
     setTimeout(() => { importing.current = false }, 500)
   }, [])
 
@@ -231,6 +251,7 @@ export function useStore(userId = null) {
   const novelFactions = seriesScope(factions, 'factions')
   const novelLoreEntries = seriesScope(loreEntries, 'lore')
   const novelIdeaEntries = seriesScope(ideaEntries, 'ideas')
+  const novelStorySchedule = storySchedule.filter(e => e.novelId === activeNovelId)
   const novelMaps = maps.filter(m => m.novelId === activeNovelId)
   const activeMapId = activeMapByNovel[activeNovelId] ?? novelMaps[0]?.id ?? null
   const activeWhiteboard = whiteboards.find(w => w.novelId === activeNovelId) ?? null
@@ -542,6 +563,14 @@ export function useStore(userId = null) {
     setWorldHistory(prev => prev.filter(h => h.timelineEventId !== id))
   }
 
+  const addScheduleEvent = (data) => {
+    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), category: 'scene', duration: 1, tags: [], linkedCharacters: [], linkedLocations: [], ...data }
+    setStorySchedule(prev => [...prev, entry])
+    return entry
+  }
+  const updateScheduleEvent = (id, data) => setStorySchedule(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
+  const deleteScheduleEvent = (id) => setStorySchedule(prev => prev.filter(e => e.id !== id))
+
   const addHistoryEntry = (data) => {
     const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), ...data }
     setWorldHistory(prev => [...prev, entry])
@@ -653,6 +682,7 @@ export function useStore(userId = null) {
     setIdeaEntries(prev => prev.filter(e => e.novelId !== id))
     setMaps(prev => prev.filter(m => m.novelId !== id))
     setWhiteboards(prev => prev.filter(w => w.novelId !== id))
+    setStorySchedule(prev => prev.filter(e => e.novelId !== id))
     setActiveMapByNovel(prev => {
       const next = { ...prev }
       delete next[id]
@@ -699,6 +729,7 @@ export function useStore(userId = null) {
     selectedLocationId, setSelectedLocationId,
     selectedLoreEntryId, setSelectedLoreEntryId,
     selectedIdeaEntryId, setSelectedIdeaEntryId,
+    storySchedule: novelStorySchedule, addScheduleEvent, updateScheduleEvent, deleteScheduleEvent,
     importData, replaceData, clearData, finishRemoteLoad
   }
 }

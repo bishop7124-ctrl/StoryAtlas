@@ -5,6 +5,7 @@ import { loadUserData } from './utils/firestoreSync'
 import NovelManager from './components/NovelManager'
 import Layout from './components/Layout'
 import LoginPage from './components/auth/LoginPage'
+import AIPanel from './components/ai/AIPanel'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -76,7 +77,16 @@ function AppInner() {
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
   const [section, setSection] = useState('dashboard')
+  const [libraryAiOpen, setLibraryAiOpen] = useState(false)
   const loadedUid = useRef(null)
+  const prevNovelId = useRef(null)
+
+  useEffect(() => {
+    if (store.activeNovelId && store.activeNovelId !== prevNovelId.current) {
+      setSection('dashboard')
+    }
+    prevNovelId.current = store.activeNovelId ?? null
+  }, [store.activeNovelId])
 
   useEffect(() => {
     if (!user) {
@@ -118,7 +128,17 @@ function AppInner() {
 
   return store.activeNovel
     ? <Layout store={store} section={section} setSection={setSection} />
-    : <NovelManager store={store} />
+    : (
+      <>
+        <NovelManager store={store} user={user} onOpenChat={() => setLibraryAiOpen(true)} />
+        <AIPanel
+          store={store}
+          open={libraryAiOpen}
+          onClose={() => setLibraryAiOpen(false)}
+          initialContext={{ characterIds: [], locationIds: [], loreEntryIds: [], chapterIds: [], customInstruction: '' }}
+        />
+      </>
+    )
 }
 
 export default function App() {

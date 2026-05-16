@@ -14,6 +14,7 @@ export function StudioFrame({
   onToggleContextRail,
   actions,
   topBar,
+  utilityContent,
   children,
 }) {
   return (
@@ -60,6 +61,7 @@ export function StudioFrame({
               {themeTray}
             </div>
           )}
+          {utilityContent}
         </div>
       </header>
 

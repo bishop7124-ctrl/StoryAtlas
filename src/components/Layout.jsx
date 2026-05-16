@@ -1,6 +1,7 @@
 import { Component, useEffect, useState, useMemo } from 'react'
 import UserMenu from './auth/UserMenu'
 import AIPanel from './ai/AIPanel'
+import AIAssistant from './ai/AIAssistant'
 import Characters from './characters/Characters'
 import FamilyTree from './familytree/FamilyTree'
 import Factions from './Factions/Factions'
@@ -13,6 +14,7 @@ import Locations from './Locations/Locations'
 import Manuscript from './Manuscript/Manuscript'
 import StoryOutline from './outline/StoryOutline'
 import ProjectDashboard from './dashboard/ProjectDashboard'
+import ScheduleCalendar from './schedule/ScheduleCalendar'
 import { getProjectType } from '../constants/projectTypes'
 import { StudioFrame, StudioWorkspace, StudioTab, StudioButton } from './presentation/Studio'
 
@@ -41,6 +43,7 @@ function Icon({ name, size = 16 }) {
     worldhistory: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a14 14 0 0 1 0 18" /><path d="M12 3a14 14 0 0 0 0 18" /></>,
     map: <><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z" /><path d="M9 4v13" /><path d="M15 7v13" /></>,
     note: <><path d="M5 4h14v16H5z" /><path d="M8 8h8" /><path d="M8 12h8" /><path d="M8 16h5" /></>,
+    schedule: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /><path d="M8 14h.01" /><path d="M12 14h.01" /><path d="M16 14h.01" /><path d="M8 18h.01" /><path d="M12 18h.01" /></>,
   }
   return <svg {...common}>{paths[name] || paths.note}</svg>
 }
@@ -65,6 +68,7 @@ class SectionErrorBoundary extends Component {
 // ─── Theme data ───────────────────────────────────────────────────────────────
 
 const PRESET_THEMES = [
+  { id: 'atelier',     label: 'Atelier',     description: 'Dark forest studio',   swatches: { bgMain: '#0e1512', bgNav: '#141c16', textMain: '#dce8d7', textMuted: '#6b856d', accent: '#8fcb9e', border: '#1e2c20' } },
   { id: 'scriptorium', label: 'Scriptorium', description: 'Warm dark desk',      swatches: { bgMain: '#14100c', bgNav: '#241b13', textMain: '#f4ead9', textMuted: '#b8a58f', accent: '#c89445', border: '#3c3023' } },
   { id: 'ink',         label: 'Night Ink',   description: 'Cool low-light focus', swatches: { bgMain: '#0d1114', bgNav: '#171d20', textMain: '#edf1ee', textMuted: '#95a39d', accent: '#8bb9a8', border: '#283237' } },
   { id: 'vellum',      label: 'Vellum',      description: 'Soft paper mode',      swatches: { bgMain: '#f3ead9', bgNav: '#e6d8bf', textMain: '#221b14', textMuted: '#71624e', accent: '#8a3f2d', border: '#c9b89e' } },
@@ -385,6 +389,7 @@ const ALL_SECTIONS = [
   { id: 'locations',    label: 'Locations',    icon: 'locations' },
   { id: 'lore',         label: 'Lore',         icon: 'lore' },
   { id: 'ideas',        label: 'Notes',        icon: 'ideas' },
+  { id: 'schedule',     label: 'Schedule',     icon: 'schedule' },
   { id: 'timeline',     label: 'Timeline',     icon: 'timeline' },
   { id: 'worldhistory', label: 'History',      icon: 'worldhistory' },
   { id: 'map',          label: 'Map',          icon: 'map' },
@@ -392,11 +397,10 @@ const ALL_SECTIONS = [
 
 const STUDIO_ROOMS = [
   { id: 'overview',    label: 'Overview',    icon: 'overview',    sections: ['dashboard'] },
-  { id: 'planning',    label: 'Planning',    icon: 'planning',    sections: ['outline', 'ideas'] },
-  { id: 'lore',        label: 'Lore',        icon: 'lore',        sections: ['lore'] },
+  { id: 'planning',    label: 'Planning',    icon: 'planning',    sections: ['outline', 'ideas', 'schedule'] },
   { id: 'characters',  label: 'Characters',  icon: 'characters',  sections: ['characters', 'familytree', 'factions'] },
   { id: 'atlas',       label: 'Atlas',       icon: 'atlas',       sections: ['locations', 'map'] },
-  { id: 'history',     label: 'History',     icon: 'history',     sections: ['timeline', 'worldhistory'] },
+  { id: 'lore',        label: 'Lore',        icon: 'lore',        sections: ['lore', 'timeline', 'worldhistory'] },
 ]
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -473,6 +477,7 @@ export default function Layout({ store, section, setSection }) {
     locations:    <Locations store={store} />,
     lore:         <Lore store={store} />,
     ideas:        <IdeasBoard store={store} />,
+    schedule:     <ScheduleCalendar store={store} />,
     timeline:     <Timeline store={store} />,
     worldhistory: <WorldHistory store={store} />,
     map:          <MapBuilder store={store} />,
@@ -522,30 +527,31 @@ export default function Layout({ store, section, setSection }) {
             Write
           </StudioButton>
         )}
-        topBar={(
-          <>
+        topBar={null}
+        utilityContent={(
+          <div className="studio-utility-btns">
             <button
-              className={`studio-top-btn${aiOpen ? ' is-active' : ''}`}
-              onClick={() => setAiOpen(v => !v)}
-              title="AI Assistant"
-            >
-              ✦ AI
-            </button>
-            <button
-              className={`studio-top-btn${showThemeEditor ? ' is-active' : ''}`}
+              className={`studio-utility-btn${showThemeEditor ? ' is-active' : ''}`}
               onClick={() => setShowThemeEditor(v => !v)}
               title="Appearance"
             >
-              ◈ Themes
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              </svg>
+              Themes
             </button>
             <button
-              className="studio-top-btn"
+              className="studio-utility-btn"
               onClick={() => store.setActiveNovelId(null)}
               title="Back to projects"
             >
-              ← Exit
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Exit
             </button>
-          </>
+          </div>
         )}
         contextRail={null}
       >
@@ -570,19 +576,35 @@ export default function Layout({ store, section, setSection }) {
             </>
           ) : null}
         >
-          <div className="h-full relative">
+          <div className="h-full relative flex flex-col">
             {viewMode === 'planning' ? (
-              <main className="h-full overflow-hidden relative">
-                <SectionErrorBoundary key={section}>
-                  {databaseContent[section] || databaseContent['characters']}
-                </SectionErrorBoundary>
-              </main>
+              <>
+                <main className="flex-1 overflow-hidden relative min-h-0">
+                  <SectionErrorBoundary key={section}>
+                    {databaseContent[section] || databaseContent['characters']}
+                  </SectionErrorBoundary>
+                </main>
+                <AIAssistant
+                  store={store}
+                  section={section}
+                  onOpenChat={() => setAiOpen(v => !v)}
+                  aiOpen={aiOpen}
+                />
+              </>
             ) : (
-              <main className="h-full overflow-hidden">
-                <SectionErrorBoundary key="manuscript">
-                  <Manuscript store={store} />
-                </SectionErrorBoundary>
-              </main>
+              <>
+                <main className="flex-1 overflow-hidden min-h-0">
+                  <SectionErrorBoundary key="manuscript">
+                    <Manuscript store={store} />
+                  </SectionErrorBoundary>
+                </main>
+                <AIAssistant
+                  store={store}
+                  section="manuscript"
+                  onOpenChat={() => setAiOpen(v => !v)}
+                  aiOpen={aiOpen}
+                />
+              </>
             )}
           </div>
         </StudioWorkspace>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import UserMenu from './auth/UserMenu'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
 
@@ -20,10 +20,155 @@ const getCoverGradient = (title) => {
   return COVER_GRADIENTS[n % COVER_GRADIENTS.length]
 }
 
-function NovelCard({ stats, onOpen, onDelete }) {
+const resizeCoverPhoto = (file) => new Promise((resolve, reject) => {
+  const image = new Image()
+  const objectUrl = URL.createObjectURL(file)
+
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl)
+    const maxWidth = 900
+    const maxHeight = 1200
+    const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height)
+    const width = Math.max(1, Math.round(image.width * scale))
+    const height = Math.max(1, Math.round(image.height * scale))
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+    canvas.width = width
+    canvas.height = height
+    ctx.fillStyle = '#111814'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(image, 0, 0, width, height)
+
+    let quality = 0.82
+    let dataUrl = canvas.toDataURL('image/jpeg', quality)
+    while (dataUrl.length > 900000 && quality > 0.48) {
+      quality -= 0.08
+      dataUrl = canvas.toDataURL('image/jpeg', quality)
+    }
+    resolve(dataUrl)
+  }
+
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl)
+    reject(new Error('Could not read that image.'))
+  }
+
+  image.src = objectUrl
+})
+
+function ProjectTypeImage({ type, label, size = 34 }) {
+  const id = type || DEFAULT_TYPE
+  const common = {
+    className: `project-type-image project-type-image-${id}`,
+    width: size,
+    height: size,
+    viewBox: '0 0 40 40',
+    role: 'img',
+    'aria-label': label,
+  }
+
+  const paths = {
+    novel: (
+      <>
+        <path className="project-type-fill" d="M10 8h12a8 8 0 0 1 8 8v17H17a7 7 0 0 0-7-7V8Z" />
+        <path className="project-type-accent" d="M17 8v25a7 7 0 0 0-7-7V8h7Z" />
+        <path className="project-type-line" d="M15 14h10M15 19h11M15 24h8" />
+      </>
+    ),
+    novella: (
+      <>
+        <path className="project-type-fill" d="M9 11h12a7 7 0 0 1 7 7v12H16a7 7 0 0 0-7-7V11Z" />
+        <path className="project-type-accent" d="M16 11v19a7 7 0 0 0-7-7V11h7Z" />
+        <path className="project-type-line" d="M15 16h10M15 21h8" />
+      </>
+    ),
+    short_story: (
+      <>
+        <path className="project-type-fill" d="M12 7h13l5 5v21H12V7Z" />
+        <path className="project-type-accent" d="M25 7v6h5L25 7Z" />
+        <path className="project-type-line" d="M17 17h8M17 22h8M17 27h6" />
+      </>
+    ),
+    play: (
+      <>
+        <path className="project-type-fill" d="M9 11c5-3 10-3 15 0v9c0 6-3 10-7.5 12C12 30 9 26 9 20v-9Z" />
+        <path className="project-type-accent" d="M17 11c5-3 10-3 15 0v9c0 6-3 10-7.5 12-2.1-1-3.9-2.6-5.2-4.8 2-1.8 3.2-4.3 3.2-7.2v-8.3A18.2 18.2 0 0 0 17 11Z" />
+        <path className="project-type-line" d="M14 18h.1M20 18h.1M13 24c2 2 5 2 7 0" />
+      </>
+    ),
+    screenplay: (
+      <>
+        <path className="project-type-fill" d="M8 15h24v16H8V15Z" />
+        <path className="project-type-accent" d="M10 8h6l3 7h-7l-2-7ZM20 8h6l3 7h-7l-2-7Z" />
+        <path className="project-type-line" d="M13 21h14M13 26h9" />
+      </>
+    ),
+    tv_show: (
+      <>
+        <path className="project-type-fill" d="M9 12h22v16H9V12Z" />
+        <path className="project-type-accent" d="M14 28h12v4H14v-4Z" />
+        <path className="project-type-line" d="M15 17h10M15 22h7M16 8l4 4 4-4" />
+      </>
+    ),
+    dnd_campaign: (
+      <>
+        <path className="project-type-fill" d="M20 7l12 7v12l-12 7-12-7V14l12-7Z" />
+        <path className="project-type-accent" d="M20 7v26l12-7V14L20 7Z" />
+        <path className="project-type-line" d="M15 17l5-3 5 3M15 23l5 3 5-3" />
+      </>
+    ),
+    tabletop_rpg: (
+      <>
+        <path className="project-type-fill" d="M20 7l12 7v12l-12 7-12-7V14l12-7Z" />
+        <path className="project-type-accent" d="M20 7v26l-12-7V14l12-7Z" />
+        <path className="project-type-line" d="M20 16v.1M16 21v.1M24 21v.1M20 26v.1" />
+      </>
+    ),
+    comic: (
+      <>
+        <path className="project-type-fill" d="M9 10h22v15H19l-7 6 2-6H9V10Z" />
+        <path className="project-type-accent" d="M13 14h14v4H13v-4Z" />
+        <path className="project-type-line" d="M13 22h9" />
+      </>
+    ),
+    video_game: (
+      <>
+        <path className="project-type-fill" d="M12 16h16l4 9a5 5 0 0 1-8 5l-2-3h-4l-2 3a5 5 0 0 1-8-5l4-9Z" />
+        <path className="project-type-accent" d="M23 16h5l4 9a5 5 0 0 1-8 5l-2-3h-2l3-11Z" />
+        <path className="project-type-line" d="M14 22h6M17 19v6M25 22h.1M28 25h.1" />
+      </>
+    ),
+  }
+
+  return (
+    <svg {...common}>
+      {paths[id] || paths.novel}
+    </svg>
+  )
+}
+
+function NovelCard({ stats, onOpen, onDelete, onUpdateCover }) {
   const [hovered, setHovered] = useState(false)
+  const [coverError, setCoverError] = useState('')
   const novel = stats.project
   const cfg = getProjectType(novel.type)
+
+  const handleCoverSelect = async (e) => {
+    e.stopPropagation()
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+
+    try {
+      setCoverError('')
+      const coverPhoto = await resizeCoverPhoto(file)
+      onUpdateCover(novel.id, coverPhoto)
+    } catch (error) {
+      setCoverError(error.message || 'Could not use that cover image.')
+    }
+  }
 
   return (
     <div
@@ -50,17 +195,30 @@ function NovelCard({ stats, onOpen, onDelete }) {
             >
               {novel.title[0]?.toUpperCase()}
             </span>
-            <span
-              style={{
-                position: 'absolute', top: 10, left: 10,
-                fontSize: 18, lineHeight: 1,
-              }}
-              title={cfg.label}
-            >
-              {cfg.icon}
+            <span className="project-type-badge" title={cfg.label}>
+              <ProjectTypeImage type={novel.type} label={cfg.label} />
             </span>
           </>
         )}
+        <div className="novel-card-cover-actions" onClick={e => e.stopPropagation()}>
+          <label className="novel-cover-button" title="Change cover photo">
+            <input type="file" accept="image/*" onChange={handleCoverSelect} />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+          </label>
+          {novel.coverPhoto && (
+            <button className="novel-cover-button" type="button" onClick={() => onUpdateCover(novel.id, null)} title="Remove cover photo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {coverError && <p className="novel-cover-error">{coverError}</p>}
       </div>
 
       {/* Title */}
@@ -113,10 +271,11 @@ function NewCard({ onClick }) {
   )
 }
 
-export default function NovelManager({ store }) {
+export default function NovelManager({ store, user, onOpenChat }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [seriesFilter, setSeriesFilter] = useState(null)
+  const userName = user?.displayName || user?.email?.split('@')[0] || 'User'
 
   const handleCreate = (e) => {
     e.preventDefault()
@@ -132,9 +291,27 @@ export default function NovelManager({ store }) {
     }
   }
 
+  const handleUpdateCover = (id, coverPhoto) => {
+    store.updateNovel(id, { coverPhoto })
+  }
+
   const visibleStats = seriesFilter
     ? store.allProjectStats.filter(s => s.project.seriesId === seriesFilter)
     : store.allProjectStats
+
+  const projectGroups = useMemo(() => {
+    const seriesById = new Map((store.series || []).map(s => [s.id, s]))
+    const groups = (store.series || []).map(s => ({
+      id: s.id,
+      title: s.name,
+      stats: visibleStats.filter(item => item.project.seriesId === s.id),
+    }))
+    const standalone = visibleStats.filter(item => !item.project.seriesId || !seriesById.has(item.project.seriesId))
+    return [
+      ...groups.filter(group => group.stats.length > 0),
+      ...(standalone.length ? [{ id: 'standalone', title: store.series.length ? 'Standalone Projects' : 'Projects', stats: standalone }] : []),
+    ]
+  }, [store.series, visibleStats])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-main)', color: 'var(--text-main)' }}>
@@ -146,7 +323,16 @@ export default function NovelManager({ store }) {
       </div>
 
       {/* Content */}
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '36px 28px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '36px 28px 56px' }}>
+        <p className="library-welcome">Welcome, {userName}!</p>
+        <div className="library-hero">
+          <div>
+            <h1>What are we writing today?</h1>
+          </div>
+          <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
+            ✦
+          </button>
+        </div>
 
         {/* Series filter strip */}
         {store.series.length > 0 && (
@@ -179,18 +365,32 @@ export default function NovelManager({ store }) {
           </div>
         )}
 
-        {/* Card grid */}
-        <div className="novel-grid">
-          {visibleStats.map(stats => (
-            <NovelCard
-              key={stats.project.id}
-              stats={stats}
-              onOpen={store.setActiveNovelId}
-              onDelete={handleDelete}
-            />
-          ))}
-          <NewCard onClick={() => setShowForm(true)} />
-        </div>
+        {/* Card groups */}
+        {projectGroups.map(group => (
+          <section className="library-series-section" key={group.id}>
+            <div className="library-series-heading">
+              <h2>{group.title}</h2>
+              <span>{group.stats.length} project{group.stats.length === 1 ? '' : 's'}</span>
+            </div>
+            <div className="novel-grid">
+              {group.stats.map(stats => (
+                <NovelCard
+                  key={stats.project.id}
+                  stats={stats}
+                  onOpen={store.setActiveNovelId}
+                  onDelete={handleDelete}
+                  onUpdateCover={handleUpdateCover}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <section className="library-series-section">
+          <div className="novel-grid novel-grid-actions">
+            <NewCard onClick={() => setShowForm(true)} />
+          </div>
+        </section>
 
         {/* Empty state */}
         {store.novels.length === 0 && (
@@ -246,7 +446,7 @@ export default function NovelManager({ store }) {
                       background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
                     }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 14 }}>{t.icon}</span>
+                      <ProjectTypeImage type={t.id} label={t.label} size={24} />
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
                     </div>
                     <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{t.description}</p>

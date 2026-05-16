@@ -6,7 +6,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Act', level2: 'Chapter', level3: 'Scene' },
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
-    sections: ['outline','characters','familytree','factions','locations','lore','ideas','timeline','worldhistory','map'],
+    sections: ['outline','characters','familytree','factions','locations','lore','ideas','schedule','timeline','worldhistory','map'],
   },
   novella: {
     label: 'Novella',
@@ -15,7 +15,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Part', level2: 'Chapter', level3: 'Scene' },
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline','map'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline','map'],
   },
   short_story: {
     label: 'Short Story',
@@ -24,7 +24,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Part', level2: 'Section', level3: 'Scene' },
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
-    sections: ['outline','characters','locations','lore','ideas'],
+    sections: ['outline','characters','locations','lore','ideas','schedule'],
   },
   play: {
     label: 'Play',
@@ -33,7 +33,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Act', level2: 'Scene', level3: 'Beat' },
     planningTab: 'PLANNING',
     writingTab: 'SCRIPT',
-    sections: ['outline','characters','familytree','locations','lore','ideas'],
+    sections: ['outline','characters','familytree','locations','lore','ideas','schedule'],
   },
   screenplay: {
     label: 'Screenplay',
@@ -42,7 +42,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Act', level2: 'Sequence', level3: 'Scene' },
     planningTab: 'PLANNING',
     writingTab: 'SCRIPT',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline'],
   },
   tv_show: {
     label: 'TV Series',
@@ -51,7 +51,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Season', level2: 'Episode', level3: 'Act' },
     planningTab: 'PLANNING',
     writingTab: 'EPISODES',
-    sections: ['outline','characters','familytree','factions','locations','lore','ideas','timeline','worldhistory'],
+    sections: ['outline','characters','familytree','factions','locations','lore','ideas','schedule','timeline','worldhistory'],
   },
   dnd_campaign: {
     label: 'D&D Campaign',
@@ -60,7 +60,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Story Arc', level2: 'Session', level3: 'Encounter' },
     planningTab: 'WORLDBUILDING',
     writingTab: 'SESSIONS',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline','worldhistory','map'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline','worldhistory','map'],
   },
   tabletop_rpg: {
     label: 'TTRPG Campaign',
@@ -69,7 +69,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Story Arc', level2: 'Session', level3: 'Encounter' },
     planningTab: 'WORLDBUILDING',
     writingTab: 'SESSIONS',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline','worldhistory','map'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline','worldhistory','map'],
   },
   comic: {
     label: 'Comic / Graphic Novel',
@@ -78,7 +78,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Volume', level2: 'Issue', level3: 'Page' },
     planningTab: 'PLANNING',
     writingTab: 'PAGES',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline','map'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline','map'],
   },
   video_game: {
     label: 'Video Game',
@@ -87,7 +87,7 @@ export const PROJECT_TYPES = {
     structure: { level1: 'Act', level2: 'Chapter', level3: 'Scene' },
     planningTab: 'WORLDBUILDING',
     writingTab: 'LEVELS',
-    sections: ['outline','characters','factions','locations','lore','ideas','timeline','worldhistory','map'],
+    sections: ['outline','characters','factions','locations','lore','ideas','schedule','timeline','worldhistory','map'],
   },
 }
 

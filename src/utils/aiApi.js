@@ -105,13 +105,15 @@ async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk,
   } catch (e) { onError(e.message || 'Network error') }
 }
 
-async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError }) {
+async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode }) {
   try {
     const contents = messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }))
-    const body = { contents, generationConfig: { maxOutputTokens: 4096 } }
+    const generationConfig = { maxOutputTokens: 4096 }
+    if (jsonMode) generationConfig.response_mime_type = 'application/json'
+    const body = { contents, generationConfig }
     if (systemPrompt) body.systemInstruction = { parts: [{ text: systemPrompt }] }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`
@@ -159,10 +161,10 @@ async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError }) {
+export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError, jsonMode }) {
   if (!apiKey)              return onError('No API key configured.')
   if (provider === 'anthropic')   return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
-  if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode })
   if (provider === 'openrouter')  return streamOpenAI({
     apiKey, model, systemPrompt, messages, onChunk, onDone, onError,
     baseUrl: 'https://openrouter.ai/api/v1',

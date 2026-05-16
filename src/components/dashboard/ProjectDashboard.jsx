@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { StudioBoard, StudioEmpty } from '../presentation/Studio'
+import { getProjectType } from '../../constants/projectTypes'
 
 const formatNumber = (value) => new Intl.NumberFormat().format(value || 0)
 const READ_WPM = 220
@@ -168,6 +169,119 @@ const buildCharacterFocus = stats => {
     .slice(0, 8)
 }
 
+const NAV_ROOMS = [
+  {
+    id: 'outline',
+    label: 'Outline',
+    primarySection: 'outline',
+    requires: ['outline'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" />
+        <circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" />
+      </svg>
+    ),
+    getSummary: (stats) => {
+      const parts = []
+      if (stats.acts.length) parts.push(`${stats.acts.length} ${stats.projectType.structure?.level1?.toLowerCase() ?? 'act'}s`)
+      if (stats.chapters.length) parts.push(`${stats.chapters.length} ${stats.projectType.structure?.level2?.toLowerCase() ?? 'chapter'}s`)
+      if (stats.scenes.length) parts.push(`${stats.scenes.length} ${stats.projectType.structure?.level3?.toLowerCase() ?? 'scene'}s`)
+      return parts.join(' · ') || 'No structure yet'
+    },
+  },
+  {
+    id: 'characters',
+    label: 'Characters',
+    primarySection: 'characters',
+    requires: ['characters'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+        <circle cx="17" cy="10" r="2.5" /><path d="M14.5 20a4.5 4.5 0 0 1 6 0" />
+      </svg>
+    ),
+    getSummary: (stats) => {
+      const parts = [`${stats.characters.length} characters`]
+      if (stats.factions.length) parts.push(`${stats.factions.length} factions`)
+      return parts.join(' · ')
+    },
+  },
+  {
+    id: 'atlas',
+    label: 'Atlas',
+    primarySection: 'locations',
+    requires: ['locations'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3z" /><path d="M9 3v15" /><path d="M15 6v15" />
+      </svg>
+    ),
+    getSummary: (stats) => {
+      const parts = [`${stats.locations.length} locations`]
+      if (stats.maps.length) parts.push(`${stats.maps.length} maps`)
+      return parts.join(' · ')
+    },
+  },
+  {
+    id: 'lore',
+    label: 'Lore',
+    primarySection: 'lore',
+    requires: ['lore'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 0-4-4z" /><path d="M5 4v16" />
+        <path d="M9 8h6" /><path d="M9 12h5" />
+      </svg>
+    ),
+    getSummary: (stats) => `${stats.loreEntries.length} entries`,
+  },
+  {
+    id: 'history',
+    label: 'History',
+    primarySection: 'timeline',
+    requires: ['timeline', 'worldhistory'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="8" /><path d="M12 8v5l3 2" /><path d="M4 4l3 3" />
+      </svg>
+    ),
+    getSummary: (stats) => {
+      const parts = []
+      if (stats.timeline.length) parts.push(`${stats.timeline.length} events`)
+      if (stats.worldHistory.length) parts.push(`${stats.worldHistory.length} eras`)
+      return parts.join(' · ') || '0 events'
+    },
+  },
+  {
+    id: 'ideas',
+    label: 'Notes',
+    primarySection: 'ideas',
+    requires: ['ideas'],
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M9 18h6" /><path d="M10 22h4" />
+        <path d="M8.5 14.5a6 6 0 1 1 7 0c-.8.7-1.5 1.5-1.5 2.5h-4c0-1-.7-1.8-1.5-2.5z" />
+      </svg>
+    ),
+    getSummary: (stats) => `${stats.ideaEntries.length} notes`,
+  },
+]
+
+const teleport = (section) =>
+  window.dispatchEvent(new CustomEvent('switch-section', { detail: { section } }))
+
+const NavCard = ({ room, stats }) => (
+  <button
+    className="overview-nav-card"
+    onClick={() => teleport(room.primarySection)}
+    aria-label={`Open ${room.label}`}
+  >
+    <span className="overview-nav-card-icon">{room.icon}</span>
+    <span className="overview-nav-card-label">{room.label}</span>
+    <span className="overview-nav-card-summary">{room.getSummary(stats)}</span>
+  </button>
+)
+
 const LedgerRow = ({ label, value }) => (
   <div className="overview-row">
     <span>{label}</span>
@@ -219,6 +333,9 @@ export default function ProjectDashboard({ store }) {
   if (!stats) return null
 
   const project = stats.project
+  const availableSections = new Set(getProjectType(project?.type).sections)
+  const visibleRooms = NAV_ROOMS.filter(room => room.requires.some(id => availableSections.has(id)))
+
   const recentScenes = [...stats.scenes]
     .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
     .slice(0, 5)
@@ -252,6 +369,14 @@ export default function ProjectDashboard({ store }) {
           <Stat label="Characters" value={formatNumber(stats.characters.length)} detail={`${stats.factions.length} factions`} />
           <Stat label="Atlas" value={formatNumber(stats.locations.length)} detail={`${stats.maps.length} maps`} />
         </section>
+
+        {visibleRooms.length > 0 && (
+          <nav className="overview-nav" aria-label="Project areas">
+            {visibleRooms.map(room => (
+              <NavCard key={room.id} room={room} stats={stats} />
+            ))}
+          </nav>
+        )}
 
         <div className="overview-columns">
           <section className="overview-section panel-soft">
