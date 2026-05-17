@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Modal from '../shared/Modal'
 import { FACTION_ICONS } from '../../constants/factionIcons'
 import { REL_TYPES } from '../../constants/Constants'
@@ -22,15 +22,34 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
     relationships: initial?.relationships || [],
     keywords: initial?.keywords || [],
     image: initial?.image || '',
+    imagePosition: initial?.imagePosition || '50% 50%',
   })
   const [keywordInput, setKeywordInput] = useState('')
+  const pickerRef = useRef(null)
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => setForm(prev => ({ ...prev, image: ev.target.result }))
+    reader.onload = (ev) => setForm(prev => ({ ...prev, image: ev.target.result, imagePosition: '50% 50%' }))
     reader.readAsDataURL(file)
+  }
+
+  const handlePickerClick = (e) => {
+    const rect = pickerRef.current.getBoundingClientRect()
+    const x = Math.round(((e.clientX - rect.left) / rect.width) * 100)
+    const y = Math.round(((e.clientY - rect.top) / rect.height) * 100)
+    setForm(prev => ({ ...prev, imagePosition: `${x}% ${y}%` }))
+  }
+
+  const [isDragging, setIsDragging] = useState(false)
+
+  const handlePickerDrag = (e) => {
+    if (!isDragging) return
+    const rect = pickerRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)))
+    const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)))
+    setForm(prev => ({ ...prev, imagePosition: `${x}% ${y}%` }))
   }
 
   const handleChange = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }))
@@ -154,20 +173,53 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
 
       <div>
         <label className={LABEL}>Character Portrait</label>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 mb-3">
+          <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="char-image-upload" />
+          <label htmlFor="char-image-upload" className="cursor-pointer text-xs text-[var(--accent)] border border-[var(--accent)]/30 hover:border-[var(--accent)] px-3 py-1.5 rounded transition-colors">
+            {form.image ? 'Change Image' : 'Upload Image'}
+          </label>
           {form.image && (
-            <img src={form.image} alt="Portrait" className="w-20 h-20 rounded-lg object-cover border border-[var(--border)] flex-shrink-0" />
+            <button type="button" onClick={() => setForm(prev => ({ ...prev, image: '', imagePosition: '50% 50%' }))} className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors">Remove</button>
           )}
-          <div className="flex items-center gap-2">
-            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="char-image-upload" />
-            <label htmlFor="char-image-upload" className="cursor-pointer text-xs text-[var(--accent)] border border-[var(--accent)]/30 hover:border-[var(--accent)] px-3 py-1.5 rounded transition-colors">
-              {form.image ? 'Change Image' : 'Upload Image'}
-            </label>
-            {form.image && (
-              <button type="button" onClick={() => setForm(prev => ({ ...prev, image: '' }))} className="text-xs text-[var(--text-muted)] hover:text-red-400 transition-colors">Remove</button>
-            )}
-          </div>
         </div>
+        {form.image && (
+          <div>
+            <p className="text-xs text-[var(--text-muted)] mb-2">Drag or click to set the focal point — this controls what's visible in thumbnails throughout the app.</p>
+            <div className="flex gap-4 items-start">
+              <div
+                ref={pickerRef}
+                className="relative flex-1 h-44 rounded-lg overflow-hidden border border-[var(--border)] cursor-crosshair select-none"
+                onClick={handlePickerClick}
+                onMouseDown={() => setIsDragging(true)}
+                onMouseMove={handlePickerDrag}
+                onMouseUp={() => setIsDragging(false)}
+                onMouseLeave={() => setIsDragging(false)}
+              >
+                <img src={form.image} alt="Portrait" className="w-full h-full object-cover pointer-events-none" style={{ objectPosition: form.imagePosition }} />
+                {/* focal point crosshair */}
+                <div
+                  className="absolute w-5 h-5 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                  style={{ left: form.imagePosition.split(' ')[0], top: form.imagePosition.split(' ')[1] }}
+                >
+                  <div className="absolute inset-0 rounded-full border-2 border-white shadow-lg" />
+                  <div className="absolute top-1/2 left-0 w-full h-px bg-white/80 -translate-y-1/2" />
+                  <div className="absolute left-1/2 top-0 h-full w-px bg-white/80 -translate-x-1/2" />
+                </div>
+              </div>
+              {/* live previews */}
+              <div className="flex flex-col gap-3 items-center flex-shrink-0">
+                <div>
+                  <p className="text-[10px] text-[var(--text-muted)] text-center mb-1">Thumbnail</p>
+                  <img src={form.image} alt="" className="w-10 h-10 rounded-full object-cover border border-[var(--border)]" style={{ objectPosition: form.imagePosition }} />
+                </div>
+                <div>
+                  <p className="text-[10px] text-[var(--text-muted)] text-center mb-1">Card</p>
+                  <img src={form.image} alt="" className="w-16 h-20 rounded-lg object-cover border border-[var(--border)]" style={{ objectPosition: form.imagePosition }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -266,8 +318,7 @@ export default function Characters({ store }) {
   return (
     <StudioSplit variant="dossier">
       <StudioIndex
-        eyebrow="Characters"
-        title="Dossiers"
+        title="Characters"
         tools={<StudioButton tone="primary" size="sm" onClick={() => { setEditTarget(null); setShowForm(true); }}>New</StudioButton>}
       >
           <input
@@ -282,7 +333,7 @@ export default function Characters({ store }) {
             >
               <div className="flex items-center gap-2.5">
                 {c.image ? (
-                  <img src={c.image} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border)]" />
+                  <img src={c.image} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[var(--border)]" style={{ objectPosition: c.imagePosition || '50% 50%' }} />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-[var(--accent-fade)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0">
                     <span className="text-[10px] font-bold text-[var(--accent)]">{c.name.charAt(0)}</span>
@@ -315,7 +366,7 @@ export default function Characters({ store }) {
             >
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 {selected.image && (
-                  <img src={selected.image} alt={selected.name} className="w-24 h-24 rounded-xl object-cover border border-[var(--border)] flex-shrink-0" />
+                  <img src={selected.image} alt={selected.name} className="w-24 h-24 rounded-xl object-cover border border-[var(--border)] flex-shrink-0" style={{ objectPosition: selected.imagePosition || '50% 50%' }} />
                 )}
                 {getFactionIconUrl(selected) && (
                   <img src={getFactionIconUrl(selected)} alt="Faction Icon" className="w-10 h-10 opacity-60 flex-shrink-0" />

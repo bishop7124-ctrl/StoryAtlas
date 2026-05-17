@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import UserMenu from './auth/UserMenu'
+import StoryAtlasLogo from './brand/StoryAtlasLogo'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
 
 const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
@@ -271,7 +272,7 @@ function NewCard({ onClick }) {
   )
 }
 
-export default function NovelManager({ store, user, onOpenChat }) {
+export default function NovelManager({ store, user, onOpenChat, onOpenAccount }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [seriesFilter, setSeriesFilter] = useState(null)
@@ -318,8 +319,8 @@ export default function NovelManager({ store, user, onOpenChat }) {
 
       {/* Top bar */}
       <div className="library-top-bar">
-        <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 900, fontSize: 18, color: 'var(--accent)' }}>StoryAtlas</span>
-        <UserMenu />
+        <span className="library-brand-logo"><StoryAtlasLogo /></span>
+        <UserMenu onOpenAccount={onOpenAccount} />
       </div>
 
       {/* Content */}
@@ -388,14 +389,19 @@ export default function NovelManager({ store, user, onOpenChat }) {
 
         <section className="library-series-section">
           <div className="novel-grid novel-grid-actions">
-            <NewCard onClick={() => setShowForm(true)} />
+            {!store.readOnly && <NewCard onClick={() => setShowForm(true)} />}
           </div>
         </section>
 
         {/* Empty state */}
-        {store.novels.length === 0 && (
+        {store.novels.length === 0 && !store.readOnly && (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
             Create your first project to get started.
+          </p>
+        )}
+        {store.readOnly && (
+          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
+            Your trial has ended. Projects are available in read-only mode until membership is active.
           </p>
         )}
       </div>

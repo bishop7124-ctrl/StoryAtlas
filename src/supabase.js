@@ -26,6 +26,15 @@ import { createClient } from '@supabase/supabase-js'
 //    create policy "Users can access own scenes" on scenes
 //      using (auth.uid()::text = user_id);
 //
+// 6. Memberships / payments:
+//    - Create a Stripe product with a £10 monthly recurring price.
+//    - Deploy two Supabase Edge Functions:
+//      VITE_CREATE_CHECKOUT_SESSION_URL points at create-checkout-session.
+//      VITE_CUSTOMER_PORTAL_URL points at create-customer-portal.
+//    - Handle Stripe webhooks server-side and write subscription_status into the
+//      user's app_metadata. The client treats active/trialing as paid; after the
+//      built-in 28 day trial, all other statuses become read-only.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 const supabaseUrl = 'https://cwifaklpjqutlcwvkxpp.supabase.co'

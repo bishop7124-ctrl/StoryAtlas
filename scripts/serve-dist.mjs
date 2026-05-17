@@ -28,11 +28,11 @@ const resolveFile = (url) => {
   return join(root, 'index.html')
 }
 
-function createStoryAtlasServer() {
+function createYowServer() {
   return createServer((req, res) => {
     if (!existsSync(indexFile)) {
       res.statusCode = 500
-      res.end('StoryAtlas has not been built yet. Run npm run build first.')
+      res.end('YOW has not been built yet. Run npm run build first.')
       return
     }
 
@@ -47,14 +47,14 @@ function createStoryAtlasServer() {
     createReadStream(filePath)
       .on('error', () => {
         res.statusCode = 500
-        res.end('Unable to load StoryAtlas.')
+        res.end('Unable to load YOW.')
       })
       .pipe(res)
   })
 }
 
 function listen(port, attemptsLeft = 10) {
-  const server = createStoryAtlasServer()
+  const server = createYowServer()
 
   server.once('error', error => {
     if (error.code === 'EADDRINUSE' && attemptsLeft > 0) {
@@ -65,13 +65,13 @@ function listen(port, attemptsLeft = 10) {
     }
 
     console.error(error.code === 'EADDRINUSE'
-      ? `Unable to launch StoryAtlas: ports ${preferredPort}-${port} are busy.`
-      : `Unable to launch StoryAtlas: ${error.message}`)
+      ? `Unable to launch YOW: ports ${preferredPort}-${port} are busy.`
+      : `Unable to launch YOW: ${error.message}`)
     process.exitCode = 1
   })
 
   server.listen(port, host, () => {
-    console.log(`StoryAtlas ready at http://${host}:${port}/`)
+    console.log(`YOW ready at http://${host}:${port}/`)
   })
 }
 

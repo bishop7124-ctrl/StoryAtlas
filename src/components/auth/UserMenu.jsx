@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
-export default function UserMenu() {
+export default function UserMenu({ onOpenAccount }) {
   const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -44,6 +44,14 @@ export default function UserMenu() {
             </p>
             <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">{user.email}</p>
           </div>
+          {onOpenAccount && (
+            <button
+              onClick={() => { setOpen(false); onOpenAccount() }}
+              className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
+            >
+              Account settings
+            </button>
+          )}
           <button
             onClick={() => { setOpen(false); signOut() }}
             className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-red-400 hover:bg-red-400/5 transition-colors"

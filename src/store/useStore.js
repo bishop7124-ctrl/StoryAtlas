@@ -54,7 +54,8 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms) }
 }
 
-export function useStore(userId = null) {
+export function useStore(userId = null, options = {}) {
+  const readOnly = Boolean(options.readOnly)
   const [novels, setNovels] = useState(() => load('nf_novels', []))
   const [activeNovelId, setActiveNovelId] = useState(() => load('nf_activeNovel', null))
   const [characters, setCharacters] = useState(() => load('nf_characters', []))
@@ -695,7 +696,20 @@ export function useStore(userId = null) {
     setSelectedIdeaEntryId(null)
   }
 
-  return {
+  const notifyReadOnly = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('membership-read-only'))
+    }
+  }
+
+  const readOnlyValue = (name) => {
+    notifyReadOnly()
+    if (name.startsWith('add') || name === 'saveLocation') return null
+    return undefined
+  }
+
+  const api = {
+    readOnly,
     novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel,
     series, addSeries, deleteSeries, updateSeries,
     allProjectStats, activeProjectStats,
@@ -732,4 +746,25 @@ export function useStore(userId = null) {
     storySchedule: novelStorySchedule, addScheduleEvent, updateScheduleEvent, deleteScheduleEvent,
     importData, replaceData, clearData, finishRemoteLoad
   }
+
+  if (!readOnly) return api
+
+  const guardedMethods = [
+    'addNovel', 'updateNovel', 'deleteNovel', 'addSeries', 'deleteSeries', 'updateSeries',
+    'saveCharacter', 'deleteCharacter', 'setFactions', 'saveLocation', 'deleteLocation',
+    'addEvent', 'updateEvent', 'deleteEvent', 'addHistoryEntry', 'updateHistoryEntry', 'deleteHistoryEntry',
+    'updateCurrentYear', 'addLoreEntry', 'updateLoreEntry', 'deleteLoreEntry',
+    'addIdeaEntry', 'updateIdeaEntry', 'deleteIdeaEntry', 'updateWhiteboard', 'updateMapProject',
+    'addMap', 'deleteMap', 'renameMap', 'updateActiveMapData', 'addLocation',
+    'addAct', 'deleteAct', 'updateAct', 'reorderAct', 'moveAct',
+    'addChapter', 'deleteChapter', 'updateChapter', 'reorderChapter', 'moveChapter',
+    'addScene', 'deleteScene', 'updateScene', 'reorderScene', 'moveScene', 'updateSceneContent',
+    'addScheduleEvent', 'updateScheduleEvent', 'deleteScheduleEvent', 'replaceData',
+  ]
+
+  const guardedApi = { ...api }
+  guardedMethods.forEach(name => {
+    guardedApi[name] = () => readOnlyValue(name)
+  })
+  return guardedApi
 }

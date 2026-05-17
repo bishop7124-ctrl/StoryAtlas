@@ -359,7 +359,7 @@ function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, customColors,
           <p className="eyebrow mb-3">Preview</p>
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{ padding: '8px 12px', background: effectiveColors.bgNav || 'var(--bg-nav)', borderBottom: `1px solid ${effectiveColors.border || 'var(--border)'}` }}>
-              <span style={{ color: effectiveColors.accent, fontWeight: 900, fontSize: 13 }}>StoryAtlas</span>
+              <span style={{ color: effectiveColors.accent, fontWeight: 900, fontSize: 13 }}>Story Atlas</span>
             </div>
             <div style={{ padding: 12, background: effectiveColors.bgMain || 'var(--bg-main)', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ padding: '6px 10px', borderRadius: 5, background: effectiveColors.bgNav, color: effectiveColors.textMain, border: `1px solid ${effectiveColors.border}`, fontSize: 11 }}>
@@ -405,11 +405,11 @@ const STUDIO_ROOMS = [
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-export default function Layout({ store, section, setSection }) {
+export default function Layout({ store, section, setSection, onOpenAccount }) {
   const projectTypeCfg = getProjectType(store.activeNovel?.type)
   const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || projectTypeCfg.sections.includes(s.id))
 
-  const [viewMode, setViewMode] = useState('writing')
+  const [viewMode, setViewMode] = useState('planning')
   const [lhnOpen, setLhnOpen] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
   const [theme, setTheme] = useState(loadThemeChoice)
@@ -516,7 +516,7 @@ export default function Layout({ store, section, setSection }) {
         rooms={roomNav}
         activeRoomId={activeRoom?.id}
         onOpenRoom={openRoom}
-        account={<UserMenu />}
+        account={<UserMenu onOpenAccount={onOpenAccount} />}
         primaryAction={(
           <StudioButton
             tone={viewMode === 'writing' ? 'primary' : 'secondary'}

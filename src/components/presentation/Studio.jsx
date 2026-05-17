@@ -1,3 +1,5 @@
+import StoryAtlasLogo from '../brand/StoryAtlasLogo'
+
 const cx = (...classes) => classes.filter(Boolean).join(' ')
 
 export function StudioFrame({
@@ -23,13 +25,12 @@ export function StudioFrame({
 
       <header className="studio-spine" aria-label="Studio navigation">
         <div className="studio-brand" title={`${projectTitle} - ${projectType}`}>
-          <div className="studio-account-slot">
-            {account || <div className="studio-brand-mark">S</div>}
-          </div>
+          <div className="studio-brand-mark"><StoryAtlasLogo /></div>
           <div>
-            <p className="studio-kicker">StoryAtlas</p>
+            <p className="studio-kicker">Story Atlas</p>
             <h1>{projectTitle}</h1>
           </div>
+          {account && <div className="studio-account-slot">{account}</div>}
         </div>
 
         {primaryAction && (

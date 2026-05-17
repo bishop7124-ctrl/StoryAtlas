@@ -6,6 +6,9 @@ import NovelManager from './components/NovelManager'
 import Layout from './components/Layout'
 import LoginPage from './components/auth/LoginPage'
 import AIPanel from './components/ai/AIPanel'
+import AccountSettings from './components/account/AccountSettings'
+import StoryAtlasLogo from './components/brand/StoryAtlasLogo'
+import { getMembership } from './utils/membership'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -21,7 +24,7 @@ class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div className="min-h-screen bg-[#0f1115] flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <span className="text-[#f59e0b] font-black text-2xl tracking-tighter">StoryAtlas</span>
+          <span className="w-12 h-12 text-[#f59e0b]"><StoryAtlasLogo /></span>
           <p className="text-[#f8fafc] font-semibold">Something went wrong.</p>
           <p className="text-[#64748b] text-sm max-w-sm">{this.state.error?.message}</p>
           <button
@@ -73,11 +76,14 @@ const hasLocalData = () => {
 function AppInner() {
   const { user, loading: authLoading } = useAuth()
   const userId = user?.uid || user?.id || null
-  const store = useStore(userId)
+  const membership = getMembership(user)
+  const store = useStore(userId, { readOnly: membership.isReadOnly })
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
   const [section, setSection] = useState('dashboard')
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [readOnlyNotice, setReadOnlyNotice] = useState(false)
   const loadedUid = useRef(null)
   const prevNovelId = useRef(null)
 
@@ -87,6 +93,19 @@ function AppInner() {
     }
     prevNovelId.current = store.activeNovelId ?? null
   }, [store.activeNovelId])
+
+  useEffect(() => {
+    const handleReadOnly = () => {
+      setReadOnlyNotice(true)
+      window.clearTimeout(handleReadOnly.timeout)
+      handleReadOnly.timeout = window.setTimeout(() => setReadOnlyNotice(false), 3600)
+    }
+    window.addEventListener('membership-read-only', handleReadOnly)
+    return () => {
+      window.removeEventListener('membership-read-only', handleReadOnly)
+      window.clearTimeout(handleReadOnly.timeout)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) {
@@ -118,7 +137,7 @@ function AppInner() {
   if (authLoading || dataLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-main)] flex flex-col items-center justify-center gap-4">
-        <span className="text-[var(--accent)] font-black text-2xl tracking-tighter">StoryAtlas</span>
+        <span className="w-12 h-12 text-[var(--accent)]"><StoryAtlasLogo /></span>
         <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -126,17 +145,34 @@ function AppInner() {
 
   if (!user) return <LoginPage />
 
+  const accountPage = (
+    <>
+      <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} />
+      {readOnlyNotice && (
+        <div className="membership-toast">
+          Your trial has ended. Upgrade in Account settings to edit again.
+        </div>
+      )}
+    </>
+  )
+
   return store.activeNovel
-    ? <Layout store={store} section={section} setSection={setSection} />
+    ? (
+      <>
+        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} />
+        {accountPage}
+      </>
+    )
     : (
       <>
-        <NovelManager store={store} user={user} onOpenChat={() => setLibraryAiOpen(true)} />
+        <NovelManager store={store} user={user} onOpenChat={() => setLibraryAiOpen(true)} onOpenAccount={() => setAccountOpen(true)} />
         <AIPanel
           store={store}
           open={libraryAiOpen}
           onClose={() => setLibraryAiOpen(false)}
           initialContext={{ characterIds: [], locationIds: [], loreEntryIds: [], chapterIds: [], customInstruction: '' }}
         />
+        {accountPage}
       </>
     )
 }

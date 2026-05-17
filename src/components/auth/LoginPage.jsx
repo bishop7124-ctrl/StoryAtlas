@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import StoryAtlasLogo from '../brand/StoryAtlasLogo'
 
 const FEATURES = [
   {
@@ -39,7 +40,7 @@ const FEATURES = [
   },
   {
     label: 'Atlas',
-    desc: 'Build worlds, maps, lore',
+    desc: 'Worlds, maps, lore',
     icon: (
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="10" cy="10" r="8" />
@@ -61,6 +62,15 @@ const FEATURES = [
   },
 ]
 
+const HOME_SECTIONS = [
+  ['Draft', 'Manuscript drafting with acts, chapters, scenes, and writing progress.'],
+  ['Plan', 'Story outlines, beat planning, schedules, and loose idea boards.'],
+  ['Cast', 'Character dossiers, relationships, factions, and family trees.'],
+  ['World', 'Locations, maps, lore entries, timelines, and world history.'],
+  ['Track', 'Project dashboards for word counts, pacing, goals, and momentum.'],
+  ['Assist', 'Built-in creative AI context for the project you are working on.'],
+]
+
 function HeroIllustration() {
   return (
     <svg
@@ -72,20 +82,20 @@ function HeroIllustration() {
     >
       <defs>
         <radialGradient id="fogL" cx="20%" cy="60%" r="55%">
-          <stop offset="0%" stopColor="#8fcb9e" stopOpacity="0.09" />
-          <stop offset="100%" stopColor="#8fcb9e" stopOpacity="0" />
+          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0" />
         </radialGradient>
         <radialGradient id="fogR" cx="80%" cy="30%" r="50%">
-          <stop offset="0%" stopColor="#a8d8b4" stopOpacity="0.07" />
-          <stop offset="100%" stopColor="#a8d8b4" stopOpacity="0" />
+          <stop offset="0%" stopColor="#9ca899" stopOpacity="0.055" />
+          <stop offset="100%" stopColor="#9ca899" stopOpacity="0" />
         </radialGradient>
         <linearGradient id="inkFade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#8fcb9e" stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#8fcb9e" stopOpacity="0.1" />
+          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.62" />
+          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0.1" />
         </linearGradient>
         <linearGradient id="stemG" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="#8fcb9e" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#8fcb9e" stopOpacity="0.05" />
+          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.42" />
+          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0.05" />
         </linearGradient>
         <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="1.4" />
@@ -103,68 +113,68 @@ function HeroIllustration() {
       {/* ── Open book / manuscript pages ── */}
       {/* Left page */}
       <path d="M28 40 Q56 34 84 40 L84 162 Q56 156 28 162 Z"
-        fill="#141c16" stroke="#8fcb9e" strokeWidth="0.6" strokeOpacity="0.35" />
+        fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.35" />
       {/* Right page */}
       <path d="M84 40 Q112 34 140 40 L140 162 Q112 156 84 162 Z"
-        fill="#141c16" stroke="#8fcb9e" strokeWidth="0.6" strokeOpacity="0.25" />
+        fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.25" />
       {/* Spine shadow */}
-      <line x1="84" y1="40" x2="84" y2="162" stroke="#8fcb9e" strokeWidth="0.8" strokeOpacity="0.2" />
+      <line x1="84" y1="40" x2="84" y2="162" stroke="#b8aa79" strokeWidth="0.8" strokeOpacity="0.2" />
       {/* Handwriting lines — left page */}
       {[0,1,2,3,4,5,6,7,8].map(i => (
         <path key={`ll${i}`}
           d={`M36 ${58 + i * 12} Q${60 + (i % 3) * 4} ${55 + i * 12} ${72 + (i % 2) * 4} ${58 + i * 12}`}
-          stroke="#dce8d7" strokeWidth="0.7" strokeOpacity={0.18 - i * 0.01} strokeLinecap="round" />
+          stroke="#e4dfd2" strokeWidth="0.7" strokeOpacity={0.18 - i * 0.01} strokeLinecap="round" />
       ))}
       {/* Handwriting lines — right page */}
       {[0,1,2,3,4,5,6,7].map(i => (
         <path key={`rl${i}`}
           d={`M92 ${60 + i * 12} Q${114 + (i % 2) * 3} ${57 + i * 12} ${132 - (i % 3) * 3} ${60 + i * 12}`}
-          stroke="#dce8d7" strokeWidth="0.7" strokeOpacity={0.15 - i * 0.008} strokeLinecap="round" />
+          stroke="#e4dfd2" strokeWidth="0.7" strokeOpacity={0.15 - i * 0.008} strokeLinecap="round" />
       ))}
       {/* Paragraph indent marks */}
-      <path d="M36 58 L42 58" stroke="#8fcb9e" strokeWidth="1" strokeOpacity="0.5" strokeLinecap="round" />
-      <path d="M36 94 L42 94" stroke="#8fcb9e" strokeWidth="1" strokeOpacity="0.35" strokeLinecap="round" />
+      <path d="M36 58 L42 58" stroke="#b8aa79" strokeWidth="1" strokeOpacity="0.5" strokeLinecap="round" />
+      <path d="M36 94 L42 94" stroke="#b8aa79" strokeWidth="1" strokeOpacity="0.35" strokeLinecap="round" />
       {/* Drop cap effect */}
-      <rect x="36" y="55" width="10" height="14" rx="1" fill="#8fcb9e" fillOpacity="0.12" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.4" />
-      <text x="38.5" y="66" fontSize="10" fill="#8fcb9e" fillOpacity="0.5" fontFamily="Georgia, serif" fontStyle="italic">T</text>
+      <rect x="36" y="55" width="10" height="14" rx="1" fill="#b8aa79" fillOpacity="0.12" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.4" />
+      <text x="38.5" y="66" fontSize="10" fill="#b8aa79" fillOpacity="0.5" fontFamily="Georgia, serif" fontStyle="italic">T</text>
 
       {/* ── Botanical / organic side elements ── */}
       {/* Left vine stem */}
       <path d="M18 170 Q14 140 18 110 Q22 80 16 55"
         stroke="url(#stemG)" strokeWidth="0.8" fill="none" strokeLinecap="round" />
       {/* Leaves */}
-      <path d="M18 130 Q8 118 10 108 Q20 116 18 130Z" fill="#8fcb9e" fillOpacity="0.14" />
-      <path d="M18 130 Q10 128 10 108" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.3" fill="none" />
-      <path d="M16 100 Q4 92 6 80 Q18 86 16 100Z" fill="#8fcb9e" fillOpacity="0.1" />
-      <path d="M16 100 Q6 96 6 80" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
+      <path d="M18 130 Q8 118 10 108 Q20 116 18 130Z" fill="#b8aa79" fillOpacity="0.14" />
+      <path d="M18 130 Q10 128 10 108" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.3" fill="none" />
+      <path d="M16 100 Q4 92 6 80 Q18 86 16 100Z" fill="#b8aa79" fillOpacity="0.1" />
+      <path d="M16 100 Q6 96 6 80" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
 
       {/* Right vine */}
       <path d="M150 165 Q156 138 152 112 Q148 86 154 60"
         stroke="url(#stemG)" strokeWidth="0.8" fill="none" strokeLinecap="round" />
-      <path d="M152 128 Q164 116 162 104 Q150 112 152 128Z" fill="#8fcb9e" fillOpacity="0.12" />
-      <path d="M152 128 Q162 120 162 104" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
+      <path d="M152 128 Q164 116 162 104 Q150 112 152 128Z" fill="#b8aa79" fillOpacity="0.12" />
+      <path d="M152 128 Q162 120 162 104" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
 
       {/* ── World / constellation cluster ── */}
       {/* Organic world blob */}
-      <ellipse cx="225" cy="78" rx="46" ry="42" fill="#141c16" stroke="#8fcb9e" strokeWidth="0.6" strokeOpacity="0.3" />
+      <ellipse cx="225" cy="78" rx="46" ry="42" fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.3" />
       {/* Topographic contour lines */}
-      <ellipse cx="225" cy="78" rx="34" ry="30" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.18" fill="none" />
-      <ellipse cx="225" cy="78" rx="22" ry="19" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.14" fill="none" />
-      <ellipse cx="225" cy="78" rx="10" ry="9" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.1" fill="none" />
+      <ellipse cx="225" cy="78" rx="34" ry="30" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.18" fill="none" />
+      <ellipse cx="225" cy="78" rx="22" ry="19" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.14" fill="none" />
+      <ellipse cx="225" cy="78" rx="10" ry="9" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.1" fill="none" />
       {/* Irregular land masses */}
       <path d="M206 68 Q215 58 228 62 Q240 60 244 70 Q250 80 242 88 Q232 96 220 90 Q208 84 206 68Z"
-        fill="#8fcb9e" fillOpacity="0.08" stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.22" />
+        fill="#b8aa79" fillOpacity="0.08" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.22" />
       <path d="M210 82 Q206 86 208 92 Q214 90 212 84Z"
-        fill="#8fcb9e" fillOpacity="0.07" stroke="#8fcb9e" strokeWidth="0.4" strokeOpacity="0.18" />
+        fill="#b8aa79" fillOpacity="0.07" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.18" />
       {/* Latitude / longitude whispers */}
-      <path d="M179 78 Q225 68 271 78" stroke="#8fcb9e" strokeWidth="0.4" strokeOpacity="0.15" fill="none" />
-      <path d="M182 62 Q225 56 268 62" stroke="#8fcb9e" strokeWidth="0.4" strokeOpacity="0.1" fill="none" />
-      <line x1="225" y1="36" x2="225" y2="120" stroke="#8fcb9e" strokeWidth="0.4" strokeOpacity="0.12" />
+      <path d="M179 78 Q225 68 271 78" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.15" fill="none" />
+      <path d="M182 62 Q225 56 268 62" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.1" fill="none" />
+      <line x1="225" y1="36" x2="225" y2="120" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.12" />
       {/* Marker pins */}
-      <circle cx="233" cy="70" r="2.5" fill="#141c16" stroke="#8fcb9e" strokeWidth="0.8" strokeOpacity="0.7" />
-      <circle cx="233" cy="70" r="1" fill="#8fcb9e" fillOpacity="0.8" />
-      <circle cx="218" cy="82" r="1.8" fill="#141c16" stroke="#8fcb9e" strokeWidth="0.6" strokeOpacity="0.5" />
-      <circle cx="218" cy="82" r="0.7" fill="#8fcb9e" fillOpacity="0.6" />
+      <circle cx="233" cy="70" r="2.5" fill="#171918" stroke="#b8aa79" strokeWidth="0.8" strokeOpacity="0.7" />
+      <circle cx="233" cy="70" r="1" fill="#b8aa79" fillOpacity="0.8" />
+      <circle cx="218" cy="82" r="1.8" fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.5" />
+      <circle cx="218" cy="82" r="0.7" fill="#b8aa79" fillOpacity="0.6" />
 
       {/* ── Character constellation ── */}
       {/* Nodes */}
@@ -176,9 +186,9 @@ function HeroIllustration() {
         [330, 56, 3, 0.45],
       ].map(([cx, cy, r, op], i) => (
         <g key={i} filter={i === 0 ? 'url(#glow)' : undefined}>
-          <circle cx={cx} cy={cy} r={r + 2} fill="#8fcb9e" fillOpacity={0.05} />
-          <circle cx={cx} cy={cy} r={r} fill="#141c16" stroke="#8fcb9e" strokeWidth="0.7" strokeOpacity={op} />
-          <circle cx={cx} cy={cy} r={r * 0.38} fill="#8fcb9e" fillOpacity={op * 0.9} />
+          <circle cx={cx} cy={cy} r={r + 2} fill="#b8aa79" fillOpacity={0.05} />
+          <circle cx={cx} cy={cy} r={r} fill="#171918" stroke="#b8aa79" strokeWidth="0.7" strokeOpacity={op} />
+          <circle cx={cx} cy={cy} r={r * 0.38} fill="#b8aa79" fillOpacity={op * 0.9} />
         </g>
       ))}
       {/* Constellation edges */}
@@ -191,41 +201,41 @@ function HeroIllustration() {
         [290, 52, 330, 56],
       ].map(([x1,y1,x2,y2], i) => (
         <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2.5 2.5" />
+          stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2.5 2.5" />
       ))}
 
       {/* ── Ink/analytics flourish at bottom ── */}
       {/* Brushstroke base */}
       <path d="M165 162 Q185 148 210 155 Q240 162 268 148 Q292 136 318 145"
-        stroke="#8fcb9e" strokeWidth="1.4" strokeOpacity="0.55" fill="none"
+        stroke="#b8aa79" strokeWidth="1.4" strokeOpacity="0.55" fill="none"
         strokeLinecap="round" strokeLinejoin="round" />
       {/* Shadow/blur version for depth */}
       <path d="M165 162 Q185 148 210 155 Q240 162 268 148 Q292 136 318 145"
-        stroke="#8fcb9e" strokeWidth="3" strokeOpacity="0.08" fill="none"
+        stroke="#b8aa79" strokeWidth="3" strokeOpacity="0.08" fill="none"
         strokeLinecap="round" filter="url(#soft)" />
       {/* Data accent dots along the line */}
       {[[210, 155], [240, 161], [268, 148], [295, 139]].map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="2.2" fill="#8fcb9e" fillOpacity={0.5 - i * 0.06} />
+        <circle key={i} cx={x} cy={y} r="2.2" fill="#b8aa79" fillOpacity={0.5 - i * 0.06} />
       ))}
       {/* Vertical tick marks */}
       {[[210, 155], [240, 161], [268, 148], [295, 139]].map(([x, y], i) => (
         <line key={i} x1={x} y1={y + 6} x2={x} y2={y + 16}
-          stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.2" />
+          stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" />
       ))}
       {/* Baseline */}
-      <line x1="165" y1="175" x2="320" y2="175" stroke="#8fcb9e" strokeWidth="0.4" strokeOpacity="0.15" />
+      <line x1="165" y1="175" x2="320" y2="175" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.15" />
 
       {/* ── Connective tissue — organic threads ── */}
       <path d="M140 100 Q170 88 179 78"
-        stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2 4" fill="none" />
+        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2 4" fill="none" />
       <path d="M271 78 Q280 64 278 55"
-        stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.18" strokeDasharray="2 4" fill="none" />
+        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.18" strokeDasharray="2 4" fill="none" />
       <path d="M225 120 Q228 140 240 155"
-        stroke="#8fcb9e" strokeWidth="0.5" strokeOpacity="0.15" strokeDasharray="2 4" fill="none" />
+        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.15" strokeDasharray="2 4" fill="none" />
 
       {/* ── Ambient ink spatter ── */}
       {[[48, 175, 1.4], [72, 178, 0.9], [162, 30, 1.2], [306, 115, 1.1], [334, 82, 0.8]].map(([x, y, r], i) => (
-        <circle key={i} cx={x} cy={y} r={r} fill="#8fcb9e" fillOpacity={0.25} />
+        <circle key={i} cx={x} cy={y} r={r} fill="#b8aa79" fillOpacity={0.25} />
       ))}
     </svg>
   )
@@ -233,11 +243,18 @@ function HeroIllustration() {
 
 export default function LoginPage() {
   const { signIn, signUp } = useAuth()
+  const [screen, setScreen] = useState('home')
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const openAuth = (nextMode) => {
+    setMode(nextMode)
+    setError('')
+    setScreen('auth')
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -255,6 +272,55 @@ export default function LoginPage() {
     }
   }
 
+  if (screen === 'home') {
+    return (
+      <div className="auth-shell yow-home min-h-screen text-[var(--text-main)]">
+        <header className="yow-home-nav">
+          <div className="flex items-center gap-3">
+            <div className="studio-logo"><StoryAtlasLogo /></div>
+            <div>
+              <p className="eyebrow text-xs mb-0.5">Story world workspace</p>
+              <strong>Story Atlas</strong>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" className="btn btn-secondary" data-testid="home-nav-login" onClick={() => openAuth('login')}>Log in</button>
+            <button type="button" className="btn btn-primary" data-testid="home-nav-start" onClick={() => openAuth('signup')}>Get started</button>
+          </div>
+        </header>
+
+        <main className="yow-home-main">
+          <section className="yow-home-hero">
+            <div className="yow-home-copy">
+              <p className="eyebrow mb-3">Story Atlas</p>
+              <h1>Build the world your story needs.</h1>
+              <p>
+                Story Atlas keeps the manuscript, map room, character board, lore archive, and project dashboard in one focused writing workspace.
+              </p>
+              <div className="yow-home-actions">
+                <button type="button" className="btn btn-primary" data-testid="home-hero-start" onClick={() => openAuth('signup')}>Get started</button>
+                <button type="button" className="btn btn-secondary" data-testid="home-hero-login" onClick={() => openAuth('login')}>Log in</button>
+              </div>
+            </div>
+
+            <div className="yow-home-visual" aria-hidden="true">
+              <HeroIllustration />
+            </div>
+          </section>
+
+          <section className="yow-home-grid" aria-label="Story Atlas functionality">
+            {HOME_SECTIONS.map(([title, copy]) => (
+              <article key={title} className="yow-home-card">
+                <span>{title}</span>
+                <p>{copy}</p>
+              </article>
+            ))}
+          </section>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="auth-shell min-h-screen p-6 text-[var(--text-main)]">
       <div className="auth-frame mx-auto grid min-h-[calc(100vh-48px)] max-w-6xl grid-cols-[minmax(300px,440px)_minmax(0,1fr)] overflow-hidden max-lg:grid-cols-1">
@@ -264,10 +330,10 @@ export default function LoginPage() {
           <div>
             {/* Brand */}
             <div className="flex items-center gap-3 mb-8">
-              <div className="studio-logo">S</div>
+              <div className="studio-logo"><StoryAtlasLogo /></div>
               <div>
-                <p className="eyebrow text-xs mb-0.5">Writing system</p>
-                <h1 className="font-semibold text-base leading-none" style={{ color: 'var(--text-main)' }}>StoryAtlas</h1>
+                <p className="eyebrow text-xs mb-0.5">Story world workspace</p>
+                <h1 className="font-semibold text-base leading-none" style={{ color: 'var(--text-main)' }}>Story Atlas</h1>
               </div>
             </div>
 
@@ -282,10 +348,10 @@ export default function LoginPage() {
 
             {/* Tagline */}
             <h2 className="font-serif text-2xl font-medium leading-snug mb-2">
-              Every story needs a home.
+              Build the world your story needs.
             </h2>
             <p className="page-copy text-sm" style={{ color: 'var(--text-muted)' }}>
-              A quiet workspace for writers who think in worlds.
+              Story Atlas is a focused home for manuscripts, characters, lore, maps, and the living logic behind a story.
             </p>
           </div>
 
@@ -309,10 +375,15 @@ export default function LoginPage() {
         <main className="auth-main flex items-center justify-center">
           <div className="w-full max-w-md">
             <div className="mb-6">
-              <p className="eyebrow mb-2">Account</p>
+              <p className="eyebrow mb-2">Story Atlas</p>
               <h2 className="font-serif text-4xl font-medium leading-none">
                 {mode === 'login' ? 'Welcome back' : 'Create account'}
               </h2>
+              <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                {mode === 'login'
+                  ? 'Sign in to return to your worlds, drafts, timelines, and story notes.'
+                  : 'Create your account and start building your first story world.'}
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="auth-form space-y-3">
@@ -360,6 +431,12 @@ export default function LoginPage() {
 
             <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
               Your data is stored securely and synced across all your devices.
+            </p>
+
+            <p className="mt-4 text-center text-xs">
+              <button type="button" onClick={() => setScreen('home')} className="text-[var(--text-muted)] hover:text-[var(--accent)]">
+                Back to homepage
+              </button>
             </p>
           </div>
         </main>

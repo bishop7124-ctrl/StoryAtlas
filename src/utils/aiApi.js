@@ -168,7 +168,7 @@ export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, 
   if (provider === 'openrouter')  return streamOpenAI({
     apiKey, model, systemPrompt, messages, onChunk, onDone, onError,
     baseUrl: 'https://openrouter.ai/api/v1',
-    extraHeaders: { 'HTTP-Referer': 'https://story-atlas.app', 'X-Title': 'Story Atlas' },
+    extraHeaders: { 'HTTP-Referer': 'https://yow.app', 'X-Title': 'Story Atlas' },
   })
   if (provider === 'openai')      return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError })
   onError(`Unknown provider: ${provider}`)

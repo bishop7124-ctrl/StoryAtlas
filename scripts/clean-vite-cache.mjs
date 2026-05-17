@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 const viteCacheDirs = [
   join(process.cwd(), 'node_modules', '.vite'),
-  join(process.cwd(), 'node_modules', '.vite-story-atlas'),
+  join(process.cwd(), 'node_modules', '.vite-yow'),
 ]
 
 for (const viteCacheDir of viteCacheDirs) {
