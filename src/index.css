@@ -5436,6 +5436,302 @@ body {
   background: color-mix(in srgb, var(--bg-nav) 70%, var(--bg-main));
 }
 
+@media (max-width: 860px) {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button,
+  [role="button"],
+  .btn,
+  .studio-button,
+  .studio-tab,
+  .studio-room,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .field {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .btn,
+  .studio-button,
+  .nf-button {
+    min-height: 42px;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .studio-shell,
+  .studio-shell.has-no-context,
+  .studio-shell.is-context-collapsed {
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .studio-spine {
+    height: auto;
+    min-height: 58px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-rows: 54px auto;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .studio-brand {
+    width: 44px;
+    height: 54px;
+    padding: 8px 5px;
+    border-right: 1px solid var(--border);
+  }
+
+  .studio-utility {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    justify-content: flex-end;
+    padding: 0 8px;
+    overflow-x: auto;
+  }
+
+  .studio-utility-btns {
+    width: auto;
+    display: flex;
+    gap: 6px;
+  }
+
+  .studio-utility-btn {
+    min-height: 38px;
+    padding: 8px 10px;
+  }
+
+  .studio-room-list {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 48px;
+    padding: 6px 8px;
+    gap: 7px;
+    border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .studio-room {
+    min-width: auto;
+    min-height: 36px;
+    grid-template-columns: 24px minmax(0, auto);
+    padding: 6px 10px;
+  }
+
+  .studio-room-copy strong {
+    display: block;
+    max-width: 96px;
+    font-size: 12px;
+  }
+
+  .studio-room-copy small,
+  .studio-volume,
+  .studio-primary-action,
+  .studio-context-rail {
+    display: none;
+  }
+
+  .studio-workspace {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .studio-workspace-header {
+    min-height: auto;
+    padding: 10px 12px;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .studio-workspace-header h2 {
+    font-size: 21px;
+    line-height: 1.1;
+  }
+
+  .studio-header-actions,
+  .studio-page-actions,
+  .studio-index-tools {
+    width: 100%;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .studio-header-actions > *,
+  .studio-page-actions > *,
+  .studio-index-tools > * {
+    flex: 1 1 auto;
+  }
+
+  .studio-section-tabs {
+    padding: 6px 8px;
+    gap: 7px;
+  }
+
+  .studio-tab {
+    min-height: 38px;
+    padding: 7px 10px;
+    flex: 0 0 auto;
+  }
+
+  .studio-surface,
+  .studio-workspace-manuscript .studio-surface,
+  .studio-workspace-overview .studio-surface {
+    border-radius: 0;
+    border-inline: 0;
+    box-shadow: none;
+  }
+
+  .studio-board,
+  .studio-detail,
+  .studio-index-list,
+  .workspace-page {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .studio-split,
+  .studio-split-notebook,
+  .studio-split-dossier,
+  .desk-index-layout {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .studio-index {
+    flex: 0 0 auto;
+    max-height: 44dvh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .studio-detail {
+    flex: 1 0 auto;
+    min-height: 56dvh;
+  }
+
+  .studio-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .studio-page-header h1,
+  .studio-wall-title {
+    font-size: clamp(24px, 8vw, 34px);
+    line-height: 1.08;
+  }
+
+  .studio-note,
+  .studio-ledger,
+  .studio-metric,
+  .panel-soft {
+    border-radius: 8px;
+  }
+
+  .theme-editor-overlay {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .theme-editor-header {
+    min-height: 54px;
+    padding: 8px 12px;
+  }
+
+  .theme-editor-body {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .theme-editor-col {
+    padding: 16px;
+    border-left: 0 !important;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .map-builder-topbar {
+    flex-wrap: wrap;
+    align-items: flex-start !important;
+    padding: 10px !important;
+  }
+
+  .map-builder-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .map-builder-actions .btn {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding-inline: 12px;
+  }
+
+  .map-builder-body {
+    flex-direction: column;
+  }
+
+  .map-builder-viewport {
+    flex: 1 1 auto;
+    min-height: 46dvh;
+    order: 1;
+  }
+
+  .map-builder-tools {
+    display: none !important;
+  }
+
+  .map-builder-map-list {
+    order: 2;
+    width: 100% !important;
+    max-height: 132px;
+    border-left: 0 !important;
+    border-top: 1px solid var(--border);
+  }
+
+  .map-builder-map-list > div {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .map-builder-map-list button {
+    min-height: 38px;
+  }
+
+  .manuscript-document {
+    max-width: none;
+    padding-inline: 16px;
+    border-inline: 0;
+    box-shadow: none;
+  }
+}
+
 /* ── Library simplified ──────────────────────────────────────────────────── */
 
 .library-top-bar {
@@ -5989,5 +6285,146 @@ body {
   .account-plan-card,
   .account-status-list {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .studio-shell,
+  .studio-shell.has-no-context,
+  .studio-shell.is-context-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+  }
+
+  .studio-spine {
+    height: auto;
+    min-height: 102px;
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-rows: 54px 48px;
+    padding: 0;
+  }
+
+  .studio-brand {
+    width: 44px;
+    height: 54px;
+    grid-template-columns: 34px;
+  }
+
+  .studio-brand > div:last-child,
+  .studio-primary-action,
+  .studio-room-copy small,
+  .studio-context-rail {
+    display: none;
+  }
+
+  .studio-utility {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: stretch;
+    justify-content: flex-end;
+    padding: 0 8px;
+  }
+
+  .studio-room-list {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 48px;
+    padding: 6px 8px;
+    gap: 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .studio-room {
+    min-width: auto;
+    min-height: 36px;
+    grid-template-columns: 24px minmax(0, auto);
+    padding: 6px 10px;
+  }
+
+  .studio-room-copy strong {
+    display: block;
+    max-width: 96px;
+  }
+
+  .studio-workspace {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 0;
+  }
+
+  .studio-workspace-header {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+  }
+
+  .studio-section-tabs {
+    padding: 6px 8px;
+  }
+
+  .studio-surface,
+  .studio-workspace-manuscript .studio-surface,
+  .studio-workspace-overview .studio-surface {
+    border-radius: 0;
+    border-inline: 0;
+  }
+
+  .studio-split,
+  .studio-split-notebook,
+  .studio-split-dossier,
+  .desk-index-layout {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .studio-index {
+    flex: 0 0 auto;
+    max-height: 44dvh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .studio-detail {
+    flex: 1 0 auto;
+    min-height: 56dvh;
+  }
+
+  .map-builder-topbar {
+    flex-wrap: wrap;
+    padding: 10px !important;
+  }
+
+  .map-builder-actions {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .map-builder-body {
+    flex-direction: column;
+  }
+
+  .map-builder-viewport {
+    min-height: 46dvh;
+    order: 1;
+  }
+
+  .map-builder-tools {
+    display: none !important;
+  }
+
+  .map-builder-map-list {
+    order: 2;
+    width: 100% !important;
+    max-height: 132px;
+    border-left: 0 !important;
+    border-top: 1px solid var(--border);
+  }
+
+  .map-builder-map-list > div {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
   }
 }

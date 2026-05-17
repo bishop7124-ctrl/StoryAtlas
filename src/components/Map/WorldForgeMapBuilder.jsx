@@ -770,6 +770,10 @@ export default function MapBuilder({ store }) {
   const paintingRef = useRef(false)
   const lastStrokePosRef = useRef(null)
   const panDragRef = useRef(null)
+  const touchPointersRef = useRef(new Map())
+  const touchGestureRef = useRef(null)
+  const panRef = useRef({ x: 0, y: 0 })
+  const zoomRef = useRef(0.75)
   const regionDragRef = useRef(null)
   const pathWaypointsRef = useRef([])
   const draggingStampRef = useRef(null)
@@ -820,6 +824,7 @@ export default function MapBuilder({ store }) {
   const [wallBrickColor, setWallBrickColor] = useState('red')
   const [downloadMenu, setDownloadMenu] = useState(false)
   const [roomDraft, setRoomDraft] = useState(null)
+  const [isMobileView, setIsMobileView] = useState(false)
 
   // Grid overlay (tabletop projects only)
   const [gridVisible, setGridVisible] = useState(false)
@@ -830,15 +835,25 @@ export default function MapBuilder({ store }) {
   const isSmallMap = mapType === 'city' || mapType === 'dungeon' || mapType === 'town' || mapType === 'interior'
   const isImported = !!activeMap?.imported
   const isTabletop = project?.type === 'tabletop' || project?.type === 'dnd'
+  const effectiveViewMode = viewMode || isMobileView
 
   // Track current mapId for async save callbacks
   const activeMapIdRef = useRef(project?.activeMapId)
   useEffect(() => { activeMapIdRef.current = project?.activeMapId }, [project?.activeMapId])
+  useEffect(() => { panRef.current = pan }, [pan])
+  useEffect(() => { zoomRef.current = zoom }, [zoom])
   useEffect(() => { pathModeRef.current = pathMode }, [pathMode])
   useEffect(() => { toolRef.current = tool; brushSizeRef.current = brushSize; brushStrRef.current = brushStr; brushCustomColorRef.current = brushCustomColor }, [tool, brushSize, brushStr, brushCustomColor])
   useEffect(() => { selectedStampIdRef.current = selectedStampId }, [selectedStampId])
   useEffect(() => { layersRef.current = layers; setTimeout(renderMap, 0) }, [layers])
   useEffect(() => { wallBrickColorRef.current = wallBrickColor }, [wallBrickColor])
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 860px), (pointer: coarse)')
+    const sync = () => setIsMobileView(query.matches)
+    sync()
+    query.addEventListener?.('change', sync)
+    return () => query.removeEventListener?.('change', sync)
+  }, [])
 
   // Keyboard delete for selected stamp
   useEffect(() => {
@@ -1407,7 +1422,7 @@ export default function MapBuilder({ store }) {
     const pos = canvasPos(e)
 
     // View mode: only allow pin interaction
-    if (viewMode) {
+    if (effectiveViewMode) {
       const pins = activeMap?.mapPins || []
       for (let i = pins.length - 1; i >= 0; i--) {
         const p = pins[i]
@@ -1495,8 +1510,17 @@ export default function MapBuilder({ store }) {
   }
 
   function handleMouseMove(e) {
+    const panDrag = panDragRef.current
+    if (panDrag) {
+      setPan({
+        x: panDrag.panX + e.clientX - panDrag.x,
+        y: panDrag.panY + e.clientY - panDrag.y,
+      })
+      return
+    }
+
     // View mode: only hover detection for pins
-    if (viewMode) {
+    if (effectiveViewMode) {
       const pos = canvasPos(e)
       const pins = activeMap?.mapPins || []
       let found = null
@@ -1552,14 +1576,6 @@ export default function MapBuilder({ store }) {
       setRegionDraft(next)
       return
     }
-    const panDrag = panDragRef.current
-    if (panDrag) {
-      setPan({
-        x: panDrag.panX + e.clientX - panDrag.x,
-        y: panDrag.panY + e.clientY - panDrag.y,
-      })
-      return
-    }
     if (!paintingRef.current) return
     const pos = canvasPos(e)
     cursorPosRef.current = pos
@@ -1584,6 +1600,110 @@ export default function MapBuilder({ store }) {
       throttledSave()
       lastStrokePosRef.current = pos
       lastPaintTimeRef.current = Date.now()
+    }
+  }
+
+  function hitTestPin(pos) {
+    const pins = activeMap?.mapPins || []
+    for (let i = pins.length - 1; i >= 0; i--) {
+      const p = pins[i]
+      if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= 34) return p
+    }
+    return null
+  }
+
+  function screenToMapPoint(clientX, clientY) {
+    const viewport = viewportRef.current
+    if (!viewport) return { x: 0, y: 0 }
+    const rect = viewport.getBoundingClientRect()
+    return {
+      x: (clientX - rect.left - panRef.current.x) / zoomRef.current,
+      y: (clientY - rect.top - panRef.current.y) / zoomRef.current,
+    }
+  }
+
+  function handleTouchPointerDown(e) {
+    if (e.pointerType === 'mouse') return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (touchPointersRef.current.size === 1) {
+      touchGestureRef.current = {
+        type: 'pan',
+        startX: e.clientX,
+        startY: e.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+        mapPos: screenToMapPoint(e.clientX, e.clientY),
+        moved: false,
+      }
+      return
+    }
+
+    if (touchPointersRef.current.size === 2) {
+      const pts = [...touchPointersRef.current.values()]
+      const center = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      const viewport = viewportRef.current
+      const rect = viewport?.getBoundingClientRect()
+      const screenCenter = rect ? { x: center.x - rect.left, y: center.y - rect.top } : center
+      touchGestureRef.current = {
+        type: 'pinch',
+        startDistance: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        startZoom: zoomRef.current,
+        startPan: panRef.current,
+        screenCenter,
+        mapCenter: {
+          x: (screenCenter.x - panRef.current.x) / zoomRef.current,
+          y: (screenCenter.y - panRef.current.y) / zoomRef.current,
+        },
+      }
+    }
+  }
+
+  function handleTouchPointerMove(e) {
+    if (e.pointerType === 'mouse') return
+    if (!touchPointersRef.current.has(e.pointerId)) return
+    e.preventDefault()
+    touchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const gesture = touchGestureRef.current
+    if (!gesture) return
+
+    if (gesture.type === 'pinch' && touchPointersRef.current.size >= 2) {
+      const pts = [...touchPointersRef.current.values()]
+      const distance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      const nextZoom = Math.max(0.2, Math.min(4, gesture.startZoom * (distance / Math.max(1, gesture.startDistance))))
+      setZoom(nextZoom)
+      setPan({
+        x: gesture.screenCenter.x - gesture.mapCenter.x * nextZoom,
+        y: gesture.screenCenter.y - gesture.mapCenter.y * nextZoom,
+      })
+      return
+    }
+
+    if (gesture.type === 'pan') {
+      const dx = e.clientX - gesture.startX
+      const dy = e.clientY - gesture.startY
+      if (Math.hypot(dx, dy) > 8) gesture.moved = true
+      setPan({ x: gesture.panX + dx, y: gesture.panY + dy })
+    }
+  }
+
+  function handleTouchPointerUp(e) {
+    if (e.pointerType === 'mouse') return
+    e.preventDefault()
+    const gesture = touchGestureRef.current
+    touchPointersRef.current.delete(e.pointerId)
+
+    if (gesture?.type === 'pan' && !gesture.moved) {
+      const hit = hitTestPin(gesture.mapPos)
+      if (hit) setPinnedPinId(prev => prev === hit.id ? null : hit.id)
+      else setPinnedPinId(null)
+    }
+
+    if (touchPointersRef.current.size === 0) {
+      touchGestureRef.current = null
+      panDragRef.current = null
     }
   }
 
@@ -1811,10 +1931,10 @@ export default function MapBuilder({ store }) {
       <div className="workspace-page" style={{ flex: 1, height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
         <div className="empty-state">
         <div style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 700, color: 'var(--text-main)' }}>No maps yet</div>
-        <div style={{ fontSize: 14, color: 'var(--muted)' }}>Create your first map to start building your world</div>
-        <button className="btn btn-primary" onClick={() => setNewMapModal(true)}>New Map</button>
+        <div style={{ fontSize: 14, color: 'var(--muted)' }}>{isMobileView ? 'Maps are view only on mobile.' : 'Create your first map to start building your world'}</div>
+        {!isMobileView && <button className="btn btn-primary" onClick={() => setNewMapModal(true)}>New Map</button>}
         </div>
-        {newMapModal && <NewMapModal onClose={() => setNewMapModal(false)} onCreate={handleCreateMap} />}
+        {!isMobileView && newMapModal && <NewMapModal onClose={() => setNewMapModal(false)} onCreate={handleCreateMap} />}
       </div>
     )
   }
@@ -1823,7 +1943,7 @@ export default function MapBuilder({ store }) {
     <div style={{ flex:1, height:'100%', minHeight:0, overflow:'hidden', display:'flex', flexDirection:'column', ...(isFullscreen ? { position:'fixed', inset:12, zIndex:80, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, boxShadow:'var(--shadow-modal)' } : {}) }}>
 
       {/* Slim top bar */}
-      <div className="studio-topbar" style={{ padding:'8px 14px', flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
+      <div className="studio-topbar map-builder-topbar" style={{ padding:'8px 14px', flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
           <span style={{ fontFamily:'var(--font-serif)', fontSize:20, fontWeight:700 }}>Map Builder</span>
           {mapType && (
@@ -1831,21 +1951,30 @@ export default function MapBuilder({ store }) {
               {MAP_TYPE_LABELS[mapType] || mapType}
             </span>
           )}
+          {isMobileView && (
+            <span style={{ fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:10, background:'var(--accent-fade)', border:'1px solid color-mix(in srgb, var(--accent) 42%, var(--border))', color:'var(--accent)' }}>
+              View only
+            </span>
+          )}
         </div>
-        <div style={{ display:'flex', gap:5, alignItems:'center', flexShrink:0 }}>
-          {!viewMode && (mapType === 'world' || mapType === 'regional' || mapType === 'region') && (
+        <div className="map-builder-actions" style={{ display:'flex', gap:5, alignItems:'center', flexShrink:0 }}>
+          {!effectiveViewMode && (mapType === 'world' || mapType === 'regional' || mapType === 'region') && (
             <button className="btn btn-secondary btn-sm" onClick={() => setGenerateModal(true)}>Generate</button>
           )}
-          {!viewMode && <button className="btn btn-secondary btn-sm" onClick={handleClear}>Clear</button>}
-          {!viewMode && <button className="btn btn-secondary btn-sm" onClick={undo} title="Undo">↩ Undo</button>}
-          <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setViewMode(v => !v)}
-            style={viewMode ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : {}}
-          >
-            {viewMode ? '👁 View' : '✏ Edit'}
-          </button>
+          {!effectiveViewMode && <button className="btn btn-secondary btn-sm" onClick={handleClear}>Clear</button>}
+          {!effectiveViewMode && <button className="btn btn-secondary btn-sm" onClick={undo} title="Undo">↩ Undo</button>}
+          {!isMobileView && (
+            <>
+              <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setViewMode(v => !v)}
+                style={viewMode ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : {}}
+              >
+                {viewMode ? '👁 View' : '✏ Edit'}
+              </button>
+            </>
+          )}
           <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
           <button className="btn btn-secondary btn-sm" onClick={() => zoomAt((viewportRef.current?.getBoundingClientRect().left || 0) + (viewportRef.current?.clientWidth || 0) / 2, (viewportRef.current?.getBoundingClientRect().top || 0) + (viewportRef.current?.clientHeight || 0) / 2, 0.85)} title="Zoom out">−</button>
           <span style={{ fontSize:12, color:'var(--muted)', minWidth:40, textAlign:'center' }}>{Math.round(zoom * 100)}%</span>
@@ -1874,10 +2003,10 @@ export default function MapBuilder({ store }) {
       </div>
 
       {/* Body: left panel + canvas + right panel */}
-      <div style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
+      <div className="map-builder-body" style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
 
         {/* LEFT PANEL — tools + settings */}
-        <div style={{ width:196, flexShrink:0, borderRight:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', display: viewMode ? 'none' : 'flex', flexDirection:'column', overflowY:'auto' }}>
+        <div className="map-builder-tools" style={{ width:196, flexShrink:0, borderRight:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', display: effectiveViewMode ? 'none' : 'flex', flexDirection:'column', overflowY:'auto' }}>
           <div style={{ padding:'10px 8px', display:'flex', flexDirection:'column', gap:10 }}>
 
             {/* Tool groups */}
@@ -2088,7 +2217,8 @@ export default function MapBuilder({ store }) {
         <div
           ref={viewportRef}
           onContextMenu={e => e.preventDefault()}
-          style={{ flex:1, minWidth:0, minHeight:0, overflow:'hidden', position:'relative', background:'radial-gradient(circle at center, color-mix(in srgb, var(--surface2) 82%, var(--accent) 8%) 0, var(--surface3) 72%)' }}
+          className="map-builder-viewport"
+          style={{ flex:1, minWidth:0, minHeight:0, overflow:'hidden', position:'relative', touchAction:'none', background:'radial-gradient(circle at center, color-mix(in srgb, var(--surface2) 82%, var(--accent) 8%) 0, var(--surface3) 72%)' }}
         >
           <div style={{ position:'absolute', inset:0, pointerEvents:'none', backgroundImage:'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)', backgroundSize:`${Math.max(16, 32 * zoom)}px ${Math.max(16, 32 * zoom)}px`, backgroundPosition:`${pan.x}px ${pan.y}px`, opacity:0.16 }} />
           <canvas
@@ -2097,7 +2227,11 @@ export default function MapBuilder({ store }) {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            style={{ position:'absolute', left:pan.x, top:pan.y, cursor:tool === 'stamp' ? 'crosshair' : isPanTool ? 'grab' : 'crosshair', display:'block', width:MAP_W * zoom, height:MAP_H * zoom, imageRendering:'auto', borderRadius:10, boxShadow:'0 22px 54px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.08)', background:'#07111d' }}
+            onPointerDown={handleTouchPointerDown}
+            onPointerMove={handleTouchPointerMove}
+            onPointerUp={handleTouchPointerUp}
+            onPointerCancel={handleTouchPointerUp}
+            style={{ position:'absolute', left:pan.x, top:pan.y, cursor:effectiveViewMode || isPanTool ? 'grab' : tool === 'stamp' ? 'crosshair' : 'crosshair', display:'block', width:MAP_W * zoom, height:MAP_H * zoom, imageRendering:'auto', borderRadius:10, boxShadow:'0 22px 54px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.08)', background:'#07111d', touchAction:'none' }}
           />
           {regionDraft && regionDraft.points && regionDraft.points.length >= 2 && (
             <svg style={{ position:'absolute', left:pan.x, top:pan.y, width:MAP_W * zoom, height:MAP_H * zoom, pointerEvents:'none', borderRadius:10 }} viewBox={`0 0 ${MAP_W} ${MAP_H}`}>
@@ -2118,7 +2252,7 @@ export default function MapBuilder({ store }) {
               />
             </svg>
           )}
-          {viewMode && (hoveredPinId || pinnedPinId) && (() => {
+          {effectiveViewMode && (hoveredPinId || pinnedPinId) && (() => {
             const pinId = pinnedPinId || hoveredPinId
             const pin = (activeMap?.mapPins || []).find(p => p.id === pinId)
             if (!pin) return null
@@ -2172,7 +2306,7 @@ export default function MapBuilder({ store }) {
         </div>
 
         {/* RIGHT PANEL — collapsible maps list */}
-        <div style={{ display:'flex', flexDirection:'column', borderLeft:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', flexShrink:0, width:rightPanelOpen ? 200 : 34, transition:'width 0.15s ease', overflow:'hidden' }}>
+        <div className="map-builder-map-list" style={{ display:'flex', flexDirection:'column', borderLeft:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', flexShrink:0, width:rightPanelOpen ? 200 : 34, transition:'width 0.15s ease', overflow:'hidden' }}>
           <button
             onClick={() => setRightPanelOpen(v => !v)}
             title={rightPanelOpen ? 'Collapse maps panel' : 'Expand maps panel'}
@@ -2203,7 +2337,7 @@ export default function MapBuilder({ store }) {
                           onDoubleClick={() => { setRenamingId(map.id); setRenameVal(map.name) }}
                           style={{ flex:1, padding:'5px 10px', borderRadius:maps.length > 1 ? '5px 0 0 5px' : 5, fontSize:12, cursor:'pointer', fontFamily:'inherit', textAlign:'left', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', background:isActive ? 'var(--accent)' : 'var(--surface2)', border:`1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`, borderRight:maps.length > 1 ? 'none' : undefined, color:isActive ? '#fff' : 'var(--muted)' }}
                         >{map.name}</button>
-                        {maps.length > 1 && (
+                        {maps.length > 1 && !effectiveViewMode && (
                           <button onClick={() => handleDeleteMap(map.id)} title="Delete map" style={{ padding:'5px 7px', borderRadius:'0 5px 5px 0', fontSize:13, cursor:'pointer', fontFamily:'inherit', background:isActive ? 'var(--accent)' : 'var(--surface2)', border:`1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`, color:isActive ? 'rgba(255,255,255,0.65)' : 'var(--faint)' }}>×</button>
                         )}
                       </>
@@ -2211,9 +2345,11 @@ export default function MapBuilder({ store }) {
                   </div>
                 )
               })}
-              <button onClick={() => setNewMapModal(true)} style={{ padding:'5px 10px', borderRadius:5, fontSize:12, cursor:'pointer', fontFamily:'inherit', flexShrink:0, background:'transparent', border:'1px dashed var(--border)', color:'var(--faint)', textAlign:'left', marginTop:4 }}>
-                + New Map
-              </button>
+              {!effectiveViewMode && (
+                <button onClick={() => setNewMapModal(true)} style={{ padding:'5px 10px', borderRadius:5, fontSize:12, cursor:'pointer', fontFamily:'inherit', flexShrink:0, background:'transparent', border:'1px dashed var(--border)', color:'var(--faint)', textAlign:'left', marginTop:4 }}>
+                  + New Map
+                </button>
+              )}
             </div>
           )}
         </div>
