@@ -706,11 +706,6 @@ body {
   height: 52px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 52%, var(--border));
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 40% 28%, rgba(255,255,255,.08), transparent 36%),
-    var(--accent-fade);
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -1564,9 +1559,6 @@ textarea:focus {
     height: 56px;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--border));
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--accent-fade) 80%, transparent);
     color: var(--accent);
     font-family: var(--font-serif);
     font-size: 30px;
@@ -2793,13 +2785,10 @@ body {
 
 .studio-brand-mark,
 .studio-logo {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
-  border-radius: 8px;
-  background: var(--accent-fade);
   color: var(--accent);
   font-family: var(--font);
   font-size: 10px;

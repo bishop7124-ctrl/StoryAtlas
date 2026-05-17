@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import StoryAtlasLogo from '../brand/StoryAtlasLogo'
 
@@ -73,170 +73,122 @@ const HOME_SECTIONS = [
 
 function HeroIllustration() {
   return (
-    <svg
-      viewBox="0 0 340 210"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="w-full"
-      aria-hidden="true"
-    >
+    <img src="/hero-illustration.png" alt="" style={{ width: '100%', display: 'block' }} aria-hidden="true" />
+  )
+}
+
+function _HeroIllustrationSVG_unused() {
+  const a = '#b8aa79'
+  return (
+    <svg viewBox="0 0 340 220" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full" aria-hidden="true">
       <defs>
-        <radialGradient id="fogL" cx="20%" cy="60%" r="55%">
-          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.08" />
+        <radialGradient id="hl-glow" cx="18%" cy="78%" r="55%">
+          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.22" />
           <stop offset="100%" stopColor="#b8aa79" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id="fogR" cx="80%" cy="30%" r="50%">
-          <stop offset="0%" stopColor="#9ca899" stopOpacity="0.055" />
-          <stop offset="100%" stopColor="#9ca899" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="inkFade" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.62" />
-          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0.1" />
-        </linearGradient>
-        <linearGradient id="stemG" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.42" />
-          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0.05" />
-        </linearGradient>
-        <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="1.4" />
-        </filter>
-        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="3" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        <filter id="hl-blur" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4" />
         </filter>
       </defs>
 
-      {/* Ambient fog */}
-      <rect width="340" height="210" fill="url(#fogL)" />
-      <rect width="340" height="210" fill="url(#fogR)" />
+      {/* Soft aura behind logo */}
+      <ellipse cx="42" cy="178" rx="72" ry="52" fill="url(#hl-glow)" />
 
-      {/* ── Open book / manuscript pages ── */}
-      {/* Left page */}
-      <path d="M28 40 Q56 34 84 40 L84 162 Q56 156 28 162 Z"
-        fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.35" />
-      {/* Right page */}
-      <path d="M84 40 Q112 34 140 40 L140 162 Q112 156 84 162 Z"
-        fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.25" />
-      {/* Spine shadow */}
-      <line x1="84" y1="40" x2="84" y2="162" stroke="#b8aa79" strokeWidth="0.8" strokeOpacity="0.2" />
-      {/* Handwriting lines — left page */}
-      {[0,1,2,3,4,5,6,7,8].map(i => (
-        <path key={`ll${i}`}
-          d={`M36 ${58 + i * 12} Q${60 + (i % 3) * 4} ${55 + i * 12} ${72 + (i % 2) * 4} ${58 + i * 12}`}
-          stroke="#e4dfd2" strokeWidth="0.7" strokeOpacity={0.18 - i * 0.01} strokeLinecap="round" />
-      ))}
-      {/* Handwriting lines — right page */}
-      {[0,1,2,3,4,5,6,7].map(i => (
-        <path key={`rl${i}`}
-          d={`M92 ${60 + i * 12} Q${114 + (i % 2) * 3} ${57 + i * 12} ${132 - (i % 3) * 3} ${60 + i * 12}`}
-          stroke="#e4dfd2" strokeWidth="0.7" strokeOpacity={0.15 - i * 0.008} strokeLinecap="round" />
-      ))}
-      {/* Paragraph indent marks */}
-      <path d="M36 58 L42 58" stroke="#b8aa79" strokeWidth="1" strokeOpacity="0.5" strokeLinecap="round" />
-      <path d="M36 94 L42 94" stroke="#b8aa79" strokeWidth="1" strokeOpacity="0.35" strokeLinecap="round" />
-      {/* Drop cap effect */}
-      <rect x="36" y="55" width="10" height="14" rx="1" fill="#b8aa79" fillOpacity="0.12" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.4" />
-      <text x="38.5" y="66" fontSize="10" fill="#b8aa79" fillOpacity="0.5" fontFamily="Georgia, serif" fontStyle="italic">T</text>
+      {/* ── Flow lines fanning out from logo ── */}
+      {/* Arc 1 — steep left sweep to upper-left */}
+      <path d="M38 148 C20 110 40 55 90 22"
+        stroke={a} strokeWidth="1.3" strokeOpacity="0.42" strokeLinecap="round" />
+      {/* Arc 2 — main creative arc to upper-centre */}
+      <path d="M42 145 C80 95 145 45 215 18"
+        stroke={a} strokeWidth="1.5" strokeOpacity="0.48" strokeLinecap="round" />
+      {/* Arc 3 — gentle sweep to upper-right */}
+      <path d="M46 148 C110 100 200 65 300 42"
+        stroke={a} strokeWidth="1.0" strokeOpacity="0.32" strokeLinecap="round" />
+      {/* Arc 4 — low flat sweep far right */}
+      <path d="M50 158 C130 148 230 140 335 132"
+        stroke={a} strokeWidth="0.7" strokeOpacity="0.2" strokeLinecap="round" />
+      {/* Arc 5 — secondary fine line */}
+      <path d="M40 150 C70 108 115 72 170 48"
+        stroke={a} strokeWidth="0.7" strokeOpacity="0.22" strokeLinecap="round" />
 
-      {/* ── Botanical / organic side elements ── */}
-      {/* Left vine stem */}
-      <path d="M18 170 Q14 140 18 110 Q22 80 16 55"
-        stroke="url(#stemG)" strokeWidth="0.8" fill="none" strokeLinecap="round" />
-      {/* Leaves */}
-      <path d="M18 130 Q8 118 10 108 Q20 116 18 130Z" fill="#b8aa79" fillOpacity="0.14" />
-      <path d="M18 130 Q10 128 10 108" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.3" fill="none" />
-      <path d="M16 100 Q4 92 6 80 Q18 86 16 100Z" fill="#b8aa79" fillOpacity="0.1" />
-      <path d="M16 100 Q6 96 6 80" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
+      {/* ── Glow halos along arcs (blurred dots) ── */}
+      <circle cx="90" cy="22" r="6" fill={a} fillOpacity="0.06" filter="url(#hl-blur)" />
+      <circle cx="215" cy="18" r="8" fill={a} fillOpacity="0.07" filter="url(#hl-blur)" />
+      <circle cx="300" cy="42" r="6" fill={a} fillOpacity="0.05" filter="url(#hl-blur)" />
 
-      {/* Right vine */}
-      <path d="M150 165 Q156 138 152 112 Q148 86 154 60"
-        stroke="url(#stemG)" strokeWidth="0.8" fill="none" strokeLinecap="round" />
-      <path d="M152 128 Q164 116 162 104 Q150 112 152 128Z" fill="#b8aa79" fillOpacity="0.12" />
-      <path d="M152 128 Q162 120 162 104" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.25" fill="none" />
+      {/* ── Floating manuscript page — mid-left ── */}
+      <g transform="translate(100, 58) rotate(-9)">
+        <rect width="32" height="42" rx="2" stroke={a} strokeWidth="0.55" strokeOpacity="0.32" />
+        {[0,1,2,3,4,5].map(i => (
+          <line key={i} x1="5" y1={10 + i * 6} x2={i % 2 === 0 ? 27 : 22} y2={10 + i * 6}
+            stroke={a} strokeWidth="0.45" strokeOpacity={0.3 - i * 0.04} />
+        ))}
+        <rect x="5" y="9" width="7" height="9" rx="0.8" fill={a} fillOpacity="0.1" stroke={a} strokeWidth="0.4" strokeOpacity="0.25" />
+      </g>
 
-      {/* ── World / constellation cluster ── */}
-      {/* Organic world blob */}
-      <ellipse cx="225" cy="78" rx="46" ry="42" fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.3" />
-      {/* Topographic contour lines */}
-      <ellipse cx="225" cy="78" rx="34" ry="30" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.18" fill="none" />
-      <ellipse cx="225" cy="78" rx="22" ry="19" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.14" fill="none" />
-      <ellipse cx="225" cy="78" rx="10" ry="9" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.1" fill="none" />
-      {/* Irregular land masses */}
-      <path d="M206 68 Q215 58 228 62 Q240 60 244 70 Q250 80 242 88 Q232 96 220 90 Q208 84 206 68Z"
-        fill="#b8aa79" fillOpacity="0.08" stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.22" />
-      <path d="M210 82 Q206 86 208 92 Q214 90 212 84Z"
-        fill="#b8aa79" fillOpacity="0.07" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.18" />
-      {/* Latitude / longitude whispers */}
-      <path d="M179 78 Q225 68 271 78" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.15" fill="none" />
-      <path d="M182 62 Q225 56 268 62" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.1" fill="none" />
-      <line x1="225" y1="36" x2="225" y2="120" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.12" />
-      {/* Marker pins */}
-      <circle cx="233" cy="70" r="2.5" fill="#171918" stroke="#b8aa79" strokeWidth="0.8" strokeOpacity="0.7" />
-      <circle cx="233" cy="70" r="1" fill="#b8aa79" fillOpacity="0.8" />
-      <circle cx="218" cy="82" r="1.8" fill="#171918" stroke="#b8aa79" strokeWidth="0.6" strokeOpacity="0.5" />
-      <circle cx="218" cy="82" r="0.7" fill="#b8aa79" fillOpacity="0.6" />
+      {/* ── Floating manuscript page — upper-right ── */}
+      <g transform="translate(240, 30) rotate(6)">
+        <rect width="26" height="33" rx="1.5" stroke={a} strokeWidth="0.5" strokeOpacity="0.24" />
+        {[0,1,2,3].map(i => (
+          <line key={i} x1="4" y1={8 + i * 7} x2={i % 2 === 0 ? 22 : 17} y2={8 + i * 7}
+            stroke={a} strokeWidth="0.4" strokeOpacity={0.24 - i * 0.04} />
+        ))}
+      </g>
 
-      {/* ── Character constellation ── */}
-      {/* Nodes */}
+      {/* ── Map pin cluster — centre ── */}
+      <circle cx="185" cy="52" r="3.2" stroke={a} strokeWidth="0.7" strokeOpacity="0.5" />
+      <circle cx="185" cy="52" r="1.1" fill={a} fillOpacity="0.6" />
+      <path d="M185 55 L185 63" stroke={a} strokeWidth="0.6" strokeOpacity="0.3" />
+
+      <circle cx="295" cy="65" r="2.4" stroke={a} strokeWidth="0.6" strokeOpacity="0.38" />
+      <circle cx="295" cy="65" r="0.8" fill={a} fillOpacity="0.5" />
+      <path d="M295 67 L295 73" stroke={a} strokeWidth="0.5" strokeOpacity="0.22" />
+
+      {/* ── Character constellation — upper-right ── */}
       {[
-        [290, 52, 5.5, 0.9],
-        [316, 74, 4, 0.6],
-        [278, 84, 3.5, 0.55],
-        [304, 102, 3, 0.5],
-        [330, 56, 3, 0.45],
+        [315, 50, 5.5, 0.85],
+        [335, 75, 3.8, 0.6],
+        [300, 82, 3.5, 0.55],
+        [322, 100, 3, 0.48],
       ].map(([cx, cy, r, op], i) => (
-        <g key={i} filter={i === 0 ? 'url(#glow)' : undefined}>
-          <circle cx={cx} cy={cy} r={r + 2} fill="#b8aa79" fillOpacity={0.05} />
-          <circle cx={cx} cy={cy} r={r} fill="#171918" stroke="#b8aa79" strokeWidth="0.7" strokeOpacity={op} />
-          <circle cx={cx} cy={cy} r={r * 0.38} fill="#b8aa79" fillOpacity={op * 0.9} />
+        <g key={i}>
+          <circle cx={cx} cy={cy} r={r + 3} fill={a} fillOpacity={0.04} />
+          <circle cx={cx} cy={cy} r={r} stroke={a} strokeWidth="0.7" strokeOpacity={op} />
+          <circle cx={cx} cy={cy} r={r * 0.35} fill={a} fillOpacity={op * 0.85} />
         </g>
       ))}
-      {/* Constellation edges */}
-      {[
-        [290, 52, 316, 74],
-        [290, 52, 278, 84],
-        [316, 74, 304, 102],
-        [278, 84, 304, 102],
-        [316, 74, 330, 56],
-        [290, 52, 330, 56],
-      ].map(([x1,y1,x2,y2], i) => (
+      {[[315,50,335,75],[315,50,300,82],[335,75,322,100],[300,82,322,100]].map(([x1,y1,x2,y2],i) => (
         <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2.5 2.5" />
+          stroke={a} strokeWidth="0.45" strokeOpacity="0.2" strokeDasharray="2 3" />
       ))}
 
-      {/* ── Ink/analytics flourish at bottom ── */}
-      {/* Brushstroke base */}
-      <path d="M165 162 Q185 148 210 155 Q240 162 268 148 Q292 136 318 145"
-        stroke="#b8aa79" strokeWidth="1.4" strokeOpacity="0.55" fill="none"
-        strokeLinecap="round" strokeLinejoin="round" />
-      {/* Shadow/blur version for depth */}
-      <path d="M165 162 Q185 148 210 155 Q240 162 268 148 Q292 136 318 145"
-        stroke="#b8aa79" strokeWidth="3" strokeOpacity="0.08" fill="none"
-        strokeLinecap="round" filter="url(#soft)" />
-      {/* Data accent dots along the line */}
-      {[[210, 155], [240, 161], [268, 148], [295, 139]].map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r="2.2" fill="#b8aa79" fillOpacity={0.5 - i * 0.06} />
+      {/* ── Sparkle dots scattered along flow ── */}
+      {[
+        [90, 22, 1.6, 0.7],
+        [148, 40, 1.3, 0.55],
+        [215, 18, 1.8, 0.65],
+        [162, 80, 1.2, 0.45],
+        [255, 95, 1.4, 0.38],
+        [330, 130, 1.0, 0.28],
+        [110, 130, 1.1, 0.35],
+      ].map(([cx, cy, r, op], i) => (
+        <circle key={i} cx={cx} cy={cy} r={r} fill={a} fillOpacity={op} />
       ))}
-      {/* Vertical tick marks */}
-      {[[210, 155], [240, 161], [268, 148], [295, 139]].map(([x, y], i) => (
-        <line key={i} x1={x} y1={y + 6} x2={x} y2={y + 16}
-          stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" />
-      ))}
-      {/* Baseline */}
-      <line x1="165" y1="175" x2="320" y2="175" stroke="#b8aa79" strokeWidth="0.4" strokeOpacity="0.15" />
 
-      {/* ── Connective tissue — organic threads ── */}
-      <path d="M140 100 Q170 88 179 78"
-        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.2" strokeDasharray="2 4" fill="none" />
-      <path d="M271 78 Q280 64 278 55"
-        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.18" strokeDasharray="2 4" fill="none" />
-      <path d="M225 120 Q228 140 240 155"
-        stroke="#b8aa79" strokeWidth="0.5" strokeOpacity="0.15" strokeDasharray="2 4" fill="none" />
+      {/* 4-point stars at arc tips */}
+      <path d="M215 10 L216.3 7 L217.6 10 L220.6 11.3 L217.6 12.6 L216.3 15.6 L215 12.6 L212 11.3Z"
+        fill={a} fillOpacity="0.7" />
+      <path d="M90 14 L91 12 L92 14 L94 15 L92 16 L91 18 L90 16 L88 15Z"
+        fill={a} fillOpacity="0.5" />
 
-      {/* ── Ambient ink spatter ── */}
-      {[[48, 175, 1.4], [72, 178, 0.9], [162, 30, 1.2], [306, 115, 1.1], [334, 82, 0.8]].map(([x, y, r], i) => (
-        <circle key={i} cx={x} cy={y} r={r} fill="#b8aa79" fillOpacity={0.25} />
-      ))}
+      {/* ── Dashed thread connecting map pins to constellation ── */}
+      <path d="M185 52 Q240 48 295 65"
+        stroke={a} strokeWidth="0.45" strokeOpacity="0.18" strokeDasharray="2 4" />
+      <path d="M295 65 Q305 55 315 50"
+        stroke={a} strokeWidth="0.45" strokeOpacity="0.15" strokeDasharray="2 4" />
+
+      {/* ── Logo — small anchor, bottom-left ── */}
+      <image href="/story-atlas-logo.png" x="8" y="142" width="54" height="72" />
     </svg>
   )
 }
@@ -249,10 +201,27 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  // Surface auth errors that Supabase encodes in the URL hash (e.g. expired link)
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.includes('error=')) return
+    const params = new URLSearchParams(hash.replace(/^#/, ''))
+    const desc = params.get('error_description')
+    if (desc) {
+      setScreen('auth')
+      setMode('login')
+      setError(decodeURIComponent(desc.replace(/\+/g, ' ')))
+      // Clean the URL so the error doesn't persist on refresh
+      history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }, [])
 
   const openAuth = (nextMode) => {
     setMode(nextMode)
     setError('')
+    setSent(false)
     setScreen('auth')
   }
 
@@ -261,10 +230,19 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      const { error: err } = mode === 'login'
-        ? await signIn(email, password)
-        : await signUp(email, password)
-      if (err) setError(err.message)
+      if (mode === 'login') {
+        const { error: err } = await signIn(email, password)
+        if (err) setError(err.message)
+      } else {
+        const { data, error: err } = await signUp(email, password)
+        if (err) {
+          setError(err.message)
+        } else if (!data?.session) {
+          // Email confirmation required — session won't exist until the link is clicked
+          setSent(true)
+        }
+        // If session is already set (confirmation disabled), onAuthStateChange handles it
+      }
     } catch (e) {
       setError(e.message || 'Something went wrong.')
     } finally {
@@ -303,7 +281,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="yow-home-visual" aria-hidden="true">
+            <div aria-hidden="true">
               <HeroIllustration />
             </div>
           </section>
@@ -338,11 +316,7 @@ export default function LoginPage() {
             </div>
 
             {/* Illustration */}
-            <div className="rounded-xl overflow-hidden mb-8" style={{
-              background: 'linear-gradient(160deg, color-mix(in srgb, var(--bg-nav) 70%, var(--accent) 3%), var(--bg-main))',
-              border: '1px solid color-mix(in srgb, var(--border) 90%, var(--accent) 10%)',
-              padding: '18px 14px 10px',
-            }}>
+            <div className="mb-8">
               <HeroIllustration />
             </div>
 
@@ -374,70 +348,98 @@ export default function LoginPage() {
         {/* Right panel — form */}
         <main className="auth-main flex items-center justify-center">
           <div className="w-full max-w-md">
-            <div className="mb-6">
-              <p className="eyebrow mb-2">Story Atlas</p>
-              <h2 className="font-serif text-4xl font-medium leading-none">
-                {mode === 'login' ? 'Welcome back' : 'Create account'}
-              </h2>
-              <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-                {mode === 'login'
-                  ? 'Sign in to return to your worlds, drafts, timelines, and story notes.'
-                  : 'Create your account and start building your first story world.'}
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="auth-form space-y-3">
-              <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
-              />
-
-              {error && (
-                <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
-                  {error}
+            {sent ? (
+              <>
+                <div className="mb-6">
+                  <p className="eyebrow mb-2">Story Atlas</p>
+                  <h2 className="font-serif text-4xl font-medium leading-none">Check your inbox</h2>
+                  <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    We sent a confirmation link to <strong style={{ color: 'var(--text-main)' }}>{email}</strong>. Click it to activate your account and start writing.
+                  </p>
+                </div>
+                <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+                  Wrong address?{' '}
+                  <button
+                    onClick={() => { setSent(false); setEmail(''); setPassword('') }}
+                    className="text-[var(--accent)] hover:underline font-medium"
+                  >
+                    Try again
+                  </button>
                 </p>
-              )}
+                <p className="mt-4 text-center text-xs">
+                  <button type="button" onClick={() => setScreen('home')} className="text-[var(--text-muted)] hover:text-[var(--accent)]">
+                    Back to homepage
+                  </button>
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <p className="eyebrow mb-2">Story Atlas</p>
+                  <h2 className="font-serif text-4xl font-medium leading-none">
+                    {mode === 'login' ? 'Welcome back' : 'Create account'}
+                  </h2>
+                  <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    {mode === 'login'
+                      ? 'Sign in to return to your worlds, drafts, timelines, and story notes.'
+                      : 'Create your account and start building your first story world.'}
+                  </p>
+                </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create Account'}
-              </button>
-            </form>
+                <form onSubmit={handleSubmit} className="auth-form space-y-3">
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                  />
 
-            <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
-              {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-              <button
-                onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}
-                className="text-[var(--accent)] hover:underline font-medium"
-              >
-                {mode === 'login' ? 'Sign up' : 'Sign in'}
-              </button>
-            </p>
+                  {error && (
+                    <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                      {error}
+                    </p>
+                  )}
 
-            <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
-              Your data is stored securely and synced across all your devices.
-            </p>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+                  </button>
+                </form>
 
-            <p className="mt-4 text-center text-xs">
-              <button type="button" onClick={() => setScreen('home')} className="text-[var(--text-muted)] hover:text-[var(--accent)]">
-                Back to homepage
-              </button>
-            </p>
+                <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+                  {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                  <button
+                    onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSent(false) }}
+                    className="text-[var(--accent)] hover:underline font-medium"
+                  >
+                    {mode === 'login' ? 'Sign up' : 'Sign in'}
+                  </button>
+                </p>
+
+                <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
+                  Your data is stored securely and synced across all your devices.
+                </p>
+
+                <p className="mt-4 text-center text-xs">
+                  <button type="button" onClick={() => setScreen('home')} className="text-[var(--text-muted)] hover:text-[var(--accent)]">
+                    Back to homepage
+                  </button>
+                </p>
+              </>
+            )}
           </div>
         </main>
       </div>
