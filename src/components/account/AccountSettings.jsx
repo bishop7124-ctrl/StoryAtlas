@@ -86,7 +86,7 @@ export default function AccountSettings({ open, onClose }) {
             <div className="account-panel-heading">
               <div>
                 <p className="eyebrow">Membership</p>
-                <h2>Story Atlas</h2>
+                <h2>Your Own World</h2>
               </div>
               <PlanBadge membership={membership} />
             </div>

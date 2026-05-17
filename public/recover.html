@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Story Atlas Recovery</title>
+    <title>Your Own World Recovery</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -64,8 +64,8 @@
   </head>
   <body>
     <main>
-      <h1>Story Atlas Recovery</h1>
-      <p>This will restore the recovered Aurethos draft into this browser's Story Atlas storage.</p>
+      <h1>Your Own World Recovery</h1>
+      <p>This will restore the recovered Aurethos draft into this browser's Your Own World storage.</p>
       <button id="restore">Restore recovered data</button>
       <div id="status" role="status"></div>
     </main>
@@ -93,7 +93,7 @@
         status.textContent = 'Restoring...'
 
         try {
-          const response = await fetch('/story-atlas-recovered-data.json', { cache: 'no-store' })
+          const response = await fetch('/yow-recovered-data.json', { cache: 'no-store' })
           if (!response.ok) throw new Error(`Recovery file returned ${response.status}`)
           const data = await response.json()
 

@@ -51,7 +51,7 @@ function buildSystemPrompt(section, store) {
   const createType = cfg.createType
 
   const lines = [
-    'You are an AI assistant embedded in Story Atlas, a creative writing platform.',
+    'You are an AI assistant embedded in Your Own World, a creative writing platform.',
     novel?.title
       ? `Project: "${novel.title}"${novel.description ? ` — ${novel.description}` : ''}.`
       : '',

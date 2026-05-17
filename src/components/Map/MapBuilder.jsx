@@ -1,1 +1,1 @@
-export { default } from './WorldForgeMapBuilder'
+export { default } from './YOWMapBuilder'

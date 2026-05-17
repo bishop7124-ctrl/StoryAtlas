@@ -7,7 +7,7 @@ import Layout from './components/Layout'
 import LoginPage from './components/auth/LoginPage'
 import AIPanel from './components/ai/AIPanel'
 import AccountSettings from './components/account/AccountSettings'
-import StoryAtlasLogo from './components/brand/StoryAtlasLogo'
+import YOWLogo from './components/brand/YOWLogo'
 import { getMembership } from './utils/membership'
 
 class ErrorBoundary extends Component {
@@ -24,7 +24,7 @@ class ErrorBoundary extends Component {
     if (this.state.error) {
       return (
         <div className="min-h-screen bg-[#0f1115] flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <span className="w-12 h-12 text-[#f59e0b]"><StoryAtlasLogo /></span>
+          <span className="w-12 h-12 text-[#f59e0b]"><YOWLogo /></span>
           <p className="text-[#f8fafc] font-semibold">Something went wrong.</p>
           <p className="text-[#64748b] text-sm max-w-sm">{this.state.error?.message}</p>
           <button
@@ -137,7 +137,7 @@ function AppInner() {
   if (authLoading || dataLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-main)] flex flex-col items-center justify-center gap-4">
-        <span className="w-12 h-12 text-[var(--accent)]"><StoryAtlasLogo /></span>
+        <span className="w-12 h-12 text-[var(--accent)]"><YOWLogo /></span>
         <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
       </div>
     )

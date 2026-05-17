@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import StoryAtlasLogo from '../brand/StoryAtlasLogo'
+import YOWLogo from '../brand/YOWLogo'
 
 const FEATURES = [
   {
@@ -188,7 +188,7 @@ function _HeroIllustrationSVG_unused() {
         stroke={a} strokeWidth="0.45" strokeOpacity="0.15" strokeDasharray="2 4" />
 
       {/* ── Logo — small anchor, bottom-left ── */}
-      <image href="/story-atlas-logo.png" x="8" y="142" width="54" height="72" />
+      <image href="/yow-logo.png" x="8" y="142" width="54" height="72" />
     </svg>
   )
 }
@@ -255,10 +255,10 @@ export default function LoginPage() {
       <div className="auth-shell yow-home min-h-screen text-[var(--text-main)]">
         <header className="yow-home-nav">
           <div className="flex items-center gap-3">
-            <div className="studio-logo"><StoryAtlasLogo /></div>
+            <div className="studio-logo"><YOWLogo /></div>
             <div>
               <p className="eyebrow text-xs mb-0.5">Story world workspace</p>
-              <strong>Story Atlas</strong>
+              <strong>Your Own World</strong>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -270,10 +270,10 @@ export default function LoginPage() {
         <main className="yow-home-main">
           <section className="yow-home-hero">
             <div className="yow-home-copy">
-              <p className="eyebrow mb-3">Story Atlas</p>
+              <p className="eyebrow mb-3">Your Own World</p>
               <h1>Build the world your story needs.</h1>
               <p>
-                Story Atlas keeps the manuscript, map room, character board, lore archive, and project dashboard in one focused writing workspace.
+                Your Own World keeps the manuscript, map room, character board, lore archive, and project dashboard in one focused writing workspace.
               </p>
               <div className="yow-home-actions">
                 <button type="button" className="btn btn-primary" data-testid="home-hero-start" onClick={() => openAuth('signup')}>Get started</button>
@@ -286,7 +286,7 @@ export default function LoginPage() {
             </div>
           </section>
 
-          <section className="yow-home-grid" aria-label="Story Atlas functionality">
+          <section className="yow-home-grid" aria-label="Your Own World functionality">
             {HOME_SECTIONS.map(([title, copy]) => (
               <article key={title} className="yow-home-card">
                 <span>{title}</span>
@@ -308,10 +308,10 @@ export default function LoginPage() {
           <div>
             {/* Brand */}
             <div className="flex items-center gap-3 mb-8">
-              <div className="studio-logo"><StoryAtlasLogo /></div>
+              <div className="studio-logo"><YOWLogo /></div>
               <div>
                 <p className="eyebrow text-xs mb-0.5">Story world workspace</p>
-                <h1 className="font-semibold text-base leading-none" style={{ color: 'var(--text-main)' }}>Story Atlas</h1>
+                <h1 className="font-semibold text-base leading-none" style={{ color: 'var(--text-main)' }}>Your Own World</h1>
               </div>
             </div>
 
@@ -325,7 +325,7 @@ export default function LoginPage() {
               Build the world your story needs.
             </h2>
             <p className="page-copy text-sm" style={{ color: 'var(--text-muted)' }}>
-              Story Atlas is a focused home for manuscripts, characters, lore, maps, and the living logic behind a story.
+              Your Own World is a focused home for manuscripts, characters, lore, maps, and the living logic behind a story.
             </p>
           </div>
 
@@ -351,7 +351,7 @@ export default function LoginPage() {
             {sent ? (
               <>
                 <div className="mb-6">
-                  <p className="eyebrow mb-2">Story Atlas</p>
+                  <p className="eyebrow mb-2">Your Own World</p>
                   <h2 className="font-serif text-4xl font-medium leading-none">Check your inbox</h2>
                   <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
                     We sent a confirmation link to <strong style={{ color: 'var(--text-main)' }}>{email}</strong>. Click it to activate your account and start writing.
@@ -375,7 +375,7 @@ export default function LoginPage() {
             ) : (
               <>
                 <div className="mb-6">
-                  <p className="eyebrow mb-2">Story Atlas</p>
+                  <p className="eyebrow mb-2">Your Own World</p>
                   <h2 className="font-serif text-4xl font-medium leading-none">
                     {mode === 'login' ? 'Welcome back' : 'Create account'}
                   </h2>

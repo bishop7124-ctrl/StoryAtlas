@@ -23,12 +23,12 @@ const OVERLAY_TYPES = {
   8: { name: 'Room',     color: [232, 221, 191], alpha: 0.85 },
 }
 
-const STORY_ATLAS_REGION = {
+const YOW_REGION = {
   fill: '#d6b45f',
   stroke: '#f6d986',
 }
 
-const STORY_ATLAS_PIN = {
+const YOW_PIN = {
   shell: '#f6d986',
   core: '#d6b45f',
 }
@@ -1164,7 +1164,7 @@ export default function MapBuilder({ store }) {
         labelX = reg.cx * MAP_W
         labelY = reg.cy * MAP_H
       }
-      const hex = reg.color || STORY_ATLAS_REGION.stroke
+      const hex = reg.color || YOW_REGION.stroke
       ctx.fillStyle = reg.fill || `${hex}2a`
       ctx.fill()
       ctx.strokeStyle = hex
@@ -1192,12 +1192,12 @@ export default function MapBuilder({ store }) {
       ctx.arc(px, py, 18, 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(10, 15, 12, 0.72)'
       ctx.fill()
-      ctx.strokeStyle = pin.color || STORY_ATLAS_PIN.shell
+      ctx.strokeStyle = pin.color || YOW_PIN.shell
       ctx.lineWidth = 4
       ctx.stroke()
       ctx.beginPath()
       ctx.arc(px, py, 7, 0, Math.PI * 2)
-      ctx.fillStyle = pin.coreColor || STORY_ATLAS_PIN.core
+      ctx.fillStyle = pin.coreColor || YOW_PIN.core
       ctx.fill()
       const label = atlasLocationName(pin.locationId, pin.name).slice(0, 18)
       ctx.font = 'bold 22px -apple-system, Arial, sans-serif'
@@ -2289,7 +2289,7 @@ export default function MapBuilder({ store }) {
                   </div>
                 )}
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('storyatlas:navigate', { detail: { section: 'locations', locationId: pin.locationId } }))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('yow:navigate', { detail: { section: 'locations', locationId: pin.locationId } }))}
                   style={{ fontSize: 11, color: '#f6d986', background: 'none', border: '1px solid rgba(246,217,134,0.3)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
                 >→ View in Locations</button>
                 {pinnedPinId && (
@@ -2362,7 +2362,7 @@ export default function MapBuilder({ store }) {
           onClose={() => setPinModal(null)}
           onSave={(name, type, desc) => {
             const loc = addLocation({ name, category: type, type, description: desc, tags: ['map'], mapX: pinModal.x, mapY: pinModal.y })
-            const pin = { id: Date.now().toString(36), name, type, description: desc, locationId: loc?.id, color: STORY_ATLAS_PIN.shell, coreColor: STORY_ATLAS_PIN.core, mapX: pinModal.x, mapY: pinModal.y }
+            const pin = { id: Date.now().toString(36), name, type, description: desc, locationId: loc?.id, color: YOW_PIN.shell, coreColor: YOW_PIN.core, mapX: pinModal.x, mapY: pinModal.y }
             updateActiveMapData(m => ({ mapPins: [...(m.mapPins || []), pin] }))
             setPinModal(null)
             renderMap()

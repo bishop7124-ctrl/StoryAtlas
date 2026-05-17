@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import UserMenu from './auth/UserMenu'
-import StoryAtlasLogo from './brand/StoryAtlasLogo'
+import YOWLogo from './brand/YOWLogo'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
 
 const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
@@ -319,7 +319,7 @@ export default function NovelManager({ store, user, onOpenChat, onOpenAccount })
 
       {/* Top bar */}
       <div className="library-top-bar">
-        <span className="library-brand-logo"><StoryAtlasLogo /></span>
+        <span className="library-brand-logo"><YOWLogo /></span>
         <UserMenu onOpenAccount={onOpenAccount} />
       </div>
 

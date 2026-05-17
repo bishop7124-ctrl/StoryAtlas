@@ -2,8 +2,8 @@
 // localStorage (used by Zustand persist) has a ~5 MB per-origin limit which
 // the raw Float32Array / Uint8Array arrays would easily exceed.
 
-const DB_NAME = 'yow-worldforge-maps'
-const LEGACY_DB_NAME = 'story-atlas-worldforge-maps'
+const DB_NAME = 'yow-maps'
+const LEGACY_DB_NAME = 'yow-maps-legacy'
 const STORE   = 'pixel-data'
 const VERSION = 1
 
