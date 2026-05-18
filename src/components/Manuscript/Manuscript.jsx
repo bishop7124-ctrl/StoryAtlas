@@ -952,6 +952,33 @@ export default function Manuscript({ store }) {
 
   return (
     <div className="manuscript-processor flex flex-col h-full bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden font-serif">
+      {/* Top tab bar */}
+      <div className="flex border-b border-[var(--border)] bg-[var(--bg-nav)] font-sans flex-shrink-0">
+        <button
+          onClick={() => setView('manuscript')}
+          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
+            view === 'manuscript' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+          }`}
+        >
+          {view === 'manuscript' && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
+          )}
+          Manuscript
+        </button>
+        <div className="w-px bg-[var(--border)] self-stretch my-1.5" />
+        <button
+          onClick={() => setView('outline')}
+          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
+            view === 'outline' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+          }`}
+        >
+          {view === 'outline' && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
+          )}
+          Outline
+        </button>
+      </div>
+
       {/* Top toolbar — only shown in manuscript view */}
       {view === 'manuscript' && (
         <FocusControls
@@ -1129,33 +1156,6 @@ export default function Manuscript({ store }) {
           onClose={() => setOutlineOpen(false)}
         />
       )}
-
-      {/* Bottom tab bar */}
-      <div className="flex border-t border-[var(--border)] bg-[var(--bg-nav)] font-sans flex-shrink-0">
-        <button
-          onClick={() => setView('manuscript')}
-          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
-            view === 'manuscript' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          {view === 'manuscript' && (
-            <span className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
-          )}
-          Manuscript
-        </button>
-        <div className="w-px bg-[var(--border)] self-stretch my-1.5" />
-        <button
-          onClick={() => setView('outline')}
-          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
-            view === 'outline' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          {view === 'outline' && (
-            <span className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
-          )}
-          Outline
-        </button>
-      </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
         .ms-textarea {

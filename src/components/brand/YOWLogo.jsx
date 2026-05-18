@@ -4,7 +4,7 @@ export default function YOWLogo({ className = '', title = 'Your Own World' }) {
       src="/yow-logo.png"
       className={`yow-logo ${className}`.trim()}
       alt={title || ''}
-      style={{ objectFit: 'contain', borderRadius: '6px' }}
+      style={{ objectFit: 'contain' }}
     />
   )
 }

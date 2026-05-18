@@ -15,7 +15,7 @@ import Manuscript from './Manuscript/Manuscript'
 import StoryOutline from './outline/StoryOutline'
 import ProjectDashboard from './dashboard/ProjectDashboard'
 import ScheduleCalendar from './schedule/ScheduleCalendar'
-import { getProjectType } from '../constants/projectTypes'
+import { PROJECT_TYPES, getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
 import { StudioFrame, StudioWorkspace, StudioTab, StudioButton } from './presentation/Studio'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -68,23 +68,21 @@ class SectionErrorBoundary extends Component {
 // ─── Theme data ───────────────────────────────────────────────────────────────
 
 const PRESET_THEMES = [
-  { id: 'atelier',     label: 'Atelier',     description: 'Dark forest studio',   swatches: { bgMain: '#0e1512', bgNav: '#141c16', textMain: '#dce8d7', textMuted: '#6b856d', accent: '#8fcb9e', border: '#1e2c20' } },
-  { id: 'scriptorium', label: 'Scriptorium', description: 'Warm dark desk',      swatches: { bgMain: '#14100c', bgNav: '#241b13', textMain: '#f4ead9', textMuted: '#b8a58f', accent: '#c89445', border: '#3c3023' } },
-  { id: 'ink',         label: 'Night Ink',   description: 'Cool low-light focus', swatches: { bgMain: '#0d1114', bgNav: '#171d20', textMain: '#edf1ee', textMuted: '#95a39d', accent: '#8bb9a8', border: '#283237' } },
-  { id: 'vellum',      label: 'Vellum',      description: 'Soft paper mode',      swatches: { bgMain: '#f3ead9', bgNav: '#e6d8bf', textMain: '#221b14', textMuted: '#71624e', accent: '#8a3f2d', border: '#c9b89e' } },
-  { id: 'maproom',     label: 'Map Room',    description: 'Muted green studio',   swatches: { bgMain: '#101719', bgNav: '#1b2726', textMain: '#e8efe8', textMuted: '#97aaa1', accent: '#b6a15d', border: '#33413c' } },
+  { id: 'atelier',     label: 'Atelier',     description: 'Dark forest studio', swatches: { bgMain: '#0e1512', bgNav: '#141c16', textMain: '#dce8d7', textMuted: '#6b856d', accent: '#8fcb9e', border: '#1e2c20' } },
+  { id: 'scriptorium', label: 'Scriptorium', description: 'Warm dark desk',     swatches: { bgMain: '#14100c', bgNav: '#241b13', textMain: '#f4ead9', textMuted: '#b8a58f', accent: '#c89445', border: '#3c3023' } },
+  { id: 'vellum',      label: 'Vellum',      description: 'Soft paper mode',    swatches: { bgMain: '#f3ead9', bgNav: '#e6d8bf', textMain: '#221b14', textMuted: '#71624e', accent: '#8a3f2d', border: '#c9b89e' } },
 ]
 
-const CURATED_PALETTES = [
-  { id: 'catppuccin', label: 'Catppuccin',    swatches: { bgMain: '#1e1e2e', bgNav: '#181825', textMain: '#cdd6f4', textMuted: '#a6adc8', accent: '#89b4fa', border: '#313244' } },
-  { id: 'nord',       label: 'Nord',          swatches: { bgMain: '#2e3440', bgNav: '#3b4252', textMain: '#eceff4', textMuted: '#d8dee9', accent: '#88c0d0', border: '#4c566a' } },
-  { id: 'dracula',    label: 'Dracula',       swatches: { bgMain: '#282a36', bgNav: '#21222c', textMain: '#f8f8f2', textMuted: '#bd93f9', accent: '#ff79c6', border: '#44475a' } },
-  { id: 'tokyo',      label: 'Tokyo Night',   swatches: { bgMain: '#1a1b26', bgNav: '#16161e', textMain: '#c0caf5', textMuted: '#7aa2f7', accent: '#bb9af7', border: '#292e42' } },
-  { id: 'rosepine',   label: 'Rosé Pine',     swatches: { bgMain: '#191724', bgNav: '#1f1d2e', textMain: '#e0def4', textMuted: '#908caa', accent: '#ebbcba', border: '#403d52' } },
-  { id: 'gruvbox',    label: 'Gruvbox Dark',  swatches: { bgMain: '#282828', bgNav: '#1d2021', textMain: '#ebdbb2', textMuted: '#bdae93', accent: '#fabd2f', border: '#504945' } },
-  { id: 'everforest', label: 'Everforest',    swatches: { bgMain: '#2d353b', bgNav: '#272e33', textMain: '#d3c6aa', textMuted: '#9da9a0', accent: '#a7c080', border: '#414b50' } },
-  { id: 'solarized',  label: 'Solarized',     swatches: { bgMain: '#002b36', bgNav: '#073642', textMain: '#839496', textMuted: '#657b83', accent: '#268bd2', border: '#094556' } },
+const QUICK_PALETTES = [
+  { id: 'nord',      label: 'Nord',      swatches: { bgMain: '#2e3440', bgNav: '#3b4252', textMain: '#eceff4', textMuted: '#d8dee9', accent: '#88c0d0', border: '#4c566a' } },
+  { id: 'rosepine',  label: 'Rosé Pine', swatches: { bgMain: '#191724', bgNav: '#1f1d2e', textMain: '#e0def4', textMuted: '#908caa', accent: '#ebbcba', border: '#403d52' } },
+  { id: 'gruvbox',   label: 'Gruvbox',   swatches: { bgMain: '#282828', bgNav: '#1d2021', textMain: '#ebdbb2', textMuted: '#bdae93', accent: '#fabd2f', border: '#504945' } },
 ]
+
+const loadSavedPresets = () => {
+  try { return JSON.parse(localStorage.getItem('nf-saved-presets') || '[]') }
+  catch { return [] }
+}
 
 const FONT_OPTIONS = [
   { id: 'system',    label: 'System UI',  value: 'system-ui, sans-serif' },
@@ -110,7 +108,7 @@ const CUSTOM_COLOR_FIELDS = [
 
 const PRESET_IDS = new Set(PRESET_THEMES.map(t => t.id))
 const DEFAULT_THEME = PRESET_THEMES[0].id
-const THEME_CSS_VARS = ['--bg-main', '--bg-nav', '--text-main', '--text-muted', '--accent', '--border', '--bg-hover', '--accent-fade']
+const THEME_CSS_VARS = ['--bg-main', '--bg-nav', '--text-main', '--text-muted', '--accent', '--border', '--bg-hover', '--accent-fade', '--logo-filter']
 
 const loadThemeChoice = () => {
   const stored = localStorage.getItem('nf-theme')
@@ -137,52 +135,55 @@ const rgbaFromHex = (hex, alpha) => {
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`
 }
 
+const logoFilterForBackground = (hex) => {
+  const rgb = hexToRgb(hex)
+  if (!rgb) return 'none'
+  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255
+  return luminance > 0.56 ? 'brightness(0)' : 'none'
+}
+
 const DEFAULT_CUSTOM_COLORS = PRESET_THEMES[0].swatches
 
 // ─── Theme editor ─────────────────────────────────────────────────────────────
 
-function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, customColors, setCustomColors, onClose }) {
-  const [importText, setImportText] = useState('')
-  const [importError, setImportError] = useState('')
-  const [copied, setCopied] = useState(false)
-  const [radiusChoice, setRadiusChoice] = useState(() => localStorage.getItem('nf-radius') || 'default')
-
-  useEffect(() => {
-    localStorage.setItem('nf-radius', radiusChoice)
-    const root = document.documentElement
-    if (radiusChoice === 'sharp') { root.setAttribute('data-radius', 'sharp') }
-    else if (radiusChoice === 'rounded') { root.setAttribute('data-radius', 'rounded') }
-    else { root.removeAttribute('data-radius') }
-  }, [radiusChoice])
+function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, radiusChoice, setRadiusChoice, customColors, setCustomColors, savedPresets, setSavedPresets, onClose }) {
+  const [savePresetName, setSavePresetName] = useState('')
 
   const applyPalette = (swatches) => {
     setCustomColors(swatches)
     setTheme('custom')
   }
 
-  const handleExport = () => {
-    const json = JSON.stringify(customColors, null, 2)
-    navigator.clipboard?.writeText(json).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
+  const handleSavePreset = () => {
+    const name = savePresetName.trim()
+    if (!name) return
+    setSavedPresets(prev => [...prev, { id: `saved-${Date.now()}`, label: name, swatches: { ...effectiveColors } }])
+    setSavePresetName('')
   }
 
-  const handleImport = () => {
-    try {
-      const parsed = JSON.parse(importText)
-      setCustomColors({ ...DEFAULT_CUSTOM_COLORS, ...parsed })
-      setTheme('custom')
-      setImportError('')
-      setImportText('')
-    } catch {
-      setImportError('Invalid JSON — check format.')
-    }
+  const handleDeletePreset = (id) => {
+    setSavedPresets(prev => prev.filter(p => p.id !== id))
+  }
+
+  const handleMovePreset = (id, dir) => {
+    setSavedPresets(prev => {
+      const idx = prev.findIndex(p => p.id === id)
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+      return next
+    })
   }
 
   const effectiveColors = theme === 'custom'
     ? { ...DEFAULT_CUSTOM_COLORS, ...customColors }
     : PRESET_THEMES.find(t => t.id === theme)?.swatches || DEFAULT_CUSTOM_COLORS
+
+  const btnStyle = (active) => ({
+    background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+    color: active ? 'var(--text-main)' : 'var(--text-muted)', fontSize: 11, lineHeight: 1,
+  })
 
   return (
     <div className="theme-editor-overlay">
@@ -239,40 +240,75 @@ function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, customColors,
             ))}
           </div>
 
-          <p className="eyebrow mb-3">Community Palettes</p>
-          <div className="space-y-1.5 mb-6">
-            {CURATED_PALETTES.map(p => (
+          <p className="eyebrow mb-3">Quick Starts</p>
+          <div className="space-y-1 mb-6">
+            {QUICK_PALETTES.map(p => (
               <button key={p.id} onClick={() => applyPalette(p.swatches)}
                 className="w-full text-left px-3 py-2 rounded transition-colors"
                 style={{ border: '1px solid var(--border)' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 6 }}>{p.label}</div>
-                <div className="flex gap-1">
-                  {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
-                    <span key={c} className="w-5 h-3 rounded-sm" style={{ background: c, border: '1px solid rgba(0,0,0,.2)' }} />
-                  ))}
+                <div className="flex items-center justify-between">
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{p.label}</span>
+                  <div className="flex gap-1">
+                    {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
+                      <span key={c} className="w-4 h-3 rounded-sm" style={{ background: c, border: '1px solid rgba(0,0,0,.2)' }} />
+                    ))}
+                  </div>
                 </div>
               </button>
             ))}
           </div>
 
-          <p className="eyebrow mb-2">Export / Import</p>
-          <button onClick={handleExport}
-            className="w-full text-left px-3 py-2 rounded mb-2 transition-colors"
-            style={{ border: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: copied ? 'var(--accent)' : 'var(--text-muted)' }}>
-            {copied ? '✓ Copied' : '↑ Copy as JSON'}
-          </button>
-          <textarea value={importText} onChange={e => setImportText(e.target.value)}
-            placeholder="Paste JSON to import…" rows={3}
-            style={{ width: '100%', background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 8px', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-main)', resize: 'none' }}
-          />
-          {importError && <p style={{ fontSize: 10, color: '#f87171', marginTop: 4 }}>{importError}</p>}
-          <button onClick={handleImport} disabled={!importText.trim()}
-            style={{ width: '100%', marginTop: 6, padding: '6px 0', border: '1px solid var(--border)', borderRadius: 4, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'none', cursor: 'pointer' }}>
-            ↓ Import
-          </button>
+          <p className="eyebrow mb-2">My Presets</p>
+          {savedPresets.length === 0 && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>No saved presets yet.</p>
+          )}
+          <div className="space-y-1 mb-3">
+            {savedPresets.map((p, i) => (
+              <div key={p.id}
+                style={{ border: '1px solid var(--border)', borderRadius: 4, padding: '6px 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => applyPalette(p.swatches)}
+                  style={{ flex: 1, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-0.5">
+                      {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
+                        <span key={c} style={{ width: 14, height: 14, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,.2)', display: 'inline-block' }} />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{p.label}</span>
+                  </div>
+                </button>
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => handleMovePreset(p.id, -1)} disabled={i === 0}
+                    style={btnStyle(i > 0)} title="Move up">▲</button>
+                  <button onClick={() => handleMovePreset(p.id, 1)} disabled={i === savedPresets.length - 1}
+                    style={btnStyle(i < savedPresets.length - 1)} title="Move down">▼</button>
+                  <button onClick={() => handleDeletePreset(p.id)}
+                    style={{ ...btnStyle(true), color: 'var(--text-muted)', marginLeft: 2 }} title="Delete">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={savePresetName}
+              onChange={e => setSavePresetName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+              placeholder="Preset name…"
+              style={{ flex: 1, background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 4, padding: '5px 8px', fontSize: 11, color: 'var(--text-main)' }}
+            />
+            <button onClick={handleSavePreset} disabled={!savePresetName.trim()}
+              style={{
+                padding: '5px 10px', borderRadius: 4, border: '1px solid var(--border)',
+                background: savePresetName.trim() ? 'var(--accent)' : 'transparent',
+                color: savePresetName.trim() ? 'var(--bg-main)' : 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, cursor: savePresetName.trim() ? 'pointer' : 'default',
+              }}>
+              Save
+            </button>
+          </div>
         </div>
 
         {/* Col 2 — Custom colors */}
@@ -384,7 +420,7 @@ const ALL_SECTIONS = [
   { id: 'dashboard',    label: 'Overview',     icon: 'overview' },
   { id: 'outline',      label: 'Outline',      icon: 'outline' },
   { id: 'characters',   label: 'Characters',   icon: 'characters' },
-  { id: 'familytree',   label: 'Family Tree',  icon: 'familytree' },
+  { id: 'familytree',   label: 'Relationships', icon: 'familytree' },
   { id: 'factions',     label: 'Factions',     icon: 'factions' },
   { id: 'locations',    label: 'Locations',    icon: 'locations' },
   { id: 'lore',         label: 'Lore',         icon: 'lore' },
@@ -403,19 +439,309 @@ const STUDIO_ROOMS = [
   { id: 'lore',        label: 'Lore',        icon: 'lore',        sections: ['lore', 'timeline', 'worldhistory'] },
 ]
 
+const SETTINGS_GROUPS = [
+  { label: 'Planning',   sections: ['outline', 'ideas', 'schedule'] },
+  { label: 'Characters', sections: ['characters', 'familytree', 'factions'] },
+  { label: 'Atlas',      sections: ['locations', 'map'] },
+  { label: 'Lore',       sections: ['lore', 'timeline', 'worldhistory'] },
+]
+
+// ─── Project Settings ─────────────────────────────────────────────────────────
+
+function ProjectSettings({ store, onClose }) {
+  const novel = store.activeNovel
+  const initial = (novel?.enabledSections ?? ALL_SECTION_IDS).filter(id => ALL_SECTION_IDS.includes(id))
+  const [enabled, setEnabled] = useState(() => new Set(initial))
+  const [details, setDetails] = useState(() => ({
+    title: novel?.title || '',
+    description: novel?.description || '',
+    type: novel?.type || 'novel',
+    currentYear: store.currentYear ?? 0,
+    seriesId: novel?.seriesId || '',
+  }))
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setEnabled(new Set((novel?.enabledSections ?? ALL_SECTION_IDS).filter(id => ALL_SECTION_IDS.includes(id))))
+    setDetails({
+      title: novel?.title || '',
+      description: novel?.description || '',
+      type: novel?.type || 'novel',
+      currentYear: store.currentYear ?? 0,
+      seriesId: novel?.seriesId || '',
+    })
+  }, [novel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const patchProject = (patch) => {
+    if (!store.activeNovelId) return
+    store.updateNovel(store.activeNovelId, patch)
+  }
+
+  const updateDetail = (field, value) => {
+    setDetails(prev => ({ ...prev, [field]: value }))
+    if (field === 'currentYear') {
+      store.updateCurrentYear(value)
+      return
+    }
+    patchProject({ [field]: field === 'seriesId' ? value || null : value })
+  }
+
+  const toggle = (id) => {
+    setEnabled(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      store.updateNovel(store.activeNovelId, { enabledSections: [...next] })
+      return next
+    })
+  }
+
+  const resetToDefaults = () => {
+    const defaults = new Set(getProjectType(novel?.type).defaultSections)
+    setEnabled(defaults)
+    store.updateNovel(store.activeNovelId, { enabledSections: [...defaults] })
+  }
+
+  const enableAll = () => {
+    const all = new Set(ALL_SECTION_IDS)
+    setEnabled(all)
+    store.updateNovel(store.activeNovelId, { enabledSections: [...all] })
+  }
+
+  return (
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+    >
+      <div style={{
+        background: 'var(--bg-nav)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        width: 'min(940px, 100%)', height: 'min(760px, calc(100vh - 48px))',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '14px 20px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 3 }}>Project Settings</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>{novel?.title || 'Untitled'}</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={onClose}
+              style={{
+                height: 28, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 4,
+                background: 'var(--accent)', color: 'var(--bg-main)',
+                fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer',
+              }}
+            >Done</button>
+            <button
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', padding: '0 4px' }}
+            >✕</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
+            <section style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-main)', padding: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Project Details</p>
+
+              <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Title</span>
+                <input
+                  value={details.title}
+                  onChange={e => updateDetail('title', e.target.value)}
+                  className="field"
+                  style={{ padding: '8px 10px', fontSize: 13 }}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Description</span>
+                <textarea
+                  value={details.description}
+                  onChange={e => updateDetail('description', e.target.value)}
+                  rows={5}
+                  className="field"
+                  style={{ padding: '8px 10px', fontSize: 13, resize: 'vertical', minHeight: 96 }}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Project type</span>
+                <select
+                  value={details.type}
+                  onChange={e => updateDetail('type', e.target.value)}
+                  className="field"
+                  style={{ padding: '8px 10px', fontSize: 13 }}
+                >
+                  {Object.entries(PROJECT_TYPES).map(([id, type]) => (
+                    <option key={id} value={id}>{type.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {store.series.length > 0 && (
+                <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Series</span>
+                  <select
+                    value={details.seriesId}
+                    onChange={e => updateDetail('seriesId', e.target.value)}
+                    className="field"
+                    style={{ padding: '8px 10px', fontSize: 13 }}
+                  >
+                    <option value="">No series</option>
+                    {store.series.map(series => (
+                      <option key={series.id} value={series.id}>{series.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Current year</span>
+                <input
+                  type="number"
+                  value={details.currentYear}
+                  onChange={e => updateDetail('currentYear', e.target.value)}
+                  className="field"
+                  style={{ padding: '8px 10px', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}
+                />
+              </label>
+            </section>
+
+            <section style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-main)', padding: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Sections</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 430 }}>
+                    Choose which rooms and tools appear in this project. Hidden sections can be re-enabled any time.
+                  </p>
+                </div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', paddingTop: 2 }}>
+                  {enabled.size} / {ALL_SECTION_IDS.length} active
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
+                {SETTINGS_GROUPS.map(group => (
+                  <div key={group.label}>
+                    <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>{group.label}</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {group.sections.map(id => {
+                        const section = ALL_SECTIONS.find(s => s.id === id)
+                        if (!section) return null
+                        const on = enabled.has(id)
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => toggle(id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              minHeight: 40, padding: '8px 10px', borderRadius: 6,
+                              border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+                              background: on ? 'var(--accent-fade)' : 'transparent',
+                              cursor: 'pointer', textAlign: 'left',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                              <span style={{ color: on ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', flexShrink: 0 }}>
+                                <Icon name={section.icon} size={14} />
+                              </span>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: on ? 'var(--text-main)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {section.label}
+                              </span>
+                            </div>
+                            <div style={{
+                              width: 32, height: 18, borderRadius: 9, flexShrink: 0,
+                              background: on ? 'var(--accent)' : 'var(--border)',
+                              position: 'relative', marginLeft: 10,
+                            }}>
+                              <div style={{
+                                position: 'absolute', top: 3, left: on ? 17 : 3,
+                                width: 12, height: 12, borderRadius: '50%',
+                                background: on ? 'var(--bg-main)' : 'var(--bg-nav)',
+                                transition: 'left .12s ease',
+                              }} />
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '12px 20px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={resetToDefaults}
+              style={{
+                height: 28, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 4,
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}
+            >Type defaults</button>
+            <button
+              onClick={enableAll}
+              style={{
+                height: 28, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 4,
+                background: 'transparent', color: 'var(--text-muted)',
+                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}
+            >Enable all</button>
+          </div>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {enabled.size} / {ALL_SECTION_IDS.length} active
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export default function Layout({ store, section, setSection, onOpenAccount }) {
   const projectTypeCfg = getProjectType(store.activeNovel?.type)
-  const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || projectTypeCfg.sections.includes(s.id))
+  const enabledSectionIds = new Set(getEnabledSections(store.activeNovel))
+  const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || enabledSectionIds.has(s.id))
 
   const [viewMode, setViewMode] = useState('planning')
   const [lhnOpen, setLhnOpen] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
   const [theme, setTheme] = useState(loadThemeChoice)
   const [showThemeEditor, setShowThemeEditor] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [fontChoice, setFontChoice] = useState(() => localStorage.getItem('nf-font') || 'system')
+  const [radiusChoice, setRadiusChoice] = useState(() => localStorage.getItem('nf-radius') || 'default')
   const [customColors, setCustomColors] = useState(loadCustomColors)
+  const [savedPresets, setSavedPresets] = useState(loadSavedPresets)
+
+  useEffect(() => {
+    localStorage.setItem('nf-saved-presets', JSON.stringify(savedPresets))
+  }, [savedPresets])
 
   // Apply theme
   useEffect(() => {
@@ -431,6 +757,7 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
       root.style.setProperty('--border', colors.border)
       root.style.setProperty('--bg-hover', rgbaFromHex(colors.textMain, 0.06))
       root.style.setProperty('--accent-fade', rgbaFromHex(colors.accent, 0.18))
+      root.style.setProperty('--logo-filter', logoFilterForBackground(colors.bgNav))
     } else {
       THEME_CSS_VARS.forEach(v => root.style.removeProperty(v))
       root.setAttribute('data-theme', theme)
@@ -449,6 +776,23 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
     localStorage.setItem('nf-font', fontChoice)
     document.documentElement.style.setProperty('--font', font.value)
   }, [fontChoice])
+
+  // Apply corner radius
+  useEffect(() => {
+    localStorage.setItem('nf-radius', radiusChoice)
+    const root = document.documentElement
+    if (radiusChoice === 'sharp') root.setAttribute('data-radius', 'sharp')
+    else if (radiusChoice === 'rounded') root.setAttribute('data-radius', 'rounded')
+    else root.removeAttribute('data-radius')
+  }, [radiusChoice])
+
+  // Redirect away from a section that just got disabled
+  useEffect(() => {
+    if (viewMode === 'planning' && section !== 'dashboard' && !enabledSectionIds.has(section)) {
+      const first = planningSections.find(s => s.id !== 'dashboard')
+      if (first) setSection(first.id)
+    }
+  }, [store.activeNovel?.enabledSections])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleTeleport = (e) => {
@@ -531,6 +875,17 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
         utilityContent={(
           <div className="studio-utility-btns">
             <button
+              className={`studio-utility-btn${showSettings ? ' is-active' : ''}`}
+              onClick={() => setShowSettings(v => !v)}
+              title="Project settings"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Settings
+            </button>
+            <button
               className={`studio-utility-btn${showThemeEditor ? ' is-active' : ''}`}
               onClick={() => setShowThemeEditor(v => !v)}
               title="Appearance"
@@ -558,8 +913,8 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
         <StudioWorkspace
           eyebrow={viewMode === 'writing' ? 'Writing' : 'Reference'}
           title={activeRoom?.label || activeSection?.label}
-          meta={viewMode === 'writing' ? projectTypeCfg.writingTab : activeSection?.label}
-          roomId={activeRoom?.id}
+          meta={viewMode === 'writing' ? projectTypeCfg.writingTab : (activeSection?.label !== activeRoom?.label ? activeSection?.label : undefined)}
+          roomId={section === 'map' ? 'atlas-map' : activeRoom?.id}
           actions={viewMode === 'planning' ? (
             <StudioButton tone="secondary" size="sm" onClick={() => setLhnOpen(v => !v)}>
               {lhnOpen ? 'Hide tools' : 'Show tools'}
@@ -610,14 +965,25 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
         </StudioWorkspace>
       </StudioFrame>
 
+      {showSettings && (
+        <ProjectSettings
+          store={store}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
+
       {showThemeEditor && (
         <ThemeEditor
           theme={theme}
           setTheme={setTheme}
           fontChoice={fontChoice}
           setFontChoice={setFontChoice}
+          radiusChoice={radiusChoice}
+          setRadiusChoice={setRadiusChoice}
           customColors={customColors}
           setCustomColors={setCustomColors}
+          savedPresets={savedPresets}
+          setSavedPresets={setSavedPresets}
           onClose={() => setShowThemeEditor(false)}
         />
       )}

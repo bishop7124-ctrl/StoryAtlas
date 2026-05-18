@@ -130,12 +130,13 @@ function tagMatches(tag, store) {
 
 export default function Lore({ store }) {
   const {
-    currentYear, updateCurrentYear, loreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry,
+    loreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry,
     characters, locations, selectedLoreEntryId, setSelectedLoreEntryId,
   } = store
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [tagFilter, setTagFilter] = useState('')
+  const [sortBy, setSortBy] = useState('title-asc')
   const [collapsed, setCollapsed] = useState({})
   const [editing, setEditing] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -159,13 +160,22 @@ export default function Lore({ store }) {
       const matchesTag = !tagFilter || e.tags?.some(t => t.toLowerCase() === tagFilter.toLowerCase())
       return matchesText && matchesCategory && matchesTag
     })
-    return filtered.reduce((acc, entry) => {
+    const sorter = (a, b) => {
+      if (sortBy === 'title-asc') return a.title.localeCompare(b.title)
+      if (sortBy === 'title-desc') return b.title.localeCompare(a.title)
+      return 0
+    }
+    const groups = filtered.reduce((acc, entry) => {
       const cat = entry.category || 'Uncategorized'
       if (!acc[cat]) acc[cat] = []
       acc[cat].push(entry)
       return acc
     }, {})
-  }, [loreEntries, search, categoryFilter, tagFilter])
+    Object.keys(groups).forEach(cat => groups[cat].sort(sorter))
+    if (sortBy === 'category-asc') return Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)))
+    if (sortBy === 'category-desc') return Object.fromEntries(Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)))
+    return groups
+  }, [loreEntries, search, categoryFilter, tagFilter, sortBy])
 
   const handleNew = () => {
     setEditTarget(null)
@@ -210,11 +220,12 @@ export default function Lore({ store }) {
               {existingTags.map(t => <option key={t} value={t}>#{t}</option>)}
             </select>
           </div>
-
-        <div className="px-3 py-2 border-b border-[var(--border)] flex items-center gap-2">
-          <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider font-bold">Story Year</span>
-          <input type="number" value={currentYear} onChange={e => updateCurrentYear(e.target.value)} className="field text-[var(--accent)] font-mono px-2 py-0.5 w-20 text-xs" />
-        </div>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="field w-full px-2 py-1.5 text-xs">
+            <option value="title-asc">Title A→Z</option>
+            <option value="title-desc">Title Z→A</option>
+            <option value="category-asc">Category A→Z</option>
+            <option value="category-desc">Category Z→A</option>
+          </select>
 
           {Object.keys(grouped).length === 0 && <p className="text-xs text-[var(--text-muted)] italic px-4 py-3">{search || tagFilter || categoryFilter !== 'All' ? 'No results.' : 'No lore entries yet.'}</p>}
           {Object.entries(grouped).map(([cat, entries]) => (

@@ -11,6 +11,7 @@
   --accent: #b8aa79;
   --accent-fade: rgba(184, 170, 121, 0.13);
   --border: #2d302b;
+  --logo-filter: none;
 
   --bg: var(--bg-main);
   --rail: var(--bg-nav);
@@ -34,40 +35,21 @@
   --font-serif: Georgia, "Times New Roman", serif;
 }
 
+[data-radius="sharp"] {
+  --radius-btn: 2px;
+  --radius-modal: 4px;
+}
+
+[data-radius="rounded"] {
+  --radius-btn: 16px;
+  --radius-modal: 24px;
+}
+
 .yow-logo {
   display: block;
   width: 100%;
   height: 100%;
-  color: var(--accent);
-}
-
-.yow-logo-bg {
-  fill: color-mix(in srgb, var(--bg-main) 82%, #07101a 18%);
-}
-
-.yow-logo-mark {
-  fill: currentColor;
-}
-
-.yow-logo-cuts,
-.yow-logo-axis {
-  fill: none;
-  stroke: color-mix(in srgb, var(--bg-main) 88%, #000 12%);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.yow-logo-cuts {
-  stroke-width: 2.8;
-}
-
-.yow-logo-cuts circle {
-  fill: color-mix(in srgb, var(--bg-main) 88%, #000 12%);
-  stroke: none;
-}
-
-.yow-logo-axis {
-  stroke-width: 1.9;
+  filter: var(--logo-filter);
 }
 
 .studio-logo .yow-logo,
@@ -93,6 +75,7 @@
   --accent: #b8aa79;
   --accent-fade: rgba(184, 170, 121, 0.13);
   --border: #2d302b;
+  --logo-filter: none;
 }
 
 [data-theme="scriptorium"] {
@@ -104,6 +87,7 @@
   --accent: #c89445;
   --accent-fade: rgba(200, 148, 69, 0.18);
   --border: #3c3023;
+  --logo-filter: none;
 }
 
 [data-theme="ink"] {
@@ -115,6 +99,7 @@
   --accent: #8bb9a8;
   --accent-fade: rgba(139, 185, 168, 0.18);
   --border: #283237;
+  --logo-filter: none;
 }
 
 [data-theme="vellum"] {
@@ -126,6 +111,7 @@
   --accent: #8a3f2d;
   --accent-fade: rgba(138, 63, 45, 0.12);
   --border: #c9b89e;
+  --logo-filter: brightness(0);
 }
 
 [data-theme="maproom"] {
@@ -137,6 +123,7 @@
   --accent: #b6a15d;
   --accent-fade: rgba(182, 161, 93, 0.17);
   --border: #33413c;
+  --logo-filter: none;
 }
 
 /* Base application styling */
@@ -872,9 +859,13 @@ body {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   padding: 16px;
+}
+
+.studio-workspace.has-tabs {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .studio-workspace-header {
@@ -2537,6 +2528,10 @@ textarea:focus {
 }
 
 .studio-workspace {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.studio-workspace.has-tabs {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
@@ -4724,7 +4719,7 @@ body {
 /* Compact top navigation shell */
 .studio-shell {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-rows: 72px minmax(0, 1fr);
 }
 
 .studio-shell.has-no-context {
@@ -4735,17 +4730,18 @@ body {
   grid-template-columns: minmax(0, 1fr) 44px;
 }
 
+/* brand+write | room-nav | utility | account */
 .studio-spine {
   grid-column: 1 / -1;
   grid-row: 1;
   min-width: 0;
   min-height: 0;
-  height: 52px;
+  height: 72px;
   display: grid;
-  grid-template-columns: minmax(120px, 190px) auto max-content minmax(0, 1fr);
+  grid-template-columns: fit-content(360px) minmax(0, 1fr) max-content max-content;
   align-items: center;
   gap: 8px;
-  padding-right: 8px;
+  padding-right: 12px;
   overflow: visible;
   border-right: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
@@ -4754,27 +4750,66 @@ body {
 }
 
 .studio-brand {
+  grid-column: 1;
   min-width: 0;
   height: 100%;
-  grid-template-columns: 34px minmax(0, 1fr) max-content;
-  gap: 8px;
-  padding: 8px 8px 8px 10px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 12px;
   border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-bottom: 0;
 }
 
-.studio-brand h1 {
-  margin-top: 1px;
-  font-size: 13px;
+.studio-brand-text {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.studio-account-slot > .relative > div {
-  left: 0;
-  right: auto;
+.studio-brand-text .studio-kicker {
+  font-size: 11px;
+  opacity: 0.55;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.studio-brand-sep {
+  font-size: 11px;
+  opacity: 0.3;
+  flex-shrink: 0;
+}
+
+.studio-brand h1 {
+  font-size: 13px;
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* account slot — far right of spine */
+.studio-spine > .studio-account-slot {
+  grid-column: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 4px;
+}
+
+.studio-spine > .studio-account-slot > .relative > div {
+  right: 0;
+  left: auto;
 }
 
 .studio-primary-action {
-  padding: 0 4px;
+  padding: 0 4px 0 8px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 
 .studio-write-button {
@@ -4785,7 +4820,7 @@ body {
 }
 
 .studio-room-list {
-  grid-column: 4;
+  grid-column: 2;
   min-width: 0;
   height: 100%;
   flex: initial;
@@ -4828,8 +4863,9 @@ body {
   height: 100%;
   display: flex;
   align-items: center;
-  justify-self: start;
-  padding: 0;
+  gap: 4px;
+  justify-self: end;
+  padding: 0 4px;
   border-top: 0;
   border-left: 0;
   background: color-mix(in srgb, var(--bg-nav) 94%, transparent);
@@ -4881,12 +4917,7 @@ body {
 }
 
 @media (max-width: 980px) {
-  .studio-spine {
-    grid-template-columns: minmax(54px, 72px) max-content max-content minmax(0, 1fr);
-    gap: 5px;
-    padding-right: 6px;
-  }
-
+  /* Collapse room labels, show icons only */
   .studio-room-copy strong {
     display: none;
   }
@@ -4902,42 +4933,41 @@ body {
   .studio-shell.has-no-context,
   .studio-shell.is-context-collapsed {
     grid-template-columns: 1fr;
-    grid-template-rows: 52px minmax(0, 1fr);
+    grid-template-rows: 72px minmax(0, 1fr);
   }
 
+  /* logo | room-nav | utility | account — account hidden on mobile */
   .studio-spine {
     max-height: none;
-    grid-template-columns: auto max-content minmax(0, 1fr);
-    gap: 5px;
-    padding-right: 6px;
+    grid-template-columns: auto minmax(0, 1fr) max-content max-content;
+    gap: 4px;
+    padding-right: 8px;
   }
 
+  /* Brand: logo mark only — hide text */
   .studio-brand {
-    display: grid;
-    width: 48px;
-    grid-template-columns: 34px;
-    padding-inline: 7px;
+    width: auto;
+    flex-shrink: 0;
+    padding-inline: 10px;
   }
 
-  .studio-brand > div:last-child,
-  .studio-primary-action {
+  .studio-brand-text {
     display: none;
   }
 
   .studio-utility {
-    grid-column: 2;
-  }
-
-  .studio-room-list {
     grid-column: 3;
+    display: flex;
   }
 
   .studio-room-list {
-    padding-inline: 6px;
+    grid-column: 2;
+    padding-inline: 4px;
   }
 
-  .studio-utility {
-    display: flex;
+  /* hide account avatar on mobile to save space */
+  .studio-spine > .studio-account-slot {
+    display: none;
   }
 
   .studio-spine-actions .studio-button {
@@ -5770,6 +5800,13 @@ body {
   text-align: center;
 }
 
+.library-hero-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+
 .library-hero h1 {
   margin: 0;
   font-family: var(--font-serif);
@@ -5777,6 +5814,26 @@ body {
   line-height: 1.05;
   font-weight: 700;
   color: var(--text-main);
+}
+
+.library-new-project-button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--border));
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--bg-main);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform .18s, border-color .18s, filter .18s;
+}
+
+.library-new-project-button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
 }
 
 .library-chat-button {
@@ -6017,7 +6074,13 @@ body {
 
 @media (max-width: 720px) {
   .library-hero {
+    flex-direction: column;
     margin-top: 0;
+  }
+
+  .library-hero-actions {
+    width: 100%;
+    justify-content: center;
   }
 
   .novel-grid {
@@ -6113,6 +6176,106 @@ body {
   text-transform: uppercase;
 }
 
+.account-profile-avatar {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--accent-fade);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.account-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-profile-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.account-profile-form label,
+.account-profile-form label span {
+  display: block;
+}
+
+.account-profile-form label span,
+.account-profile-summary span {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.account-profile-form input,
+.account-profile-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  outline: none;
+}
+
+.account-profile-form input {
+  height: 40px;
+  padding: 0 12px;
+}
+
+.account-profile-form textarea {
+  resize: vertical;
+  min-height: 104px;
+  padding: 10px 12px;
+}
+
+.account-profile-form input:focus,
+.account-profile-form textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--border));
+  box-shadow: 0 0 0 3px var(--accent-fade);
+}
+
+.account-profile-wide {
+  grid-column: 1 / -1;
+}
+
+.account-profile-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-profile-summary div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--bg-main) 76%, transparent);
+}
+
+.account-profile-summary strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .account-plan-paid {
   border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   color: var(--accent);
@@ -6203,6 +6366,7 @@ body {
 }
 
 .account-readonly-note,
+.account-success,
 .account-error {
   margin: 12px 0 0;
   border-radius: 7px;
@@ -6215,6 +6379,12 @@ body {
   border: 1px solid rgba(248,113,113,.28);
   background: rgba(248,113,113,.08);
   color: #fca5a5;
+}
+
+.account-success {
+  border: 1px solid rgba(74,222,128,.26);
+  background: rgba(74,222,128,.08);
+  color: #86efac;
 }
 
 .account-error {
@@ -6283,7 +6453,9 @@ body {
 @media (max-width: 820px) {
   .account-settings-grid,
   .account-plan-card,
-  .account-status-list {
+  .account-status-list,
+  .account-profile-form,
+  .account-profile-summary {
     grid-template-columns: 1fr;
   }
 }
@@ -6533,8 +6705,12 @@ body {
     min-height: 0;
     grid-column: 1;
     grid-row: 2;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
+  }
+
+  .studio-workspace.has-tabs {
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .studio-workspace-header {
@@ -6709,15 +6885,8 @@ body {
     flex: 0 0 34px;
   }
 
-  .yow-home-nav .eyebrow {
-    max-width: 130px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .yow-home-nav strong {
-    max-width: 150px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -6745,12 +6914,11 @@ body {
   }
 
   .yow-home-nav .eyebrow {
-    max-width: 104px;
-    font-size: 9px;
+    display: none;
   }
 
   .yow-home-nav strong {
-    max-width: 122px;
+    max-width: 130px;
     font-size: 14px;
   }
 
@@ -6763,4 +6931,279 @@ body {
   .yow-home-hero {
     padding-top: 34px;
   }
+}
+
+/* Navbar containment: keep labels inside the browser chrome at every width. */
+.studio-spine {
+  min-width: 0;
+}
+
+.studio-brand,
+.studio-brand > div,
+.studio-room-list,
+.studio-room,
+.studio-room-copy,
+.studio-utility,
+.studio-utility-btns,
+.yow-home-nav,
+.yow-home-nav > div {
+  min-width: 0;
+}
+
+.studio-brand-mark,
+.studio-logo {
+  width: auto;
+  height: 38px;
+  aspect-ratio: 498 / 668;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.studio-brand-mark .yow-logo,
+.studio-logo .yow-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.studio-room-list {
+  overscroll-behavior-x: contain;
+}
+
+.studio-room {
+  max-width: 100%;
+}
+
+.studio-room-copy strong,
+.studio-room-copy small,
+.studio-brand h1,
+.yow-home-nav .eyebrow,
+.yow-home-nav strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-utility-btns {
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+.studio-utility-btn {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1;
+}
+
+.yow-home-nav {
+  overflow: hidden;
+}
+
+.yow-home-nav > div:first-child {
+  flex: 1 1 auto;
+}
+
+.yow-home-nav > div:last-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+@media (min-width: 861px) {
+  /* brand+write | room-nav | utility | account */
+  .studio-spine {
+    grid-template-columns: fit-content(360px) minmax(0, 1fr) max-content max-content;
+  }
+
+  .studio-room {
+    min-width: 0;
+    max-width: 132px;
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+
+  .studio-room-copy strong {
+    display: block;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  /* At medium widths tighten brand column and keep text visible */
+  .studio-spine {
+    grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) max-content max-content;
+  }
+
+  /* Collapse utility button labels to icon-only */
+  .studio-utility-btn {
+    width: 34px;
+    justify-content: center;
+    padding-inline: 0;
+    overflow: hidden;
+    color: transparent;
+    font-size: 0;
+    gap: 0;
+  }
+
+  .studio-utility-btn svg {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+  }
+
+  .studio-utility-btn:hover svg,
+  .studio-utility-btn.is-active svg {
+    color: var(--text-main);
+  }
+}
+
+@media (max-width: 640px) {
+  .studio-brand-mark,
+  .studio-logo,
+  .yow-home-nav .studio-logo {
+    width: calc(34px * 498 / 668);
+    height: 34px;
+    flex: 0 0 calc(34px * 498 / 668);
+  }
+
+  .yow-home-nav {
+    gap: 10px;
+  }
+
+  .yow-home-nav > div:last-child {
+    gap: 6px;
+  }
+
+  .yow-home-nav .btn {
+    max-width: 94px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 360px) {
+  .yow-home-nav .eyebrow,
+  .yow-home-nav strong {
+    max-width: 82px;
+  }
+
+  .yow-home-nav .btn {
+    max-width: 76px;
+    padding-inline: 7px;
+  }
+}
+
+/* ─── Placement fixes ────────────────────────────────────────────────────────
+   These override earlier conflicting rules that were accumulated across
+   multiple CSS iterations. Place at end so they always cascade last.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  /* 1. Hide project title text in the compact mobile top-nav brand column.
+        The 44px column is only wide enough for the logo mark. The text div
+        is already hidden at 861-1180px; this extends that to mobile too. */
+  .studio-brand > div:not(.studio-brand-mark):not(.studio-account-slot) {
+    display: none;
+  }
+
+  /* 2. Action containers — keep at natural width instead of forcing full row.
+        Earlier rules set width:100% + flex:1 1 130px, which makes single
+        buttons (Hide tools, New, etc.) span the entire workspace header. */
+  .studio-header-actions,
+  .studio-page-actions,
+  .studio-index-tools {
+    width: auto;
+    min-width: 0;
+    justify-content: flex-end;
+    align-self: center;
+    flex-shrink: 0;
+  }
+
+  .studio-header-actions > *,
+  .studio-page-actions > *,
+  .studio-index-tools > * {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  /* 3. Workspace header — align title and action on the same baseline row. */
+  .studio-workspace-header {
+    align-items: center;
+  }
+}
+
+/* Final top-nav alignment overrides */
+@media (min-width: 861px) {
+  .studio-spine {
+    grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  }
+
+  .studio-brand {
+    width: max-content;
+    max-width: none;
+  }
+
+  .studio-brand-text,
+  .studio-brand h1 {
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+  }
+
+  .studio-primary-action {
+    padding-right: 14px;
+  }
+
+  .studio-room-list {
+    justify-content: center;
+  }
+}
+
+/* Map builder gets a compact shell so the canvas owns the screen. */
+.studio-workspace-atlas-map {
+  gap: 6px;
+  padding: 8px;
+}
+
+.studio-workspace-atlas-map .studio-workspace-header {
+  min-height: 0;
+  padding: 6px 10px;
+  align-items: center;
+  border-radius: 5px;
+  box-shadow: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--studio-paper) 34%, var(--bg-nav)), color-mix(in srgb, var(--bg-main) 58%, transparent));
+}
+
+.studio-workspace-atlas-map .studio-kicker,
+.studio-workspace-atlas-map .studio-header-meta {
+  display: none;
+}
+
+.studio-workspace-atlas-map .studio-workspace-header h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.studio-workspace-atlas-map .studio-header-actions .studio-button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.studio-workspace-atlas-map .studio-section-tabs {
+  padding: 4px;
+  gap: 4px;
+}
+
+.studio-workspace-atlas-map .studio-tab {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.studio-workspace-atlas-map .studio-surface {
+  border-radius: 5px;
 }

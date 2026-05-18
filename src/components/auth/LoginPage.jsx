@@ -77,122 +77,6 @@ function HeroIllustration() {
   )
 }
 
-function _HeroIllustrationSVG_unused() {
-  const a = '#b8aa79'
-  return (
-    <svg viewBox="0 0 340 220" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full" aria-hidden="true">
-      <defs>
-        <radialGradient id="hl-glow" cx="18%" cy="78%" r="55%">
-          <stop offset="0%" stopColor="#b8aa79" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#b8aa79" stopOpacity="0" />
-        </radialGradient>
-        <filter id="hl-blur" x="-60%" y="-60%" width="220%" height="220%">
-          <feGaussianBlur stdDeviation="4" />
-        </filter>
-      </defs>
-
-      {/* Soft aura behind logo */}
-      <ellipse cx="42" cy="178" rx="72" ry="52" fill="url(#hl-glow)" />
-
-      {/* ── Flow lines fanning out from logo ── */}
-      {/* Arc 1 — steep left sweep to upper-left */}
-      <path d="M38 148 C20 110 40 55 90 22"
-        stroke={a} strokeWidth="1.3" strokeOpacity="0.42" strokeLinecap="round" />
-      {/* Arc 2 — main creative arc to upper-centre */}
-      <path d="M42 145 C80 95 145 45 215 18"
-        stroke={a} strokeWidth="1.5" strokeOpacity="0.48" strokeLinecap="round" />
-      {/* Arc 3 — gentle sweep to upper-right */}
-      <path d="M46 148 C110 100 200 65 300 42"
-        stroke={a} strokeWidth="1.0" strokeOpacity="0.32" strokeLinecap="round" />
-      {/* Arc 4 — low flat sweep far right */}
-      <path d="M50 158 C130 148 230 140 335 132"
-        stroke={a} strokeWidth="0.7" strokeOpacity="0.2" strokeLinecap="round" />
-      {/* Arc 5 — secondary fine line */}
-      <path d="M40 150 C70 108 115 72 170 48"
-        stroke={a} strokeWidth="0.7" strokeOpacity="0.22" strokeLinecap="round" />
-
-      {/* ── Glow halos along arcs (blurred dots) ── */}
-      <circle cx="90" cy="22" r="6" fill={a} fillOpacity="0.06" filter="url(#hl-blur)" />
-      <circle cx="215" cy="18" r="8" fill={a} fillOpacity="0.07" filter="url(#hl-blur)" />
-      <circle cx="300" cy="42" r="6" fill={a} fillOpacity="0.05" filter="url(#hl-blur)" />
-
-      {/* ── Floating manuscript page — mid-left ── */}
-      <g transform="translate(100, 58) rotate(-9)">
-        <rect width="32" height="42" rx="2" stroke={a} strokeWidth="0.55" strokeOpacity="0.32" />
-        {[0,1,2,3,4,5].map(i => (
-          <line key={i} x1="5" y1={10 + i * 6} x2={i % 2 === 0 ? 27 : 22} y2={10 + i * 6}
-            stroke={a} strokeWidth="0.45" strokeOpacity={0.3 - i * 0.04} />
-        ))}
-        <rect x="5" y="9" width="7" height="9" rx="0.8" fill={a} fillOpacity="0.1" stroke={a} strokeWidth="0.4" strokeOpacity="0.25" />
-      </g>
-
-      {/* ── Floating manuscript page — upper-right ── */}
-      <g transform="translate(240, 30) rotate(6)">
-        <rect width="26" height="33" rx="1.5" stroke={a} strokeWidth="0.5" strokeOpacity="0.24" />
-        {[0,1,2,3].map(i => (
-          <line key={i} x1="4" y1={8 + i * 7} x2={i % 2 === 0 ? 22 : 17} y2={8 + i * 7}
-            stroke={a} strokeWidth="0.4" strokeOpacity={0.24 - i * 0.04} />
-        ))}
-      </g>
-
-      {/* ── Map pin cluster — centre ── */}
-      <circle cx="185" cy="52" r="3.2" stroke={a} strokeWidth="0.7" strokeOpacity="0.5" />
-      <circle cx="185" cy="52" r="1.1" fill={a} fillOpacity="0.6" />
-      <path d="M185 55 L185 63" stroke={a} strokeWidth="0.6" strokeOpacity="0.3" />
-
-      <circle cx="295" cy="65" r="2.4" stroke={a} strokeWidth="0.6" strokeOpacity="0.38" />
-      <circle cx="295" cy="65" r="0.8" fill={a} fillOpacity="0.5" />
-      <path d="M295 67 L295 73" stroke={a} strokeWidth="0.5" strokeOpacity="0.22" />
-
-      {/* ── Character constellation — upper-right ── */}
-      {[
-        [315, 50, 5.5, 0.85],
-        [335, 75, 3.8, 0.6],
-        [300, 82, 3.5, 0.55],
-        [322, 100, 3, 0.48],
-      ].map(([cx, cy, r, op], i) => (
-        <g key={i}>
-          <circle cx={cx} cy={cy} r={r + 3} fill={a} fillOpacity={0.04} />
-          <circle cx={cx} cy={cy} r={r} stroke={a} strokeWidth="0.7" strokeOpacity={op} />
-          <circle cx={cx} cy={cy} r={r * 0.35} fill={a} fillOpacity={op * 0.85} />
-        </g>
-      ))}
-      {[[315,50,335,75],[315,50,300,82],[335,75,322,100],[300,82,322,100]].map(([x1,y1,x2,y2],i) => (
-        <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke={a} strokeWidth="0.45" strokeOpacity="0.2" strokeDasharray="2 3" />
-      ))}
-
-      {/* ── Sparkle dots scattered along flow ── */}
-      {[
-        [90, 22, 1.6, 0.7],
-        [148, 40, 1.3, 0.55],
-        [215, 18, 1.8, 0.65],
-        [162, 80, 1.2, 0.45],
-        [255, 95, 1.4, 0.38],
-        [330, 130, 1.0, 0.28],
-        [110, 130, 1.1, 0.35],
-      ].map(([cx, cy, r, op], i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill={a} fillOpacity={op} />
-      ))}
-
-      {/* 4-point stars at arc tips */}
-      <path d="M215 10 L216.3 7 L217.6 10 L220.6 11.3 L217.6 12.6 L216.3 15.6 L215 12.6 L212 11.3Z"
-        fill={a} fillOpacity="0.7" />
-      <path d="M90 14 L91 12 L92 14 L94 15 L92 16 L91 18 L90 16 L88 15Z"
-        fill={a} fillOpacity="0.5" />
-
-      {/* ── Dashed thread connecting map pins to constellation ── */}
-      <path d="M185 52 Q240 48 295 65"
-        stroke={a} strokeWidth="0.45" strokeOpacity="0.18" strokeDasharray="2 4" />
-      <path d="M295 65 Q305 55 315 50"
-        stroke={a} strokeWidth="0.45" strokeOpacity="0.15" strokeDasharray="2 4" />
-
-      {/* ── Logo — small anchor, bottom-left ── */}
-      <image href="/yow-logo.png" x="8" y="142" width="54" height="72" />
-    </svg>
-  )
-}
-
 export default function LoginPage() {
   const { signIn, signUp } = useAuth()
   const [screen, setScreen] = useState('home')
@@ -210,6 +94,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(hash.replace(/^#/, ''))
     const desc = params.get('error_description')
     if (desc) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setScreen('auth')
       setMode('login')
       setError(decodeURIComponent(desc.replace(/\+/g, ' ')))

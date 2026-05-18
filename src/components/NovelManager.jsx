@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import UserMenu from './auth/UserMenu'
 import YOWLogo from './brand/YOWLogo'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
+import { createProjectZipBlob, getProjectExportFilename } from '../utils/projectExport'
 
 const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
 
@@ -149,7 +150,7 @@ function ProjectTypeImage({ type, label, size = 34 }) {
   )
 }
 
-function NovelCard({ stats, onOpen, onDelete, onUpdateCover }) {
+function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport }) {
   const [hovered, setHovered] = useState(false)
   const [coverError, setCoverError] = useState('')
   const novel = stats.project
@@ -248,14 +249,24 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover }) {
             >
               Open →
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(novel.id) }}
-              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-            >
-              Delete
-            </button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onExport(novel.id) }}
+                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                Export project
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(novel.id) }}
+                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -263,20 +274,12 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover }) {
   )
 }
 
-function NewCard({ onClick }) {
-  return (
-    <button className="novel-card novel-card-new" onClick={onClick}>
-      <span style={{ fontSize: 28, lineHeight: 1 }}>+</span>
-      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase' }}>New Project</span>
-    </button>
-  )
-}
-
 export default function NovelManager({ store, user, onOpenChat, onOpenAccount }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [seriesFilter, setSeriesFilter] = useState(null)
-  const userName = user?.displayName || user?.email?.split('@')[0] || 'User'
+  const userProfile = user?.user_metadata || {}
+  const userName = userProfile.full_name || userProfile.name || userProfile.alias || userProfile.writer_alias || user?.displayName || user?.email?.split('@')[0] || 'User'
 
   const handleCreate = (e) => {
     e.preventDefault()
@@ -294,6 +297,21 @@ export default function NovelManager({ store, user, onOpenChat, onOpenAccount })
 
   const handleUpdateCover = (id, coverPhoto) => {
     store.updateNovel(id, { coverPhoto })
+  }
+
+  const handleExportProject = (id) => {
+    const projectData = store.getProjectExportData(id)
+    if (!projectData) return
+
+    const blob = createProjectZipBlob(projectData)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = getProjectExportFilename(projectData.project)
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
   }
 
   const visibleStats = seriesFilter
@@ -330,9 +348,16 @@ export default function NovelManager({ store, user, onOpenChat, onOpenAccount })
           <div>
             <h1>What are we writing today?</h1>
           </div>
-          <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
-            ✦
-          </button>
+          <div className="library-hero-actions">
+            {!store.readOnly && (
+              <button className="library-new-project-button" type="button" onClick={() => setShowForm(true)}>
+                New Project
+              </button>
+            )}
+            <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
+              ✦
+            </button>
+          </div>
         </div>
 
         {/* Series filter strip */}
@@ -381,17 +406,12 @@ export default function NovelManager({ store, user, onOpenChat, onOpenAccount })
                   onOpen={store.setActiveNovelId}
                   onDelete={handleDelete}
                   onUpdateCover={handleUpdateCover}
+                  onExport={handleExportProject}
                 />
               ))}
             </div>
           </section>
         ))}
-
-        <section className="library-series-section">
-          <div className="novel-grid novel-grid-actions">
-            {!store.readOnly && <NewCard onClick={() => setShowForm(true)} />}
-          </div>
-        </section>
 
         {/* Empty state */}
         {store.novels.length === 0 && !store.readOnly && (

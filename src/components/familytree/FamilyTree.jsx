@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { getRelType } from "../../constants/Constants";
 import { FACTION_ICONS } from "../../constants/factionIcons";
 
+const toArray = (v) => Array.isArray(v) ? v : []
+
 const extractYear = (value) => {
   if (!value) return null;
   const match = value.match(/-?\d+/);
@@ -121,14 +123,14 @@ export default function FamilyTree({ store }) {
     });
 
     const sections = Array.from(groups.entries()).map(([familyGroup, members]) => {
-      const label = familyGroup === "unassigned" ? "Unassigned Family" : familyGroup;
+      const label = familyGroup === "unassigned" ? "Ungrouped Characters" : familyGroup;
       const maxGeneration = members.reduce((max, m) => Math.max(max, generations.get(m.id) ?? 0), 0);
       const generationRows = Array.from({ length: maxGeneration + 1 }, (_, i) => i).map((generation) => ({
         generation,
         people: members
           .filter((m) => (generations.get(m.id) ?? 0) === generation)
           .slice()
-          .sort((a, b) => a.name.localeCompare(b.name)),
+          .sort((a, b) => (a.name || '').localeCompare(b.name || '')),
       }));
 
       const positions = new Map();
@@ -166,7 +168,7 @@ export default function FamilyTree({ store }) {
     if (!selectedCharacterId || !relTargetId || relTargetId === selectedCharacterId) return;
     const source = byId.get(selectedCharacterId);
     if (!source) return;
-    const existing = source.relationships || [];
+    const existing = toArray(source.relationships);
     const next = [...existing.filter((r) => !(r.targetId === relTargetId && r.type === relType)), { targetId: relTargetId, type: relType }];
     saveCharacter({ relationships: next }, selectedCharacterId);
   };
@@ -175,7 +177,7 @@ export default function FamilyTree({ store }) {
     if (!selectedCharacterId) return;
     const source = byId.get(selectedCharacterId);
     if (!source) return;
-    const next = (source.relationships || []).filter((r) => !(r.targetId === targetId && r.type === type));
+    const next = (toArray(source.relationships)).filter((r) => !(r.targetId === targetId && r.type === type));
     saveCharacter({ relationships: next }, selectedCharacterId);
   };
 
@@ -184,8 +186,8 @@ export default function FamilyTree({ store }) {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-end justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--text-main)]">Family Tree</h1>
-            <p className="text-sm text-[var(--text-muted)] mt-1">Classic tree layout by family and generation.</p>
+            <h1 className="text-2xl font-bold text-[var(--text-main)]">Relationships</h1>
+            <p className="text-sm text-[var(--text-muted)] mt-1">Tree layout by family group and generation. Works for any character network.</p>
           </div>
           <div className="text-xs text-[var(--text-muted)] bg-[var(--bg-nav)] border border-[var(--border)] rounded px-3 py-2">
             Current Year: <span className="text-[var(--accent)] font-bold">{parsedCurrentYear}</span>
@@ -193,8 +195,9 @@ export default function FamilyTree({ store }) {
         </div>
 
         {characters.length === 0 ? (
-          <div className="h-[60vh] flex items-center justify-center text-[var(--text-muted)] italic border border-dashed border-[var(--border)] rounded-xl">
-            Add characters to start building your family tree.
+          <div className="h-[60vh] flex flex-col items-center justify-center gap-3 text-center border border-dashed border-[var(--border)] rounded-xl px-8">
+            <p className="text-[var(--text-muted)] text-sm font-medium">No characters yet</p>
+            <p className="text-[var(--text-muted)] text-xs leading-relaxed max-w-xs">Create characters in the <strong className="text-[var(--text-main)]">Characters</strong> tab — they appear here automatically. Assign a Family Group and set parent/spouse relationships to see family connections.</p>
           </div>
         ) : (
           <div className="grid grid-cols-[1fr_280px] gap-4 items-start">
@@ -271,7 +274,7 @@ export default function FamilyTree({ store }) {
                       {section.members.map((char) => {
                         const source = section.positions.get(char.id);
                         if (!source) return null;
-                        return (char.relationships || [])
+                        return toArray(char.relationships)
                           .filter((rel) => section.positions.has(rel.targetId))
                           .filter((rel) => rel.targetId > char.id)
                           .map((rel) => {
@@ -297,8 +300,6 @@ export default function FamilyTree({ store }) {
                         const p = section.positions.get(char.id);
                         if (!p) return null;
                         const ageLabel = getAgeLabel(char);
-                        const faction = factions.find((f) => f.id === char.factionId);
-                        const icon = FACTION_ICONS.find((i) => i.id === faction?.iconId)?.url;
                         const hasPhoto = Boolean(char.image);
                         const photoSize = 46;
                         const photoX = p.x + 7;
@@ -310,6 +311,7 @@ export default function FamilyTree({ store }) {
                             key={`node-${char.id}`}
                             className="tree-node"
                             style={{ cursor: "pointer" }}
+                            onClick={() => setSelectedCharacterId(char.id)}
                             onMouseEnter={(e) => {
                               updateHoverPosition(e.currentTarget);
                               setHoveredCharId(char.id);
@@ -327,7 +329,7 @@ export default function FamilyTree({ store }) {
                                 </clipPath>
                               </defs>
                             )}
-                            <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill="var(--bg-nav)" stroke={selectedCharacterId === char.id ? "var(--accent)" : "var(--border)"} strokeWidth={selectedCharacterId === char.id ? "2.6" : "1.4"} onClick={() => setSelectedCharacterId(char.id)} />
+                            <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill="var(--bg-nav)" stroke={selectedCharacterId === char.id ? "var(--accent)" : "var(--border)"} strokeWidth={selectedCharacterId === char.id ? "2.6" : "1.4"} />
                             {hasPhoto && (
                               <>
                                 <image href={char.image} x={photoX} y={photoY} width={photoSize} height={photoSize} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
@@ -380,8 +382,8 @@ export default function FamilyTree({ store }) {
                   <div className="border-t border-[var(--border)] pt-2">
                     <div className="text-xs text-[var(--text-muted)] mb-1">Existing links</div>
                     <div className="space-y-1 max-h-40 overflow-y-auto">
-                      {(selectedCharacter.relationships || []).length === 0 && <p className="text-xs text-[var(--text-muted)] italic">No custom links yet.</p>}
-                      {(selectedCharacter.relationships || []).map((rel, idx) => {
+                      {toArray(selectedCharacter.relationships).length === 0 && <p className="text-xs text-[var(--text-muted)] italic">No custom links yet.</p>}
+                      {toArray(selectedCharacter.relationships).map((rel, idx) => {
                         const target = byId.get(rel.targetId);
                         if (!target) return null;
                         return (

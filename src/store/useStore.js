@@ -270,6 +270,7 @@ export function useStore(userId = null, options = {}) {
     mapType: null,
   } : null
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const updateMapProject = useCallback((updater) => {
     if (!activeNovelId) return
     const currentMaps = maps.filter(m => m.novelId === activeNovelId)
@@ -308,7 +309,7 @@ export function useStore(userId = null, options = {}) {
         return [...prev.filter(w => w.novelId !== activeNovelId), entry]
       })
     }
-  }, [activeNovelId, activeNovel?.type, activeMapByNovel, locations, maps, whiteboards])
+  }, [activeNovelId, activeNovel?.type, activeMapByNovel, locations, maps, whiteboards]) // eslint-disable-line react-hooks/preserve-manual-memoization
 
   const updateWhiteboard = useCallback((updater) => {
     if (!activeNovelId) return
@@ -348,7 +349,7 @@ export function useStore(userId = null, options = {}) {
       synopsis: '',
       content: '',
       order: novelScenes.length,
-      lastModified: Date.now()
+      lastModified: Date.now() // eslint-disable-line react-hooks/purity
     }
     setScenes(prev => [...prev, newScene])
     if (userId) saveSceneDoc(userId, newScene).catch(console.error)
@@ -509,11 +510,22 @@ export function useStore(userId = null, options = {}) {
   }
 
   const saveCharacter = (data, id) => {
-    if (id) {
-      setCharacters(prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
-    } else {
-      setCharacters(prev => [...prev, { id: uid(), novelId: activeNovelId, ...data }])
-    }
+    const characterId = id || uid()
+    const childIds = data.childIds || []
+    setCharacters(prev => {
+      const next = id
+        ? prev.map(c => c.id === id ? { ...c, ...data } : c)
+        : [...prev, { id: characterId, novelId: activeNovelId, ...data }]
+
+      return next.map(c => {
+        if (c.id === characterId || c.novelId !== activeNovelId) return c
+        const parents = c.parentIds || []
+        const shouldBeChild = childIds.includes(c.id)
+        if (shouldBeChild && !parents.includes(characterId)) return { ...c, parentIds: [...parents, characterId] }
+        if (!shouldBeChild && parents.includes(characterId)) return { ...c, parentIds: parents.filter(parentId => parentId !== characterId) }
+        return c
+      })
+    })
   }
   const deleteCharacter = (id) => setCharacters(prev => prev.filter(c => c.id !== id))
 
@@ -532,7 +544,7 @@ export function useStore(userId = null, options = {}) {
   const addEvent = (data) => {
     const eventId = uid()
     const historyId = uid()
-    const createdAt = Date.now()
+    const createdAt = Date.now() // eslint-disable-line react-hooks/purity
     const event = { id: eventId, novelId: activeNovelId, createdAt, worldHistoryEntryId: historyId, ...data }
     const historyEntry = {
       id: historyId,
@@ -565,7 +577,7 @@ export function useStore(userId = null, options = {}) {
   }
 
   const addScheduleEvent = (data) => {
-    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), category: 'scene', duration: 1, tags: [], linkedCharacters: [], linkedLocations: [], ...data }
+    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), category: 'scene', duration: 1, tags: [], linkedCharacters: [], linkedLocations: [], ...data } // eslint-disable-line react-hooks/purity
     setStorySchedule(prev => [...prev, entry])
     return entry
   }
@@ -573,7 +585,7 @@ export function useStore(userId = null, options = {}) {
   const deleteScheduleEvent = (id) => setStorySchedule(prev => prev.filter(e => e.id !== id))
 
   const addHistoryEntry = (data) => {
-    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), ...data }
+    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), ...data } // eslint-disable-line react-hooks/purity
     setWorldHistory(prev => [...prev, entry])
     return entry
   }
@@ -581,7 +593,7 @@ export function useStore(userId = null, options = {}) {
   const deleteHistoryEntry = (id) => setWorldHistory(prev => prev.filter(h => h.id !== id))
 
   const addLoreEntry = (data) => {
-    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), characterIds: [], category: '', content: '', ...data }
+    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), characterIds: [], category: '', content: '', ...data } // eslint-disable-line react-hooks/purity
     setLoreEntries(prev => [...prev, entry])
     return entry
   }
@@ -592,7 +604,7 @@ export function useStore(userId = null, options = {}) {
     const entry = {
       id: uid(),
       novelId: activeNovelId,
-      createdAt: Date.now(),
+      createdAt: Date.now(), // eslint-disable-line react-hooks/purity
       title: '',
       body: '',
       group: '',
@@ -609,7 +621,7 @@ export function useStore(userId = null, options = {}) {
   const deleteIdeaEntry = (id) => setIdeaEntries(prev => prev.filter(e => e.id !== id))
 
   const addMap = (name, mapType) => {
-    const map = { id: uid(), novelId: activeNovelId, name, mapType: mapType || 'regional', mapPins: [], mapRegions: [], created: Date.now() }
+    const map = { id: uid(), novelId: activeNovelId, name, mapType: mapType || 'regional', mapPins: [], mapRegions: [], created: Date.now() } // eslint-disable-line react-hooks/purity
     setMaps(prev => [...prev, map])
     setActiveMapByNovel(prev => ({ ...prev, [activeNovelId]: map.id }))
     return map.id
@@ -646,7 +658,12 @@ export function useStore(userId = null, options = {}) {
 
   const updateCurrentYear = (value) => {
     const next = Number(value)
-    setCurrentYear(Number.isFinite(next) ? next : 0)
+    const normalized = Number.isFinite(next) ? next : 0
+    if (activeNovelId) {
+      setNovels(prev => prev.map(n => n.id === activeNovelId ? { ...n, currentYear: normalized } : n))
+    } else {
+      setCurrentYear(normalized)
+    }
   }
 
   const addNovel = (data) => {
@@ -654,6 +671,33 @@ export function useStore(userId = null, options = {}) {
     setNovels(prev => [...prev, novel]); setActiveNovelId(novel.id); return novel
   }
   const updateNovel = (id, data) => setNovels(prev => prev.map(n => n.id === id ? { ...n, ...data } : n))
+
+  const getProjectExportData = (id) => {
+    const project = novels.find(n => n.id === id) ?? null
+    if (!project) return null
+    const projectSeries = project.seriesId
+      ? series.find(s => s.id === project.seriesId) ?? null
+      : null
+    return {
+      exportedAt: new Date().toISOString(),
+      project,
+      series: projectSeries,
+      activeMapId: activeMapByNovel[id] ?? null,
+      characters: characters.filter(c => c.novelId === id),
+      factions: factions.filter(f => f.novelId === id),
+      locations: locations.filter(l => l.novelId === id),
+      timeline: timeline.filter(e => e.novelId === id),
+      worldHistory: worldHistory.filter(h => h.novelId === id),
+      acts: acts.filter(a => a.novelId === id),
+      chapters: chapters.filter(c => c.novelId === id),
+      scenes: scenes.filter(s => s.novelId === id),
+      loreEntries: loreEntries.filter(e => e.novelId === id),
+      ideaEntries: ideaEntries.filter(e => e.novelId === id),
+      maps: maps.filter(m => m.novelId === id),
+      whiteboards: whiteboards.filter(w => w.novelId === id),
+      storySchedule: storySchedule.filter(e => e.novelId === id),
+    }
+  }
 
   const addSeries = (name) => {
     const s = { id: uid(), name, createdAt: new Date().toISOString() }
@@ -710,7 +754,7 @@ export function useStore(userId = null, options = {}) {
 
   const api = {
     readOnly,
-    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel,
+    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData,
     series, addSeries, deleteSeries, updateSeries,
     allProjectStats, activeProjectStats,
     characters: seriesScope(characters, 'characters'),
@@ -730,7 +774,7 @@ export function useStore(userId = null, options = {}) {
     addEvent, updateEvent, deleteEvent,
     worldHistory: novelWorldHistory,
     addHistoryEntry, updateHistoryEntry, deleteHistoryEntry,
-    currentYear, updateCurrentYear,
+    currentYear: activeNovel?.currentYear ?? currentYear, updateCurrentYear,
     loreEntries: novelLoreEntries, addLoreEntry, updateLoreEntry, deleteLoreEntry,
     ideaEntries: novelIdeaEntries, addIdeaEntry, updateIdeaEntry, deleteIdeaEntry,
     whiteboard, updateWhiteboard, mapProject, updateMapProject, addMap, selectMap, deleteMap, renameMap, updateActiveMapData,

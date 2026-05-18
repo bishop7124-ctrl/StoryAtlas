@@ -73,7 +73,7 @@ async function readSSE(body, onEvent) {
       try {
         const stop = onEvent(JSON.parse(data))
         if (stop) return
-      } catch (_) { /* ignore parse errors */ }
+      } catch { /* ignore parse errors */ }
     }
   }
 }
@@ -94,7 +94,7 @@ async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk,
     })
     if (!res.ok) {
       let msg = `HTTP ${res.status}`
-      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
     await readSSE(res.body, (parsed) => {
@@ -124,7 +124,7 @@ async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, on
     })
     if (!res.ok) {
       let msg = `HTTP ${res.status}`
-      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
     await readSSE(res.body, (parsed) => {
@@ -147,7 +147,7 @@ async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt
     })
     if (!res.ok) {
       let msg = `HTTP ${res.status}`
-      try { const d = await res.json(); msg = d.error?.message || msg } catch (_) {}
+      try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
     await readSSE(res.body, (parsed) => {

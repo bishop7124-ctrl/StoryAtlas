@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-const AuthContext = createContext({ user: null, loading: false, signUp: () => {}, signIn: () => {}, signOut: () => {}, getAccessToken: () => null })
+const AuthContext = createContext({ user: null, loading: false, signUp: () => {}, signIn: () => {}, signOut: () => {}, updateProfile: () => {}, getAccessToken: () => null })
 
 // Read the cached Supabase session from localStorage synchronously so the app
 // renders immediately on return visits without waiting for a network round-trip.
@@ -36,16 +36,23 @@ export function AuthProvider({ children }) {
   const signUp = (email, password) => supabase.auth.signUp({ email, password })
   const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password })
   const signOut = () => supabase.auth.signOut()
+  const updateProfile = async (profile) => {
+    const { data, error } = await supabase.auth.updateUser({ data: profile })
+    if (error) throw error
+    setUser(data.user ?? null)
+    return data.user
+  }
   const getAccessToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     return session?.access_token ?? null
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, getAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, updateProfile, getAccessToken }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)

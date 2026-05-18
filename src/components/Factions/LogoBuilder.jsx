@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { getShapeElement } from './FactionLogo'
+import { DEFAULT_LOGO_BACKGROUND, normalizeFactionLogo } from './logoData'
 
 const uid = () => Math.random().toString(36).slice(2)
 
@@ -23,28 +24,37 @@ const COLORS = [
   '#555555', '#999999', '#cccccc', '#ffffff',
 ]
 
+const BACKGROUND_COLORS = [
+  '#0c0c12', '#171720', '#2b1b1b', '#2a1f0f',
+  '#14231b', '#102a32', '#16243d', '#241b3d',
+  '#3a1630', '#111111', '#f4f1e8', '#ffffff',
+]
+
 const BTN = 'px-2.5 py-1 rounded text-xs font-bold border border-[var(--border)] bg-[var(--bg-nav)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all text-[var(--text-muted)]'
 
 export default function LogoBuilder({ logo, onChange }) {
   const [selectedIdx, setSelectedIdx] = useState(null)
-  const shapes = logo || []
+  const logoData = normalizeFactionLogo(logo)
+  const { shapes, backgroundColor, backgroundTransparent } = logoData
   const selected = selectedIdx !== null && selectedIdx < shapes.length ? shapes[selectedIdx] : null
+
+  const updateLogo = (updates) => onChange({ ...logoData, ...updates })
 
   const addShape = (type) => {
     const newShape = { id: uid(), type, cx: 50, cy: 50, size: 30, color: '#ffffff' }
     const next = [...shapes, newShape]
-    onChange(next)
+    updateLogo({ shapes: next })
     setSelectedIdx(next.length - 1)
   }
 
   const update = (updates) => {
     if (selectedIdx === null) return
-    onChange(shapes.map((s, i) => i === selectedIdx ? { ...s, ...updates } : s))
+    updateLogo({ shapes: shapes.map((s, i) => i === selectedIdx ? { ...s, ...updates } : s) })
   }
 
   const removeSelected = () => {
     if (selectedIdx === null) return
-    onChange(shapes.filter((_, i) => i !== selectedIdx))
+    updateLogo({ shapes: shapes.filter((_, i) => i !== selectedIdx) })
     setSelectedIdx(null)
   }
 
@@ -54,11 +64,19 @@ export default function LogoBuilder({ logo, onChange }) {
     const target = selectedIdx + dir
     if (target < 0 || target >= next.length) return
     ;[next[selectedIdx], next[target]] = [next[target], next[selectedIdx]]
-    onChange(next)
+    updateLogo({ shapes: next })
     setSelectedIdx(target)
   }
 
-  const clearAll = () => { onChange([]); setSelectedIdx(null) }
+  const clearAll = () => { updateLogo({ shapes: [] }); setSelectedIdx(null) }
+
+  const checkerboard = {
+    backgroundColor: '#ffffff',
+    backgroundImage:
+      'linear-gradient(45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.16) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.16) 75%)',
+    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+    backgroundSize: '16px 16px',
+  }
 
   return (
     <div className="flex gap-5">
@@ -66,10 +84,12 @@ export default function LogoBuilder({ logo, onChange }) {
       {/* Canvas */}
       <div className="flex flex-col items-center gap-2 flex-shrink-0">
         <div
-          className="w-44 h-44 rounded-xl border-2 border-[var(--border)] bg-[#0c0c12] relative overflow-hidden cursor-default select-none"
+          className="w-44 h-44 rounded-xl border-2 border-[var(--border)] relative overflow-hidden cursor-default select-none"
           onClick={() => setSelectedIdx(null)}
+          style={backgroundTransparent ? checkerboard : { backgroundColor }}
         >
           <svg viewBox="0 0 100 100" width="176" height="176">
+            {!backgroundTransparent && <rect width="100" height="100" fill={backgroundColor} />}
             {shapes.map((shape, i) => {
               const isSelected = i === selectedIdx
               return (
@@ -103,6 +123,58 @@ export default function LogoBuilder({ logo, onChange }) {
 
       {/* Controls */}
       <div className="flex-1 min-w-0 space-y-4">
+
+        {/* Background */}
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">Background</p>
+            <label className="flex items-center gap-1.5 text-[10px] text-[var(--text-muted)] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={backgroundTransparent}
+                onChange={e => updateLogo({ backgroundTransparent: e.target.checked })}
+                className="accent-[var(--accent)]"
+              />
+              Transparent
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {BACKGROUND_COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => updateLogo({ backgroundColor: c, backgroundTransparent: false })}
+                title={c}
+                className="w-5 h-5 rounded border-2 transition-all hover:scale-110"
+                style={{
+                  backgroundColor: c,
+                  borderColor: !backgroundTransparent && backgroundColor === c ? 'var(--accent)' : 'transparent',
+                  outline: c === '#ffffff' || c === '#f4f1e8' ? '1px solid rgba(255,255,255,0.15)' : 'none',
+                }}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => updateLogo({ backgroundTransparent: true })}
+              title="Transparent background"
+              className="w-5 h-5 rounded border-2 transition-all hover:scale-110"
+              style={{
+                ...checkerboard,
+                borderColor: backgroundTransparent ? 'var(--accent)' : 'transparent',
+                outline: '1px solid rgba(255,255,255,0.15)',
+              }}
+            />
+            <label title="Custom background colour" className="w-5 h-5 rounded border border-[var(--border)] overflow-hidden cursor-pointer hover:scale-110 transition-all flex-shrink-0">
+              <input
+                type="color"
+                value={backgroundColor || DEFAULT_LOGO_BACKGROUND}
+                onChange={e => updateLogo({ backgroundColor: e.target.value, backgroundTransparent: false })}
+                className="w-6 h-6 -translate-x-0.5 -translate-y-0.5 cursor-pointer opacity-0 absolute"
+              />
+              <div className="w-full h-full" style={{ background: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} />
+            </label>
+          </div>
+        </div>
 
         {/* Shape palette */}
         <div>

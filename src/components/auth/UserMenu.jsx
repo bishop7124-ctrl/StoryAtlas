@@ -14,24 +14,27 @@ export default function UserMenu({ onOpenAccount }) {
 
   if (!user) return null
 
-  const initial = (user.displayName || user.email || '?')[0].toUpperCase()
+  const metadata = user.user_metadata || {}
+  const displayName = metadata.full_name || metadata.name || metadata.alias || metadata.writer_alias || user.displayName || user.email
+  const avatarUrl = metadata.avatar_url || user.photoURL
+  const initial = (displayName || '?')[0].toUpperCase()
 
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
         className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-        title={user.displayName || user.email}
+        title={displayName || user.email}
       >
-        {user.photoURL ? (
-          <img src={user.photoURL} alt="avatar" className="w-7 h-7 rounded-full border border-[var(--border)]" referrerPolicy="no-referrer" />
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="avatar" className="w-7 h-7 rounded-full border border-[var(--border)]" referrerPolicy="no-referrer" />
         ) : (
           <span className="w-7 h-7 rounded-full bg-[var(--accent)] text-[var(--bg-main)] flex items-center justify-center text-xs font-black">
             {initial}
           </span>
         )}
         <span className="text-xs text-[var(--text-muted)] max-w-[120px] truncate hidden sm:block">
-          {user.displayName || user.email}
+          {displayName || user.email}
         </span>
         <span className="text-[var(--text-muted)] text-xs">▾</span>
       </button>
@@ -40,7 +43,7 @@ export default function UserMenu({ onOpenAccount }) {
         <div className="absolute right-0 top-full mt-2 w-52 bg-[var(--bg-nav)] border border-[var(--border)] rounded-lg shadow-xl z-50 overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--border)]">
             <p className="text-xs font-semibold text-[var(--text-main)] truncate">
-              {user.displayName || 'Account'}
+              {displayName || 'Account'}
             </p>
             <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">{user.email}</p>
           </div>

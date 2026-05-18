@@ -43,8 +43,8 @@ export default function IdeasBoard({ store }) {
   const canvasRef = useRef(null)
 
   // Sync from store only when switching projects
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBoard({
       notes: whiteboard?.notes || [],
       groups: whiteboard?.groups || [],
@@ -403,7 +403,7 @@ export default function IdeasBoard({ store }) {
           flex: 1,
           position: 'relative',
           overflow: 'hidden',
-          background: 'radial-gradient(circle at 12px 12px, rgba(255,255,255,.11) 1px, transparent 1.5px), color-mix(in srgb, var(--studio-cork) 88%, #1a1009)',
+          background: 'radial-gradient(circle at 12px 12px, rgba(255,255,255,.06) 1px, transparent 1.5px), var(--bg-main)',
           backgroundSize: '22px 22px, auto',
           cursor,
         }}

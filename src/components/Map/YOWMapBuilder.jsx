@@ -325,6 +325,25 @@ function cloudWarp(px, py, bs) {
 function paintBrush(hm, cx, cy, bs, str, tool) {
   const warpMax = bs * 0.45
   const outer = Math.ceil(bs + warpMax)
+  const flattenTarget = tool === 'flatten' ? hm[Math.max(0, Math.min(MAP_H - 1, cy)) * MAP_W + Math.max(0, Math.min(MAP_W - 1, cx))] : 0.52
+  const smoothPad = 3
+  const smoothBounds = tool === 'smooth'
+    ? {
+        x1: Math.max(0, cx - outer - smoothPad),
+        y1: Math.max(0, cy - outer - smoothPad),
+        x2: Math.min(MAP_W - 1, cx + outer + smoothPad),
+        y2: Math.min(MAP_H - 1, cy + outer + smoothPad),
+      }
+    : null
+  const smoothW = smoothBounds ? smoothBounds.x2 - smoothBounds.x1 + 1 : 0
+  const smoothSource = smoothBounds ? new Float32Array(smoothW * (smoothBounds.y2 - smoothBounds.y1 + 1)) : null
+  if (smoothBounds) {
+    for (let sy = smoothBounds.y1; sy <= smoothBounds.y2; sy++) {
+      const srcStart = sy * MAP_W + smoothBounds.x1
+      smoothSource.set(hm.subarray(srcStart, srcStart + smoothW), (sy - smoothBounds.y1) * smoothW)
+    }
+  }
+  const smoothValueAt = (x, y) => smoothSource[(y - smoothBounds.y1) * smoothW + (x - smoothBounds.x1)]
 
   for (let dy = -outer; dy <= outer; dy++) {
     for (let dx = -outer; dx <= outer; dx++) {
@@ -360,13 +379,13 @@ function paintBrush(hm, cx, cy, bs, str, tool) {
           if (hm[idx] > target) hm[idx] = target
           break
         }
-        case 'flatten': hm[idx] += (0.52 - hm[idx]) * amount * 2; break
+        case 'flatten': hm[idx] += (flattenTarget - hm[idx]) * amount * 2; break
         case 'smooth': {
           let sum = 0, count = 0
           for (let sy = -3; sy <= 3; sy++) {
             for (let sx = -3; sx <= 3; sx++) {
               const nx = x + sx, ny = y + sy
-              if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H) { sum += hm[ny*MAP_W+nx]; count++ }
+              if (nx >= 0 && nx < MAP_W && ny >= 0 && ny < MAP_H) { sum += smoothValueAt(nx, ny); count++ }
             }
           }
           hm[idx] += (sum / count - hm[idx]) * Math.min(1, amount * 5)
@@ -740,9 +759,46 @@ const MAP_TYPE_LABELS = {
 
 const NEW_MAP_TYPES = [
   { id: 'world',    label: 'World',       icon: '🌍', desc: 'Continents, oceans and global terrain' },
-  { id: 'town',     label: 'Town / City', icon: '🏙️', desc: 'Streets, districts and buildings' },
-  { id: 'interior', label: 'Interior',    icon: '🏰', desc: 'Dungeons, buildings, rooms' },
 ]
+
+const TERRAIN_LAYER_ID = 'terrain'
+const DEFAULT_OBJECT_LAYER_ID = 'layer-1'
+
+function defaultMapLayers() {
+  return [
+    { id: TERRAIN_LAYER_ID, name: 'Terrain', visible: true, locked: true },
+    { id: DEFAULT_OBJECT_LAYER_ID, name: 'Layer 1', visible: true },
+  ]
+}
+
+function normaliseMapLayers(map) {
+  const raw = Array.isArray(map?.mapLayers) ? map.mapLayers : []
+  const terrain = { id: TERRAIN_LAYER_ID, name: 'Terrain', visible: true, locked: true }
+  const objectLayers = raw
+    .filter(layer => layer?.id && layer.id !== TERRAIN_LAYER_ID)
+    .map((layer, index) => ({
+      id: layer.id,
+      name: layer.name || `Layer ${index + 1}`,
+      visible: layer.visible !== false,
+      locked: false,
+    }))
+  return [terrain, ...(objectLayers.length ? objectLayers : defaultMapLayers().slice(1))]
+}
+
+function objectLayerId(item) {
+  return item?.layerId || DEFAULT_OBJECT_LAYER_ID
+}
+
+function objectOrder(item, fallback = 0) {
+  return Number.isFinite(item?.objectOrder) ? item.objectOrder : fallback
+}
+
+function clampMapPoint(point) {
+  return {
+    x: Math.max(0, Math.min(MAP_W - 1, point.x)),
+    y: Math.max(0, Math.min(MAP_H - 1, point.y)),
+  }
+}
 
 export default function MapBuilder({ store }) {
   const {
@@ -778,8 +834,12 @@ export default function MapBuilder({ store }) {
   const pathWaypointsRef = useRef([])
   const draggingStampRef = useRef(null)
   const draggingPinRef = useRef(null)
+  const draggingObjectRef = useRef(null)
+  const resizingObjectRef = useRef(null)
+  const objectDraftRef = useRef(null)
   const roomDraftRef = useRef(null)
   const selectedStampIdRef = useRef(null)
+  const selectedObjectRef = useRef(null)
   // Refs so renderMap always reads current values regardless of closure age
   const pathModeRef        = useRef('freehand')
   const toolRef            = useRef('raise')
@@ -789,7 +849,8 @@ export default function MapBuilder({ store }) {
   const cursorPosRef       = useRef(null)
   const lastPaintTimeRef   = useRef(0)
   const paintLoopRef       = useRef(null)
-  const layersRef          = useRef({ terrain: true, regions: true, locations: true, stamps: true, labels: true })
+  const renderFrameRef     = useRef(null)
+  const mapLayersRef       = useRef(defaultMapLayers())
   const wallBrickColorRef  = useRef('red')
 
   const [tool, setTool]           = useState('raise')
@@ -815,12 +876,13 @@ export default function MapBuilder({ store }) {
   const [pathMode, setPathMode] = useState('freehand')
   const [pathWaypoints, setPathWaypoints] = useState([])
   const [stampSize, setStampSize] = useState(28)
-  const [rightPanelOpen, setRightPanelOpen] = useState(true)
+  const [rightPanelOpen, setRightPanelOpen] = useState(false)
   const [selectedStampId, setSelectedStampId] = useState(null)
-  const [viewMode, setViewMode] = useState(false)
-  const [hoveredPinId, setHoveredPinId] = useState(null)
-  const [pinnedPinId, setPinnedPinId] = useState(null)
-  const [layers, setLayers] = useState({ terrain: true, regions: true, locations: true, stamps: true, labels: true })
+  const [mode, setMode] = useState('edit')
+  const [hoveredPreview, setHoveredPreview] = useState(null)
+  const [pinnedPreview, setPinnedPreview] = useState(null)
+  const [activeLayerId, setActiveLayerId] = useState(DEFAULT_OBJECT_LAYER_ID)
+  const [selectedObject, setSelectedObject] = useState(null)
   const [wallBrickColor, setWallBrickColor] = useState('red')
   const [downloadMenu, setDownloadMenu] = useState(false)
   const [roomDraft, setRoomDraft] = useState(null)
@@ -831,11 +893,14 @@ export default function MapBuilder({ store }) {
   const [gridSize, setGridSize]       = useState(32)
   const [gridOpacity, setGridOpacity] = useState(0.3)
 
-  const mapType   = activeMap?.mapType || null
+  const mapType   = 'world'
   const isSmallMap = mapType === 'city' || mapType === 'dungeon' || mapType === 'town' || mapType === 'interior'
   const isImported = !!activeMap?.imported
   const isTabletop = project?.type === 'tabletop' || project?.type === 'dnd'
-  const effectiveViewMode = viewMode || isMobileView
+  const effectiveViewMode = mode === 'view' || isMobileView
+  const mapLayers = normaliseMapLayers(activeMap)
+  const activeLayer = mapLayers.find(layer => layer.id === activeLayerId) || mapLayers.find(layer => !layer.locked) || mapLayers[0]
+  const activeObjectLayerId = activeLayer?.locked ? DEFAULT_OBJECT_LAYER_ID : activeLayer?.id || DEFAULT_OBJECT_LAYER_ID
 
   // Track current mapId for async save callbacks
   const activeMapIdRef = useRef(project?.activeMapId)
@@ -845,8 +910,16 @@ export default function MapBuilder({ store }) {
   useEffect(() => { pathModeRef.current = pathMode }, [pathMode])
   useEffect(() => { toolRef.current = tool; brushSizeRef.current = brushSize; brushStrRef.current = brushStr; brushCustomColorRef.current = brushCustomColor }, [tool, brushSize, brushStr, brushCustomColor])
   useEffect(() => { selectedStampIdRef.current = selectedStampId }, [selectedStampId])
-  useEffect(() => { layersRef.current = layers; setTimeout(renderMap, 0) }, [layers])
+  useEffect(() => { selectedObjectRef.current = selectedObject }, [selectedObject])
+  useEffect(() => { mapLayersRef.current = mapLayers; setTimeout(renderMap, 0) }, [activeMap?.mapLayers])
   useEffect(() => { wallBrickColorRef.current = wallBrickColor }, [wallBrickColor])
+  useEffect(() => {
+    if (!activeMap) return
+    if (!Array.isArray(activeMap.mapLayers) || activeMap.mapLayers.length === 0) {
+      updateActiveMapData(() => ({ mapLayers: defaultMapLayers() }))
+      return
+    }
+  }, [activeMap?.id, activeMap?.mapLayers, activeLayerId])
   useEffect(() => {
     const query = window.matchMedia('(max-width: 860px), (pointer: coarse)')
     const sync = () => setIsMobileView(query.matches)
@@ -855,20 +928,19 @@ export default function MapBuilder({ store }) {
     return () => query.removeEventListener?.('change', sync)
   }, [])
 
-  // Keyboard delete for selected stamp
+  // Keyboard delete for the selected map object.
   useEffect(() => {
     function onKeyDown(e) {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedStampId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedObject) {
         const target = document.activeElement
         if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return
-        updateActiveMapData(m => ({ mapStamps: (m.mapStamps || []).filter(s => s.id !== selectedStampId) }))
-        setSelectedStampId(null)
+        deleteSelectedObject()
         setTimeout(renderMap, 0)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedStampId])
+  }, [selectedObject])
 
   // Eagerly migrate any pixel data still in localStorage → IndexedDB, then clear it
   useEffect(() => {
@@ -912,6 +984,7 @@ export default function MapBuilder({ store }) {
           mapLabels: (project.mapLabels || []).map(label => ({ ...label, mapX: label.mapX * normalized.scale, mapY: label.mapY * normalized.scale })),
           mapStamps: (project.mapStamps || []).map(stamp => ({ ...stamp, mapX: stamp.mapX * normalized.scale, mapY: stamp.mapY * normalized.scale })),
           mapRegions: project.mapRegions || [],
+          mapLayers: defaultMapLayers(),
           created: Date.now(),
         }],
         activeMapId: id,
@@ -1063,6 +1136,10 @@ export default function MapBuilder({ store }) {
   }, [handleWheel])
 
   function renderMap() {
+    if (renderFrameRef.current) {
+      cancelAnimationFrame(renderFrameRef.current)
+      renderFrameRef.current = null
+    }
     const canvas = canvasRef.current
     if (!canvas) return
     const hm = hmRef.current
@@ -1111,11 +1188,10 @@ export default function MapBuilder({ store }) {
         ctx.fillRect(0, 0, MAP_W, MAP_H)
       }
       const imgData = ctx.createImageData(MAP_W, MAP_H)
-      const layersState = layersRef.current
       for (let i = 0; i < MAP_W * MAP_H; i++) {
-        let [r, g, b] = layersState.terrain ? heightToColor(hm[i]) : [220, 215, 200]
+        let [r, g, b] = heightToColor(hm[i])
         const ovType = ov[i]
-        if (layersState.terrain && ovType === 9 && colorOv && colorOv[i * 4 + 3] > 0) {
+        if (ovType === 9 && colorOv && colorOv[i * 4 + 3] > 0) {
           const alpha = colorOv[i * 4 + 3] / 255
           r = Math.round(r * (1 - alpha) + colorOv[i*4]   * alpha)
           g = Math.round(g * (1 - alpha) + colorOv[i*4+1] * alpha)
@@ -1146,9 +1222,8 @@ export default function MapBuilder({ store }) {
       ctx.putImageData(imgData, 0, 0)
     }
 
-    // Draw regions
-    const regions = layersRef.current.regions ? (activeMap?.mapRegions || []) : []
-    regions.forEach(reg => {
+    const currentSelection = selectedObjectRef.current
+    function drawRegion(reg) {
       ctx.save()
       ctx.beginPath()
       let labelX, labelY
@@ -1171,6 +1246,12 @@ export default function MapBuilder({ store }) {
       ctx.lineWidth = 5
       ctx.setLineDash([12, 8])
       ctx.stroke()
+      if (currentSelection?.type === 'region' && currentSelection.id === reg.id) {
+        ctx.strokeStyle = 'rgba(255, 200, 60, 0.95)'
+        ctx.lineWidth = 3
+        ctx.setLineDash([5, 5])
+        ctx.stroke()
+      }
       ctx.setLineDash([])
       ctx.font = 'bold 22px -apple-system, Arial, sans-serif'
       ctx.textAlign = 'center'
@@ -1181,24 +1262,32 @@ export default function MapBuilder({ store }) {
       ctx.fillStyle = hex
       ctx.fillText(regionLabel, labelX, labelY)
       ctx.restore()
-    })
+    }
 
-    // Draw pins
-    const pins = layersRef.current.locations ? (activeMap?.mapPins || []) : []
-    ctx.textBaseline = 'bottom'
-    pins.forEach(pin => {
+    function drawPin(pin) {
+      ctx.textBaseline = 'bottom'
       const px = pin.mapX, py = pin.mapY
+      const pinSize = pin.size || 36
       ctx.beginPath()
-      ctx.arc(px, py, 18, 0, Math.PI * 2)
+      ctx.arc(px, py, pinSize * 0.5, 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(10, 15, 12, 0.72)'
       ctx.fill()
       ctx.strokeStyle = pin.color || YOW_PIN.shell
       ctx.lineWidth = 4
       ctx.stroke()
       ctx.beginPath()
-      ctx.arc(px, py, 7, 0, Math.PI * 2)
+      ctx.arc(px, py, Math.max(5, pinSize * 0.2), 0, Math.PI * 2)
       ctx.fillStyle = pin.coreColor || YOW_PIN.core
       ctx.fill()
+      if (currentSelection?.type === 'pin' && currentSelection.id === pin.id) {
+        ctx.beginPath()
+        ctx.arc(px, py, pinSize * 0.7, 0, Math.PI * 2)
+        ctx.strokeStyle = 'rgba(255, 200, 60, 0.95)'
+        ctx.lineWidth = 2.5
+        ctx.setLineDash([6, 4])
+        ctx.stroke()
+        ctx.setLineDash([])
+      }
       const label = atlasLocationName(pin.locationId, pin.name).slice(0, 18)
       ctx.font = 'bold 22px -apple-system, Arial, sans-serif'
       const tw = ctx.measureText(label).width
@@ -1208,11 +1297,9 @@ export default function MapBuilder({ store }) {
       ctx.textAlign = 'center'
       ctx.fillText(label, px, py - 23)
       ctx.textAlign = 'left'
-    })
+    }
 
-    // Draw free labels
-    const labels = layersRef.current.labels ? (activeMap?.mapLabels || []) : []
-    labels.forEach(label => {
+    function drawLabel(label) {
       const px = label.mapX, py = label.mapY
       const size = label.size || 28
       ctx.save()
@@ -1224,13 +1311,19 @@ export default function MapBuilder({ store }) {
       ctx.fillStyle = label.color || '#f6e3b1'
       ctx.strokeText(label.text, px, py)
       ctx.fillText(label.text, px, py)
+      if (currentSelection?.type === 'label' && currentSelection.id === label.id) {
+        const w = Math.max(50, ctx.measureText(label.text).width + 18)
+        ctx.strokeStyle = 'rgba(255, 200, 60, 0.95)'
+        ctx.lineWidth = 2
+        ctx.setLineDash([5, 4])
+        ctx.strokeRect(px - w / 2, py - size * 0.75, w, size * 1.5)
+        ctx.setLineDash([])
+      }
       ctx.restore()
-    })
+    }
 
-    // Draw stamps
-    const stamps = layersRef.current.stamps ? (activeMap?.mapStamps || []) : []
-    const selStampId = selectedStampIdRef.current
-    stamps.forEach(stamp => {
+    function drawStamp(stamp) {
+      const selStampId = selectedStampIdRef.current
       drawStampIndicator(ctx, stamp)
       if (stamp.id === selStampId) {
         const sz = (stamp.size || 44) / 2 + 10
@@ -1244,6 +1337,15 @@ export default function MapBuilder({ store }) {
         ctx.setLineDash([])
         ctx.restore()
       }
+    }
+
+    mapLayersRef.current.filter(layer => !layer.locked && layer.visible !== false).forEach(layer => {
+      mapObjectsForLayer(layer.id).forEach(({ type, item }) => {
+        if (type === 'region') drawRegion(item)
+        else if (type === 'pin') drawPin(item)
+        else if (type === 'label') drawLabel(item)
+        else if (type === 'stamp') drawStamp(item)
+      })
     })
 
     // Points-mode path preview — drawn with actual brush appearance
@@ -1299,6 +1401,35 @@ export default function MapBuilder({ store }) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_W, y); ctx.stroke()
       }
     }
+
+    const sel = selectedObjectRef.current
+    if (sel && !effectiveViewMode) {
+      const item = findMapObject(sel.type, sel.id)
+      const bounds = item ? objectBounds(sel.type, item) : null
+      if (bounds) {
+        ctx.save()
+        ctx.strokeStyle = 'rgba(255, 200, 60, 0.98)'
+        ctx.lineWidth = 3
+        ctx.setLineDash([10, 7])
+        ctx.strokeRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top)
+        ctx.setLineDash([])
+        ctx.fillStyle = '#f6d986'
+        ctx.strokeStyle = 'rgba(10, 15, 12, 0.92)'
+        ctx.lineWidth = 3
+        const hs = Math.max(14, 18 / zoomRef.current)
+        ctx.fillRect(bounds.right - hs / 2, bounds.bottom - hs / 2, hs, hs)
+        ctx.strokeRect(bounds.right - hs / 2, bounds.bottom - hs / 2, hs, hs)
+        ctx.restore()
+      }
+    }
+  }
+
+  function requestRenderMap() {
+    if (renderFrameRef.current) return
+    renderFrameRef.current = requestAnimationFrame(() => {
+      renderFrameRef.current = null
+      renderMap()
+    })
   }
 
   function pushUndo() {
@@ -1337,22 +1468,132 @@ export default function MapBuilder({ store }) {
     }
   }
 
-  function normalizeRegionDraft(draft) {
-    const left = Math.min(draft.x1, draft.x2)
-    const right = Math.max(draft.x1, draft.x2)
-    const top = Math.min(draft.y1, draft.y2)
-    const bottom = Math.max(draft.y1, draft.y2)
-    return {
-      left,
-      top,
-      width: right - left,
-      height: bottom - top,
-      cx: (left + right) / 2,
-      cy: (top + bottom) / 2,
-      rx: Math.max(1, (right - left) / 2),
-      ry: Math.max(1, (bottom - top) / 2),
-    }
+  function visibleObjectLayerIds() {
+    return new Set(mapLayersRef.current.filter(layer => !layer.locked && layer.visible !== false).map(layer => layer.id))
   }
+
+  function selectMapObject(type, id) {
+    setSelectedObject({ type, id })
+    setSelectedStampId(type === 'stamp' ? id : null)
+  }
+
+  function clearObjectSelection() {
+    setSelectedObject(null)
+    setSelectedStampId(null)
+    objectDraftRef.current = null
+  }
+
+  function deleteSelectedObject() {
+    const sel = selectedObjectRef.current
+    if (!sel) return
+    updateActiveMapData(m => ({
+      mapPins: sel.type === 'pin' ? (m.mapPins || []).filter(p => p.id !== sel.id) : m.mapPins,
+      mapRegions: sel.type === 'region' ? (m.mapRegions || []).filter(r => r.id !== sel.id) : m.mapRegions,
+      mapLabels: sel.type === 'label' ? (m.mapLabels || []).filter(l => l.id !== sel.id) : m.mapLabels,
+      mapStamps: sel.type === 'stamp' ? (m.mapStamps || []).filter(s => s.id !== sel.id) : m.mapStamps,
+    }))
+    clearObjectSelection()
+  }
+
+  function deleteMapObject(type, id) {
+    updateActiveMapData(m => ({
+      mapPins: type === 'pin' ? (m.mapPins || []).filter(p => p.id !== id) : m.mapPins,
+      mapRegions: type === 'region' ? (m.mapRegions || []).filter(r => r.id !== id) : m.mapRegions,
+      mapLabels: type === 'label' ? (m.mapLabels || []).filter(l => l.id !== id) : m.mapLabels,
+      mapStamps: type === 'stamp' ? (m.mapStamps || []).filter(s => s.id !== id) : m.mapStamps,
+    }))
+    if (selectedObjectRef.current?.type === type && selectedObjectRef.current?.id === id) clearObjectSelection()
+    setTimeout(renderMap, 0)
+  }
+
+  function scaleRegion(region, factor) {
+    if (region.points?.length) {
+      const cx = region.points.reduce((sum, p) => sum + p.x, 0) / region.points.length
+      const cy = region.points.reduce((sum, p) => sum + p.y, 0) / region.points.length
+      return {
+        ...region,
+        points: region.points.map(p => ({
+          x: Math.max(0, Math.min(1, cx + (p.x - cx) * factor)),
+          y: Math.max(0, Math.min(1, cy + (p.y - cy) * factor)),
+        })),
+      }
+    }
+    return { ...region, rx: Math.max(0.01, Math.min(0.8, (region.rx || 0.08) * factor)), ry: Math.max(0.01, Math.min(0.8, (region.ry || 0.06) * factor)) }
+  }
+
+  function moveObjectItem(type, item, dx, dy) {
+    if (type === 'pin' || type === 'label' || type === 'stamp') {
+      return { ...item, ...clampMapPoint({ x: item.mapX + dx, y: item.mapY + dy }) }
+    }
+    if (type === 'region') {
+      if (item.points?.length) {
+        return { ...item, points: item.points.map(p => ({ x: Math.max(0, Math.min(1, p.x + dx / MAP_W)), y: Math.max(0, Math.min(1, p.y + dy / MAP_H)) })) }
+      }
+      return { ...item, cx: Math.max(0, Math.min(1, (item.cx || 0.5) + dx / MAP_W)), cy: Math.max(0, Math.min(1, (item.cy || 0.5) + dy / MAP_H)) }
+    }
+    return item
+  }
+
+  function applyObjectDraft(type, item) {
+    const draft = objectDraftRef.current
+    return draft?.type === type && draft?.id === item.id ? draft.item : item
+  }
+
+  function commitObjectDraft() {
+    const draft = objectDraftRef.current
+    if (!draft) return
+    updateObjectInMap(draft.type, draft.id, () => draft.item)
+    objectDraftRef.current = null
+    setTimeout(renderMap, 0)
+  }
+
+  function pointInPolygon(pos, points) {
+    let inside = false
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const xi = points[i].x * MAP_W, yi = points[i].y * MAP_H
+      const xj = points[j].x * MAP_W, yj = points[j].y * MAP_H
+      const intersect = ((yi > pos.y) !== (yj > pos.y)) && (pos.x < (xj - xi) * (pos.y - yi) / Math.max(0.0001, yj - yi) + xi)
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
+  function hitTestObject(pos, includeRegions = true) {
+    const visibleLayers = visibleObjectLayerIds()
+    const inVisibleLayer = item => visibleLayers.has(objectLayerId(item))
+    const stamps = (activeMap?.mapStamps || []).filter(inVisibleLayer)
+    for (let i = stamps.length - 1; i >= 0; i--) {
+      const s = stamps[i]
+      const sz = (s.size || 44) / 2 + 10
+      if (Math.hypot(pos.x - s.mapX, pos.y - s.mapY) <= sz) return { type: 'stamp', item: s }
+    }
+    const labels = (activeMap?.mapLabels || []).filter(inVisibleLayer)
+    for (let i = labels.length - 1; i >= 0; i--) {
+      const l = labels[i]
+      const size = l.size || 28
+      const halfW = Math.max(36, String(l.text || '').length * size * 0.34)
+      if (Math.abs(pos.x - l.mapX) <= halfW && Math.abs(pos.y - l.mapY) <= size * 0.75) return { type: 'label', item: l }
+    }
+    const pins = (activeMap?.mapPins || []).filter(inVisibleLayer)
+    for (let i = pins.length - 1; i >= 0; i--) {
+      const p = pins[i]
+      if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= Math.max(24, (p.size || 36) * 0.75)) return { type: 'pin', item: p }
+    }
+    if (includeRegions) {
+      const regions = (activeMap?.mapRegions || []).filter(inVisibleLayer)
+      for (let i = regions.length - 1; i >= 0; i--) {
+        const r = regions[i]
+        if (r.points?.length >= 3 && pointInPolygon(pos, r.points)) return { type: 'region', item: r }
+        if (!r.points) {
+          const dx = (pos.x - (r.cx || 0) * MAP_W) / Math.max(1, (r.rx || 0.08) * MAP_W)
+          const dy = (pos.y - (r.cy || 0) * MAP_H) / Math.max(1, (r.ry || 0.06) * MAP_H)
+          if (dx * dx + dy * dy <= 1) return { type: 'region', item: r }
+        }
+      }
+    }
+    return null
+  }
+
 
   // Overlay tool value: 0=erase, 1-5=terrain, 6-8=small map
   const OVERLAY_TOOL_MAP = {
@@ -1366,6 +1607,11 @@ export default function MapBuilder({ store }) {
   const isPanTool = tool === 'pan'
   const selectTool = useCallback((nextTool) => {
     setTool(nextTool)
+    if (['raise','lower','smooth','flatten','water','rock','sand','grassland','farmland','swampland','erase-texture'].includes(nextTool)) {
+      setActiveLayerId(TERRAIN_LAYER_ID)
+    } else if (['pin', 'region', 'label', 'stamp'].includes(nextTool) && activeLayerId === TERRAIN_LAYER_ID) {
+      setActiveLayerId(mapLayers.find(layer => !layer.locked)?.id || DEFAULT_OBJECT_LAYER_ID)
+    }
     if (nextTool === 'water') setBrushSize(size => Math.min(size, 8))
     if (tool === 'water' && nextTool !== 'water') setBrushSize(size => Math.max(size, 18))
     if (nextTool === 'stamp') {
@@ -1381,7 +1627,7 @@ export default function MapBuilder({ store }) {
       pathWaypointsRef.current = []
       setPathWaypoints([])
     }
-  }, [tool, mapType])
+  }, [tool, mapType, activeLayerId, mapLayers])
 
   function startPaintLoop() {
     const SCULPT_SET = new Set(['raise','lower','smooth','flatten','water'])
@@ -1423,16 +1669,42 @@ export default function MapBuilder({ store }) {
 
     // View mode: only allow pin interaction
     if (effectiveViewMode) {
-      const pins = activeMap?.mapPins || []
-      for (let i = pins.length - 1; i >= 0; i--) {
-        const p = pins[i]
-        if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= 24) {
-          setPinnedPinId(prev => prev === p.id ? null : p.id)
+      const hit = hitTestObject(pos, true)
+      if (hit && (hit.type === 'pin' || hit.type === 'region')) {
+        setPinnedPreview(prev => prev?.id === hit.item.id && prev?.type === hit.type ? null : { type: hit.type, id: hit.item.id })
+        return
+      }
+      setPinnedPreview(null)
+      return
+    }
+
+    const selectedBounds = selectedObjectBounds()
+    if (selectedBounds && selectedObject) {
+      const handleRadius = Math.max(12, 14 / zoomRef.current)
+      if (Math.hypot(pos.x - selectedBounds.right, pos.y - selectedBounds.bottom) <= handleRadius) {
+        const item = findMapObject(selectedObject.type, selectedObject.id)
+        if (item) {
+          resizingObjectRef.current = {
+            type: selectedObject.type,
+            id: selectedObject.id,
+            centerX: selectedBounds.centerX,
+            centerY: selectedBounds.centerY,
+            startDist: Math.hypot(selectedBounds.right - selectedBounds.centerX, selectedBounds.bottom - selectedBounds.centerY),
+            startSize: objectResizeStartSize(selectedObject.type, item),
+            startItem: item,
+          }
           return
         }
       }
-      setPinnedPinId(null)
+    }
+
+    const existing = hitTestObject(pos, tool !== 'region')
+    if (existing && ['pin', 'region', 'label', 'stamp'].includes(existing.type)) {
+      selectMapObject(existing.type, existing.item.id)
+      draggingObjectRef.current = { type: existing.type, id: existing.item.id, startX: pos.x, startY: pos.y, startItem: existing.item }
       return
+    } else if (selectedObject) {
+      clearObjectSelection()
     }
 
     if (tool === 'room') {
@@ -1449,6 +1721,7 @@ export default function MapBuilder({ store }) {
         if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= 24) { hit = p; break }
       }
       if (hit) {
+        selectMapObject('pin', hit.id)
         draggingPinRef.current = { id: hit.id, lastX: pos.x, lastY: pos.y }
         return
       }
@@ -1466,13 +1739,13 @@ export default function MapBuilder({ store }) {
         if (Math.hypot(pos.x - s.mapX, pos.y - s.mapY) <= sz) { hit = s; break }
       }
       if (hit) {
-        setSelectedStampId(hit.id)
+        selectMapObject('stamp', hit.id)
         draggingStampRef.current = { id: hit.id, lastX: pos.x, lastY: pos.y }
       } else {
-        const stamp = { id: Date.now().toString(36), stampType: selectedStamp, mapX: pos.x, mapY: pos.y, size: stampSize }
+        const stamp = { id: Date.now().toString(36), stampType: selectedStamp, mapX: pos.x, mapY: pos.y, size: stampSize, layerId: activeObjectLayerId, objectOrder: nextObjectOrderForLayer(activeObjectLayerId) }
         updateActiveMapData(m => ({ mapStamps: [...(m.mapStamps || []), stamp] }))
-        setSelectedStampId(stamp.id)
-        draggingStampRef.current = { id: stamp.id, lastX: pos.x, lastY: pos.y }
+        selectMapObject('stamp', stamp.id)
+        draggingObjectRef.current = { type: 'stamp', id: stamp.id, startX: pos.x, startY: pos.y, startItem: stamp }
         setTimeout(renderMap, 0)
       }
       return
@@ -1522,13 +1795,24 @@ export default function MapBuilder({ store }) {
     // View mode: only hover detection for pins
     if (effectiveViewMode) {
       const pos = canvasPos(e)
-      const pins = activeMap?.mapPins || []
-      let found = null
-      for (let i = pins.length - 1; i >= 0; i--) {
-        const p = pins[i]
-        if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= 24) { found = p.id; break }
+      const hit = hitTestObject(pos, true)
+      setHoveredPreview(hit && (hit.type === 'pin' || hit.type === 'region') ? { type: hit.type, id: hit.item.id } : null)
+      return
+    }
+    if (resizingObjectRef.current) {
+      const pos = canvasPos(e)
+      resizeObjectFromDrag(resizingObjectRef.current, pos)
+      return
+    }
+    if (draggingObjectRef.current) {
+      const pos = canvasPos(e)
+      const drag = draggingObjectRef.current
+      const dx = pos.x - drag.startX
+      const dy = pos.y - drag.startY
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        objectDraftRef.current = { type: drag.type, id: drag.id, item: moveObjectItem(drag.type, drag.startItem, dx, dy) }
+        requestRenderMap()
       }
-      setHoveredPinId(found)
       return
     }
     if (roomDraftRef.current) {
@@ -1604,12 +1888,8 @@ export default function MapBuilder({ store }) {
   }
 
   function hitTestPin(pos) {
-    const pins = activeMap?.mapPins || []
-    for (let i = pins.length - 1; i >= 0; i--) {
-      const p = pins[i]
-      if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= 34) return p
-    }
-    return null
+    const hit = hitTestObject(pos, true)
+    return hit && (hit.type === 'pin' || hit.type === 'region') ? hit : null
   }
 
   function screenToMapPoint(clientX, clientY) {
@@ -1697,8 +1977,8 @@ export default function MapBuilder({ store }) {
 
     if (gesture?.type === 'pan' && !gesture.moved) {
       const hit = hitTestPin(gesture.mapPos)
-      if (hit) setPinnedPinId(prev => prev === hit.id ? null : hit.id)
-      else setPinnedPinId(null)
+      if (hit) setPinnedPreview(prev => prev?.id === hit.item.id && prev?.type === hit.type ? null : { type: hit.type, id: hit.item.id })
+      else setPinnedPreview(null)
     }
 
     if (touchPointersRef.current.size === 0) {
@@ -1718,6 +1998,9 @@ export default function MapBuilder({ store }) {
       return
     }
     draggingPinRef.current = null
+    commitObjectDraft()
+    draggingObjectRef.current = null
+    resizingObjectRef.current = null
     if (regionDragRef.current) {
       const pts = regionDragRef.current.points
       regionDragRef.current = null
@@ -1810,9 +2093,10 @@ export default function MapBuilder({ store }) {
     const newMapId = addMap(name, type)
     saveMapPixels(newMapId, hm, createOverlay())
     setNewMapModal(false)
-    if (backgroundImage) {
-      setTimeout(() => updateActiveMapData(() => ({ backgroundImage, imported: true })), 0)
-    }
+    setTimeout(() => updateActiveMapData(() => ({
+      mapLayers: defaultMapLayers(),
+      ...(backgroundImage ? { backgroundImage, imported: true } : {}),
+    })), 0)
     if (type === 'town' || type === 'city' || type === 'interior' || type === 'dungeon') setTool('room')
     else setTool('raise')
   }
@@ -1833,6 +2117,203 @@ export default function MapBuilder({ store }) {
   function handleFinishRename() {
     if (renamingId && renameVal.trim()) renameMap(renamingId, renameVal.trim())
     setRenamingId(null)
+  }
+
+  function updateMapLayers(updater) {
+    updateActiveMapData(m => ({ mapLayers: updater(normaliseMapLayers(m)) }))
+    setTimeout(renderMap, 0)
+  }
+
+  function addObjectLayer() {
+    const nextId = `layer-${Date.now().toString(36)}`
+    updateMapLayers(current => {
+      const count = current.filter(layer => !layer.locked).length + 1
+      return [...current, { id: nextId, name: `Layer ${count}`, visible: true }]
+    })
+    setActiveLayerId(nextId)
+  }
+
+  function toggleObjectLayer(layerId) {
+    if (layerId === TERRAIN_LAYER_ID) return
+    updateMapLayers(current => current.map(layer => layer.id === layerId ? { ...layer, visible: layer.visible === false } : layer))
+  }
+
+  function reorderObjectLayer(layerId, direction) {
+    if (layerId === TERRAIN_LAYER_ID) return
+    updateMapLayers(current => {
+      const terrain = current.find(layer => layer.locked) || defaultMapLayers()[0]
+      const objectLayers = current.filter(layer => !layer.locked)
+      const index = objectLayers.findIndex(layer => layer.id === layerId)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= objectLayers.length) return current
+      const reordered = [...objectLayers]
+      const [moved] = reordered.splice(index, 1)
+      reordered.splice(nextIndex, 0, moved)
+      return [terrain, ...reordered]
+    })
+  }
+
+  function deleteObjectLayer(layerId) {
+    if (layerId === TERRAIN_LAYER_ID) return
+    const objectLayers = mapLayers.filter(layer => !layer.locked)
+    if (objectLayers.length <= 1) return
+    const fallbackId = objectLayers.find(layer => layer.id !== layerId)?.id || DEFAULT_OBJECT_LAYER_ID
+    updateActiveMapData(m => ({
+      mapLayers: normaliseMapLayers(m).filter(layer => layer.id !== layerId),
+      mapPins: (m.mapPins || []).map(item => objectLayerId(item) === layerId ? { ...item, layerId: fallbackId } : item),
+      mapRegions: (m.mapRegions || []).map(item => objectLayerId(item) === layerId ? { ...item, layerId: fallbackId } : item),
+      mapLabels: (m.mapLabels || []).map(item => objectLayerId(item) === layerId ? { ...item, layerId: fallbackId } : item),
+      mapStamps: (m.mapStamps || []).map(item => objectLayerId(item) === layerId ? { ...item, layerId: fallbackId } : item),
+    }))
+    if (activeLayerId === layerId) setActiveLayerId(fallbackId)
+    setTimeout(renderMap, 0)
+  }
+
+  function objectDisplayName(type, item) {
+    if (type === 'pin' || type === 'region') return atlasLocationName(item.locationId, item.name) || (type === 'pin' ? 'Location' : 'Region')
+    if (type === 'label') return item.text || 'Label'
+    if (type === 'stamp') return STAMP_TYPES[item.stampType]?.label || 'Stamp'
+    return 'Object'
+  }
+
+  function objectIcon(type, item) {
+    if (type === 'pin') return '📍'
+    if (type === 'region') return '⭕'
+    if (type === 'label') return 'T'
+    if (type === 'stamp') return STAMP_TYPES[item.stampType]?.glyph || '◆'
+    return '•'
+  }
+
+  function mapObjectsForLayer(layerId) {
+    return [
+      ...(activeMap?.mapRegions || []).map((item, fallback) => ({ type: 'region', item, fallback })),
+      ...(activeMap?.mapPins || []).map((item, fallback) => ({ type: 'pin', item, fallback: fallback + 1000 })),
+      ...(activeMap?.mapLabels || []).map((item, fallback) => ({ type: 'label', item, fallback: fallback + 2000 })),
+      ...(activeMap?.mapStamps || []).map((item, fallback) => ({ type: 'stamp', item, fallback: fallback + 3000 })),
+    ]
+      .filter(entry => objectLayerId(entry.item) === layerId)
+      .map(entry => ({ ...entry, item: applyObjectDraft(entry.type, entry.item) }))
+      .sort((a, b) => objectOrder(a.item, a.fallback) - objectOrder(b.item, b.fallback))
+  }
+
+  function nextObjectOrderForLayer(layerId) {
+    const entries = mapObjectsForLayer(layerId)
+    if (!entries.length) return 0
+    return Math.max(...entries.map(entry => objectOrder(entry.item, entry.fallback))) + 1
+  }
+
+  function selectObjectFromList(type, item) {
+    setActiveLayerId(objectLayerId(item))
+    selectMapObject(type, item.id)
+    setTimeout(renderMap, 0)
+  }
+
+  function updateObjectInMap(type, id, updater) {
+    const key = type === 'pin' ? 'mapPins'
+      : type === 'region' ? 'mapRegions'
+        : type === 'label' ? 'mapLabels'
+          : 'mapStamps'
+    updateActiveMapData(m => {
+      const items = m[key] || []
+      let found = false
+      const nextItems = items.map(item => {
+        if (item.id !== id) return item
+        found = true
+        return updater(item)
+      })
+      return { [key]: found ? nextItems : [...nextItems, updater({ id })] }
+    })
+  }
+
+  function reorderLayerObject(layerId, type, id, direction) {
+    const entries = mapObjectsForLayer(layerId)
+    const index = entries.findIndex(entry => entry.type === type && entry.item.id === id)
+    const nextIndex = index + direction
+    if (index < 0 || nextIndex < 0 || nextIndex >= entries.length) return
+    const current = entries[index]
+    const target = entries[nextIndex]
+    const currentOrder = objectOrder(current.item, current.fallback)
+    const targetOrder = objectOrder(target.item, target.fallback)
+    updateActiveMapData(m => ({
+      mapPins: (m.mapPins || []).map(item => item.id === current.item.id && current.type === 'pin' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'pin' ? { ...item, objectOrder: currentOrder } : item),
+      mapRegions: (m.mapRegions || []).map(item => item.id === current.item.id && current.type === 'region' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'region' ? { ...item, objectOrder: currentOrder } : item),
+      mapLabels: (m.mapLabels || []).map(item => item.id === current.item.id && current.type === 'label' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'label' ? { ...item, objectOrder: currentOrder } : item),
+      mapStamps: (m.mapStamps || []).map(item => item.id === current.item.id && current.type === 'stamp' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'stamp' ? { ...item, objectOrder: currentOrder } : item),
+    }))
+    selectMapObject(type, id)
+    setTimeout(renderMap, 0)
+  }
+
+  function selectedObjectBounds() {
+    const sel = selectedObject
+    if (!sel || !activeMap) return null
+    const item = findMapObject(sel.type, sel.id)
+    if (!item) return null
+    return objectBounds(sel.type, item)
+  }
+
+  function findMapObject(type, id) {
+    if (!activeMap) return null
+    const collections = {
+      pin: activeMap.mapPins || [],
+      region: activeMap.mapRegions || [],
+      label: activeMap.mapLabels || [],
+      stamp: activeMap.mapStamps || [],
+    }
+    const item = collections[type]?.find(entry => entry.id === id) || null
+    return item ? applyObjectDraft(type, item) : null
+  }
+
+  function objectBounds(type, item) {
+    if (type === 'pin') {
+      const r = Math.max(18, item.size || 36) * 0.75
+      return { type, id: item.id, left: item.mapX - r, top: item.mapY - r, right: item.mapX + r, bottom: item.mapY + r, centerX: item.mapX, centerY: item.mapY }
+    }
+    if (type === 'stamp') {
+      const r = (item.size || 44) / 2 + 10
+      return { type, id: item.id, left: item.mapX - r, top: item.mapY - r, right: item.mapX + r, bottom: item.mapY + r, centerX: item.mapX, centerY: item.mapY }
+    }
+    if (type === 'label') {
+      const size = item.size || 28
+      const halfW = Math.max(36, String(item.text || '').length * size * 0.34)
+      return { type, id: item.id, left: item.mapX - halfW, top: item.mapY - size * 0.75, right: item.mapX + halfW, bottom: item.mapY + size * 0.75, centerX: item.mapX, centerY: item.mapY }
+    }
+    if (type === 'region') {
+      if (item.points?.length) {
+        const xs = item.points.map(p => p.x * MAP_W)
+        const ys = item.points.map(p => p.y * MAP_H)
+        const left = Math.min(...xs), right = Math.max(...xs), top = Math.min(...ys), bottom = Math.max(...ys)
+        return { type, id: item.id, left, top, right, bottom, centerX: (left + right) / 2, centerY: (top + bottom) / 2 }
+      }
+      const cx = (item.cx || 0.5) * MAP_W
+      const cy = (item.cy || 0.5) * MAP_H
+      const rx = (item.rx || 0.08) * MAP_W
+      const ry = (item.ry || 0.06) * MAP_H
+      return { type, id: item.id, left: cx - rx, top: cy - ry, right: cx + rx, bottom: cy + ry, centerX: cx, centerY: cy }
+    }
+    return null
+  }
+
+  function objectResizeStartSize(type, item) {
+    if (type === 'pin') return item.size || 36
+    if (type === 'stamp') return item.size || 44
+    if (type === 'label') return item.size || 28
+    return 1
+  }
+
+  function resizeObjectFromDrag(drag, pos) {
+    const nextDist = Math.max(8, Math.hypot(pos.x - drag.centerX, pos.y - drag.centerY))
+    const factor = Math.max(0.25, Math.min(4, nextDist / Math.max(8, drag.startDist)))
+    if (drag.type === 'pin') {
+      objectDraftRef.current = { type: 'pin', id: drag.id, item: { ...drag.startItem, size: Math.max(18, Math.min(90, drag.startSize * factor)) } }
+    } else if (drag.type === 'stamp') {
+      objectDraftRef.current = { type: 'stamp', id: drag.id, item: { ...drag.startItem, size: Math.max(8, Math.min(160, drag.startSize * factor)) } }
+    } else if (drag.type === 'label') {
+      objectDraftRef.current = { type: 'label', id: drag.id, item: { ...drag.startItem, size: Math.max(10, Math.min(120, drag.startSize * factor)) } }
+    } else if (drag.type === 'region') {
+      objectDraftRef.current = { type: 'region', id: drag.id, item: scaleRegion(drag.startItem, factor) }
+    }
+    requestRenderMap()
   }
 
   function downloadMap(format) {
@@ -1943,9 +2424,9 @@ export default function MapBuilder({ store }) {
     <div style={{ flex:1, height:'100%', minHeight:0, overflow:'hidden', display:'flex', flexDirection:'column', ...(isFullscreen ? { position:'fixed', inset:12, zIndex:80, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, boxShadow:'var(--shadow-modal)' } : {}) }}>
 
       {/* Slim top bar */}
-      <div className="studio-topbar map-builder-topbar" style={{ padding:'8px 14px', flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
+      <div className="studio-topbar map-builder-topbar" style={{ padding:'6px 10px', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
-          <span style={{ fontFamily:'var(--font-serif)', fontSize:20, fontWeight:700 }}>Map Builder</span>
+          <span style={{ fontFamily:'var(--font-serif)', fontSize:18, fontWeight:700 }}>Map Builder</span>
           {mapType && (
             <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)' }}>
               {MAP_TYPE_LABELS[mapType] || mapType}
@@ -1957,7 +2438,7 @@ export default function MapBuilder({ store }) {
             </span>
           )}
         </div>
-        <div className="map-builder-actions" style={{ display:'flex', gap:5, alignItems:'center', flexShrink:0 }}>
+        <div className="map-builder-actions" style={{ display:'flex', gap:4, alignItems:'center', flexShrink:0 }}>
           {!effectiveViewMode && (mapType === 'world' || mapType === 'regional' || mapType === 'region') && (
             <button className="btn btn-secondary btn-sm" onClick={() => setGenerateModal(true)}>Generate</button>
           )}
@@ -1966,13 +2447,23 @@ export default function MapBuilder({ store }) {
           {!isMobileView && (
             <>
               <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setViewMode(v => !v)}
-                style={viewMode ? { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' } : {}}
-              >
-                {viewMode ? '👁 View' : '✏ Edit'}
-              </button>
+              <div style={{ display:'flex', border:'1px solid var(--border)', borderRadius:7, overflow:'hidden' }}>
+                {['view', 'edit'].map(nextMode => (
+                  <button
+                    key={nextMode}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setMode(nextMode); clearObjectSelection(); setPinnedPreview(null); setHoveredPreview(null) }}
+                    style={{
+                      border:'none',
+                      borderRadius:0,
+                      background: mode === nextMode ? 'var(--accent)' : 'var(--surface2)',
+                      color: mode === nextMode ? '#fff' : 'var(--muted)',
+                    }}
+                  >
+                    {nextMode === 'view' ? 'View' : 'Edit'}
+                  </button>
+                ))}
+              </div>
             </>
           )}
           <div style={{ width:1, height:20, background:'var(--border)', margin:'0 2px' }} />
@@ -1981,6 +2472,11 @@ export default function MapBuilder({ store }) {
           <button className="btn btn-secondary btn-sm" onClick={() => zoomAt((viewportRef.current?.getBoundingClientRect().left || 0) + (viewportRef.current?.clientWidth || 0) / 2, (viewportRef.current?.getBoundingClientRect().top || 0) + (viewportRef.current?.clientHeight || 0) / 2, 1.15)} title="Zoom in">+</button>
           <button className="btn btn-secondary btn-sm" onClick={fitMapToViewport} title="Fit map to view">Fit</button>
           <button className="btn btn-secondary btn-sm" onClick={resetView} title="Show map at full resolution">100%</button>
+          {!isMobileView && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setRightPanelOpen(v => !v)} title={rightPanelOpen ? 'Hide layers panel' : 'Show layers panel'}>
+              Layers
+            </button>
+          )}
           <div style={{ position: 'relative' }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setDownloadMenu(v => !v)}>⬇ Export</button>
             {downloadMenu && (
@@ -2006,8 +2502,8 @@ export default function MapBuilder({ store }) {
       <div className="map-builder-body" style={{ flex:1, minHeight:0, display:'flex', overflow:'hidden' }}>
 
         {/* LEFT PANEL — tools + settings */}
-        <div className="map-builder-tools" style={{ width:196, flexShrink:0, borderRight:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', display: effectiveViewMode ? 'none' : 'flex', flexDirection:'column', overflowY:'auto' }}>
-          <div style={{ padding:'10px 8px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div className="map-builder-tools" style={{ width:164, flexShrink:0, borderRight:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', display: effectiveViewMode ? 'none' : 'flex', flexDirection:'column', overflowY:'auto' }}>
+          <div style={{ padding:'8px 6px', display:'flex', flexDirection:'column', gap:8 }}>
 
             {/* Tool groups */}
             {!isSmallMap && !isImported && (
@@ -2021,28 +2517,6 @@ export default function MapBuilder({ store }) {
             )}
             <ToolGroup label="Place" tools={isSmallMap ? PLACE_TOOLS.filter(t => t.id === 'stamp') : PLACE_TOOLS} active={tool} onSelect={selectTool} wrap />
             <ToolGroup label="View" tools={VIEW_TOOLS} active={tool} onSelect={selectTool} wrap />
-
-            {/* Layer visibility */}
-            <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:1 }}>Layers</div>
-              {[
-                { key: 'terrain', label: 'Terrain' },
-                { key: 'regions', label: 'Regions' },
-                { key: 'locations', label: 'Locations' },
-                { key: 'stamps', label: 'Stamps' },
-                { key: 'labels', label: 'Labels' },
-              ].map(({ key, label }) => (
-                <button key={key} onClick={() => { setLayers(l => { const next = { ...l, [key]: !l[key] }; return next }); setTimeout(renderMap, 0) }}
-                  style={{ padding:'3px 8px', borderRadius:5, fontSize:11, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                    background: layers[key] ? 'var(--surface2)' : 'rgba(0,0,0,0.2)',
-                    border:`1px solid ${layers[key] ? 'var(--border)' : 'rgba(255,255,255,0.08)'}`,
-                    color: layers[key] ? 'var(--muted)' : 'var(--faint)',
-                    textDecoration: layers[key] ? 'none' : 'line-through',
-                  }}>
-                  {layers[key] ? '◉' : '○'} {label}
-                </button>
-              ))}
-            </div>
 
             {/* Tabletop grid toggle */}
             {isTabletop && (
@@ -2149,25 +2623,6 @@ export default function MapBuilder({ store }) {
                     </div>
                     <input type="range" min={12} max={80} value={stampSize} onChange={e => setStampSize(+e.target.value)} style={{ accentColor:'var(--accent)', width:'100%' }} />
                   </label>
-                  {selectedStampId && (
-                    <div style={{ display:'flex', flexDirection:'column', gap:4, padding:'6px 8px', background:'var(--surface2)', borderRadius:6, border:'1px solid var(--border)' }}>
-                      <div style={{ fontSize:9, color:'var(--faint)', textTransform:'uppercase', letterSpacing:'.06em' }}>Selected</div>
-                      <div style={{ display:'flex', gap:4 }}>
-                        <button
-                          onClick={() => { updateActiveMapData(m => ({ mapStamps: (m.mapStamps || []).map(s => s.id === selectedStampId ? { ...s, size: Math.max(8, (s.size || 44) - 8) } : s) })); setTimeout(renderMap, 0) }}
-                          style={{ flex:1, padding:'3px 6px', borderRadius:5, fontSize:11, cursor:'pointer', fontFamily:'inherit', background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)' }}
-                        >− Smaller</button>
-                        <button
-                          onClick={() => { updateActiveMapData(m => ({ mapStamps: (m.mapStamps || []).map(s => s.id === selectedStampId ? { ...s, size: Math.min(160, (s.size || 44) + 8) } : s) })); setTimeout(renderMap, 0) }}
-                          style={{ flex:1, padding:'3px 6px', borderRadius:5, fontSize:11, cursor:'pointer', fontFamily:'inherit', background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)' }}
-                        >+ Larger</button>
-                      </div>
-                      <button
-                        onClick={() => { updateActiveMapData(m => ({ mapStamps: (m.mapStamps || []).filter(s => s.id !== selectedStampId) })); setSelectedStampId(null); setTimeout(renderMap, 0) }}
-                        style={{ padding:'4px 6px', borderRadius:5, fontSize:11, cursor:'pointer', fontFamily:'inherit', background:'rgba(220,50,50,0.12)', border:'1px solid rgba(220,50,50,0.3)', color:'#e06060', fontWeight:600 }}
-                      >🗑 Delete</button>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -2252,20 +2707,29 @@ export default function MapBuilder({ store }) {
               />
             </svg>
           )}
-          {effectiveViewMode && (hoveredPinId || pinnedPinId) && (() => {
-            const pinId = pinnedPinId || hoveredPinId
-            const pin = (activeMap?.mapPins || []).find(p => p.id === pinId)
-            if (!pin) return null
-            const locName = atlasLocationName(pin.locationId, pin.name)
-            const loc = project?.locations?.find(l => l.id === pin.locationId)
+          {effectiveViewMode && (hoveredPreview || pinnedPreview) && (() => {
+            const preview = pinnedPreview || hoveredPreview
+            const item = preview.type === 'region'
+              ? (activeMap?.mapRegions || []).find(r => r.id === preview.id)
+              : (activeMap?.mapPins || []).find(p => p.id === preview.id)
+            if (!item) return null
+            const locName = atlasLocationName(item.locationId, item.name)
+            const loc = project?.locations?.find(l => l.id === item.locationId)
             const viewport = viewportRef.current
             const vRect = viewport ? viewport.getBoundingClientRect() : { width: 800, height: 600 }
-            const rawScreenX = pan.x + pin.mapX * zoom
-            const rawScreenY = pan.y + pin.mapY * zoom
+            const regionCenter = item.points?.length
+              ? {
+                  x: item.points.reduce((sum, p) => sum + p.x, 0) / item.points.length * MAP_W,
+                  y: item.points.reduce((sum, p) => sum + p.y, 0) / item.points.length * MAP_H,
+                }
+              : { x: (item.cx || 0.5) * MAP_W, y: (item.cy || 0.5) * MAP_H }
+            const mapPoint = preview.type === 'region' ? regionCenter : { x: item.mapX, y: item.mapY }
+            const rawScreenX = pan.x + mapPoint.x * zoom
+            const rawScreenY = pan.y + mapPoint.y * zoom
             const boxW = 260
             const screenX = Math.min(rawScreenX + 12, vRect.width - boxW - 12)
             const screenY = Math.max(8, rawScreenY - 110)
-            const desc = loc?.description || pin.description
+            const desc = loc?.description || item.description
             return (
               <div style={{
                 position: 'absolute',
@@ -2277,23 +2741,23 @@ export default function MapBuilder({ store }) {
                 padding: '10px 14px',
                 minWidth: 180,
                 maxWidth: boxW,
-                pointerEvents: pinnedPinId ? 'all' : 'none',
+                pointerEvents: pinnedPreview ? 'all' : 'none',
                 zIndex: 10,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
               }}>
                 <div style={{ fontWeight: 700, color: '#f6d986', fontSize: 14, marginBottom: 4 }}>{locName}</div>
-                {pin.type && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{pin.type}</div>}
+                {item.type && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{item.type}</div>}
                 {desc && (
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5, marginBottom: 6 }}>
                     {desc.slice(0, 120)}{desc.length > 120 ? '…' : ''}
                   </div>
                 )}
                 <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('yow:navigate', { detail: { section: 'locations', locationId: pin.locationId } }))}
+                  onClick={() => window.dispatchEvent(new CustomEvent('yow:navigate', { detail: { section: 'locations', locationId: item.locationId } }))}
                   style={{ fontSize: 11, color: '#f6d986', background: 'none', border: '1px solid rgba(246,217,134,0.3)', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit' }}
                 >→ View in Locations</button>
-                {pinnedPinId && (
-                  <button onClick={() => setPinnedPinId(null)} style={{ marginLeft: 6, fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                {pinnedPreview && (
+                  <button onClick={() => setPinnedPreview(null)} style={{ marginLeft: 6, fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
                 )}
               </div>
             )
@@ -2305,18 +2769,99 @@ export default function MapBuilder({ store }) {
           </div>
         </div>
 
-        {/* RIGHT PANEL — collapsible maps list */}
-        <div className="map-builder-map-list" style={{ display:'flex', flexDirection:'column', borderLeft:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', flexShrink:0, width:rightPanelOpen ? 200 : 34, transition:'width 0.15s ease', overflow:'hidden' }}>
+        {/* RIGHT PANEL — layers, objects, and maps */}
+        <div className="map-builder-map-list" style={{ display:'flex', flexDirection:'column', borderLeft:'1px solid var(--border)', background:'color-mix(in srgb, var(--surface) 94%, #000)', flexShrink:0, width:rightPanelOpen ? 220 : 30, transition:'width 0.15s ease', overflow:'hidden' }}>
           <button
             onClick={() => setRightPanelOpen(v => !v)}
-            title={rightPanelOpen ? 'Collapse maps panel' : 'Expand maps panel'}
+            title={rightPanelOpen ? 'Collapse right panel' : 'Expand right panel'}
             style={{ display:'flex', alignItems:'center', justifyContent:rightPanelOpen ? 'space-between' : 'center', gap:6, padding:'8px 10px', flexShrink:0, background:'none', border:'none', borderBottom:'1px solid var(--border)', cursor:'pointer', fontFamily:'inherit', color:'var(--muted)', fontSize:12, fontWeight:600, whiteSpace:'nowrap', width:'100%' }}
           >
-            {rightPanelOpen && <span>Maps ({maps.length})</span>}
+            {rightPanelOpen && <span>Layers & Objects</span>}
             <span style={{ fontSize:13 }}>{rightPanelOpen ? '›' : '‹'}</span>
           </button>
           {rightPanelOpen && (
-            <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:3, padding:'6px 6px' }}>
+            <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:10, padding:'8px 7px' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+                {mapLayers.map(layer => {
+                  const layerObjects = layer.locked ? [] : mapObjectsForLayer(layer.id)
+                  const layerActive = activeLayerId === layer.id
+                  const objectLayerIds = mapLayers.filter(item => !item.locked).map(item => item.id)
+                  const objectLayerIndex = objectLayerIds.indexOf(layer.id)
+                  return (
+                    <div key={layer.id} style={{ border:'1px solid var(--border)', borderRadius:7, overflow:'hidden', background:layerActive ? 'color-mix(in srgb, var(--accent) 10%, var(--surface2))' : 'var(--surface2)' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 6px', borderBottom:layer.locked || layerObjects.length ? '1px solid var(--border)' : 'none' }}>
+                        <button
+                          onClick={() => setActiveLayerId(layer.id)}
+                          title={layer.locked ? 'Locked terrain base layer' : 'Select layer'}
+                          style={{ flex:1, minWidth:0, background:'none', border:'none', color:layerActive ? 'var(--text)' : 'var(--muted)', cursor:'pointer', fontFamily:'inherit', fontSize:12, fontWeight:700, textAlign:'left', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', padding:0 }}
+                        >
+                          {layer.locked ? '▣' : '▢'} {layer.name}
+                        </button>
+                        {!layer.locked && (
+                          <>
+                            <span style={{ fontSize:10, color:'var(--faint)', flexShrink:0 }}>{layerObjects.length}</span>
+                            <button onClick={() => reorderObjectLayer(layer.id, -1)} disabled={objectLayerIndex <= 0} title="Move layer up" style={{ width:22, height:22, borderRadius:5, cursor:objectLayerIndex <= 0 ? 'default' : 'pointer', background:'var(--surface)', border:'1px solid var(--border)', color:objectLayerIndex <= 0 ? 'var(--faint)' : 'var(--muted)', opacity:objectLayerIndex <= 0 ? 0.45 : 1, fontFamily:'inherit', flexShrink:0 }}>
+                              ↑
+                            </button>
+                            <button onClick={() => reorderObjectLayer(layer.id, 1)} disabled={objectLayerIndex === objectLayerIds.length - 1} title="Move layer down" style={{ width:22, height:22, borderRadius:5, cursor:objectLayerIndex === objectLayerIds.length - 1 ? 'default' : 'pointer', background:'var(--surface)', border:'1px solid var(--border)', color:objectLayerIndex === objectLayerIds.length - 1 ? 'var(--faint)' : 'var(--muted)', opacity:objectLayerIndex === objectLayerIds.length - 1 ? 0.45 : 1, fontFamily:'inherit', flexShrink:0 }}>
+                              ↓
+                            </button>
+                            <button onClick={() => toggleObjectLayer(layer.id)} title={layer.visible === false ? 'Show layer' : 'Hide layer'} style={{ width:24, height:22, borderRadius:5, cursor:'pointer', background:'var(--surface)', border:'1px solid var(--border)', color:layer.visible === false ? 'var(--faint)' : 'var(--muted)', fontFamily:'inherit', flexShrink:0 }}>
+                              {layer.visible === false ? '○' : '◉'}
+                            </button>
+                            {!effectiveViewMode && (
+                              <button onClick={() => deleteObjectLayer(layer.id)} title="Delete layer" style={{ width:22, height:22, borderRadius:5, cursor:'pointer', background:'var(--surface)', border:'1px solid var(--border)', color:'var(--faint)', fontFamily:'inherit', flexShrink:0 }}>
+                                ×
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {layer.locked ? (
+                        <div style={{ padding:'5px 8px', fontSize:11, color:'var(--faint)' }}>Base terrain</div>
+                      ) : layerObjects.length ? (
+                        <div style={{ display:'flex', flexDirection:'column', gap:2, padding:'4px' }}>
+                          {layerObjects.map(({ type, item }, objectIndex) => {
+                            const selected = selectedObject?.type === type && selectedObject?.id === item.id
+                            return (
+                              <div
+                                key={`${type}-${item.id}`}
+                                style={{ display:'flex', alignItems:'center', gap:3, width:'100%', padding:'3px', borderRadius:5, border:`1px solid ${selected ? 'var(--accent)' : 'transparent'}`, background:selected ? 'var(--accent)' : 'transparent', color:selected ? '#fff' : 'var(--muted)', minWidth:0 }}
+                              >
+                                <button
+                                  onClick={() => selectObjectFromList(type, item)}
+                                  style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0, background:'none', border:'none', color:'inherit', cursor:'pointer', fontFamily:'inherit', fontSize:11, textAlign:'left', padding:'2px 3px' }}
+                                >
+                                  <span style={{ width:16, textAlign:'center', flexShrink:0 }}>{objectIcon(type, item)}</span>
+                                  <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{objectDisplayName(type, item)}</span>
+                                  <span style={{ color:selected ? 'rgba(255,255,255,0.72)' : 'var(--faint)', fontSize:10, textTransform:'capitalize', flexShrink:0 }}>{type}</span>
+                                </button>
+                                <button onClick={() => reorderLayerObject(layer.id, type, item.id, -1)} disabled={objectIndex <= 0} title="Move object up" style={{ width:20, height:20, borderRadius:4, cursor:objectIndex <= 0 ? 'default' : 'pointer', background:selected ? 'rgba(255,255,255,0.12)' : 'var(--surface)', border:'1px solid var(--border)', color:objectIndex <= 0 ? 'var(--faint)' : 'var(--muted)', opacity:objectIndex <= 0 ? 0.45 : 1, fontFamily:'inherit', flexShrink:0 }}>↑</button>
+                                <button onClick={() => reorderLayerObject(layer.id, type, item.id, 1)} disabled={objectIndex === layerObjects.length - 1} title="Move object down" style={{ width:20, height:20, borderRadius:4, cursor:objectIndex === layerObjects.length - 1 ? 'default' : 'pointer', background:selected ? 'rgba(255,255,255,0.12)' : 'var(--surface)', border:'1px solid var(--border)', color:objectIndex === layerObjects.length - 1 ? 'var(--faint)' : 'var(--muted)', opacity:objectIndex === layerObjects.length - 1 ? 0.45 : 1, fontFamily:'inherit', flexShrink:0 }}>↓</button>
+                                {!effectiveViewMode && (
+                                  <button onClick={() => deleteMapObject(type, item.id)} title="Delete object" style={{ width:20, height:20, borderRadius:4, cursor:'pointer', background:selected ? 'rgba(255,255,255,0.12)' : 'var(--surface)', border:'1px solid var(--border)', color:selected ? 'rgba(255,255,255,0.78)' : 'var(--faint)', fontFamily:'inherit', flexShrink:0 }}>×</button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{ padding:'5px 8px', fontSize:11, color:'var(--faint)' }}>No objects</div>
+                      )}
+                    </div>
+                  )
+                })}
+                {!effectiveViewMode && (
+                  <button onClick={addObjectLayer} style={{ padding:'5px 8px', borderRadius:5, fontSize:12, cursor:'pointer', fontFamily:'inherit', background:'transparent', border:'1px dashed var(--border)', color:'var(--faint)', textAlign:'left' }}>
+                    + Add layer
+                  </button>
+                )}
+              </div>
+
+              <div style={{ height:1, background:'var(--border)' }} />
+
+              <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                <div style={{ fontSize:9, fontWeight:700, color:'var(--faint)', textTransform:'uppercase', letterSpacing:'.06em', padding:'0 2px' }}>Maps ({maps.length})</div>
               {maps.map(map => {
                 const isActive = map.id === project.activeMapId
                 return (
@@ -2350,6 +2895,7 @@ export default function MapBuilder({ store }) {
                   + New Map
                 </button>
               )}
+              </div>
             </div>
           )}
         </div>
@@ -2362,8 +2908,9 @@ export default function MapBuilder({ store }) {
           onClose={() => setPinModal(null)}
           onSave={(name, type, desc) => {
             const loc = addLocation({ name, category: type, type, description: desc, tags: ['map'], mapX: pinModal.x, mapY: pinModal.y })
-            const pin = { id: Date.now().toString(36), name, type, description: desc, locationId: loc?.id, color: YOW_PIN.shell, coreColor: YOW_PIN.core, mapX: pinModal.x, mapY: pinModal.y }
+            const pin = { id: Date.now().toString(36), name, type, description: desc, locationId: loc?.id, color: YOW_PIN.shell, coreColor: YOW_PIN.core, mapX: pinModal.x, mapY: pinModal.y, layerId: activeObjectLayerId, objectOrder: nextObjectOrderForLayer(activeObjectLayerId) }
             updateActiveMapData(m => ({ mapPins: [...(m.mapPins || []), pin] }))
+            selectMapObject('pin', pin.id)
             setPinModal(null)
             renderMap()
           }}
@@ -2374,8 +2921,9 @@ export default function MapBuilder({ store }) {
         <LabelModal
           onClose={() => setLabelModal(null)}
           onSave={(text, size, color) => {
-            const label = { id: Date.now().toString(36), text, size, color, outline: 'rgba(12, 12, 10, 0.82)', mapX: labelModal.x, mapY: labelModal.y }
+            const label = { id: Date.now().toString(36), text, size, color, outline: 'rgba(12, 12, 10, 0.82)', mapX: labelModal.x, mapY: labelModal.y, layerId: activeObjectLayerId, objectOrder: nextObjectOrderForLayer(activeObjectLayerId) }
             updateActiveMapData(m => ({ mapLabels: [...(m.mapLabels || []), label] }))
+            selectMapObject('label', label.id)
             setLabelModal(null)
             setTimeout(renderMap, 0)
           }}
@@ -2387,8 +2935,9 @@ export default function MapBuilder({ store }) {
           onClose={() => { setRegionModal(null); setRegionDraft(null) }}
           onSave={(name, color, desc) => {
             const loc = addLocation({ name, category: 'Kingdom/Region', type: 'Region', description: desc, tags: ['map', 'region'] })
-            const region = { id: Date.now().toString(36), name, color, fill: `${color}38`, locationId: loc?.id, description: desc, points: regionModal.points.map(p => ({ x: p.x / MAP_W, y: p.y / MAP_H })) }
+            const region = { id: Date.now().toString(36), name, color, fill: `${color}38`, locationId: loc?.id, description: desc, points: regionModal.points.map(p => ({ x: p.x / MAP_W, y: p.y / MAP_H })), layerId: activeObjectLayerId, objectOrder: nextObjectOrderForLayer(activeObjectLayerId) }
             updateActiveMapData(m => ({ mapRegions: [...(m.mapRegions || []), region] }))
+            selectMapObject('region', region.id)
             setRegionModal(null)
             setRegionDraft(null)
           }}
@@ -2413,7 +2962,7 @@ export default function MapBuilder({ store }) {
 
 // ---- New Map modal ----
 function NewMapModal({ onClose, onCreate }) {
-  const [selectedType, setSelectedType] = useState(null)
+  const [selectedType, setSelectedType] = useState('world')
   const [name, setName] = useState('')
   const [importFile, setImportFile] = useState(null)
   const fileInputRef = useRef(null)
@@ -2448,8 +2997,8 @@ function NewMapModal({ onClose, onCreate }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Map Type *</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+            <label className="form-label">Map Type</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginTop: 4 }}>
               {NEW_MAP_TYPES.map(t => (
                 <button
                   key={t.id}
@@ -2528,7 +3077,7 @@ function ToolGroup({ label, tools, active, onSelect, wrap }) {
             key={t.id}
             onClick={() => onSelect(t.id)}
             style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+              padding: '3px 7px', borderRadius: 6, fontSize: 10.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
               background: active === t.id ? 'var(--accent)' : 'var(--surface2)',
               border: `1px solid ${active === t.id ? 'var(--accent)' : 'var(--border)'}`,
               color: active === t.id ? '#fff' : 'var(--muted)',
@@ -2541,9 +3090,6 @@ function ToolGroup({ label, tools, active, onSelect, wrap }) {
   )
 }
 
-function Divider() {
-  return <div style={{ width: 1, height: 36, background: 'var(--border)', alignSelf: 'flex-end', marginBottom: 2, marginLeft: 2, marginRight: 2 }} />
-}
 
 function GenerateMapModal({ mapType, settings, onClose, onGenerate }) {
   const [draft, setDraft] = useState(settings)

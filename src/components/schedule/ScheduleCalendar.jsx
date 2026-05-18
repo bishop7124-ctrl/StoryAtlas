@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 
 const DAYS_PER_MONTH = 30
-const DAYS_PER_WEEK = 7
 
 const MONTH_NAMES = [
   '', 'First Month', 'Second Month', 'Third Month', 'Fourth Month',
@@ -325,7 +324,7 @@ export default function ScheduleCalendar({ store }) {
 
   const openCreate = day => setModal({ type: 'create', day })
   const openDetail = event => setModal({ type: 'detail', event })
-  const openEdit = event => setModal({ type: 'edit', event })
+
   const closeModal = () => setModal(null)
 
   return (

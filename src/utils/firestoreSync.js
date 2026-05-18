@@ -22,6 +22,7 @@ export async function loadUserData(userId) {
     activeMapByNovel: d.activeMapByNovel ?? {},
     whiteboards:   d.whiteboards   ?? [],
     series:        d.series        ?? [],
+    storySchedule: d.storySchedule ?? [],
     currentYear:   d.currentYear   ?? 0,
     activeNovelId: d.activeNovelId ?? null,
     scenes: (scenesData ?? []).map(s => s.data)

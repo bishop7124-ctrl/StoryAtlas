@@ -80,10 +80,18 @@ function LocationForm({ initial, onSave, onCancel }) {
 export default function Locations({ store }) {
   const { locations, saveLocation, deleteLocation, selectedLocationId, setSelectedLocationId } = store
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('name-asc')
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
 
-  const filtered = (locations || []).filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
+  const filtered = (locations || [])
+    .filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'name-asc') return (a.name || '').localeCompare(b.name || '')
+      if (sortBy === 'name-desc') return (b.name || '').localeCompare(a.name || '')
+      if (sortBy === 'category') return (a.category || '').localeCompare(b.category || '')
+      return 0
+    })
   const selected = (locations || []).find(l => l.id === selectedLocationId)
 
   return (
@@ -94,6 +102,11 @@ export default function Locations({ store }) {
         tools={<StudioButton tone="primary" size="sm" onClick={()=>{setEditTarget(null);setShowForm(true)}}>New</StudioButton>}
       >
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." className="field w-full px-2 py-1.5 text-xs placeholder:text-[var(--text-muted)]" />
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="field w-full px-2 py-1.5 text-xs">
+            <option value="name-asc">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+            <option value="category">Category</option>
+          </select>
           {filtered.map(l => (
             <StudioRecord
               key={l.id}

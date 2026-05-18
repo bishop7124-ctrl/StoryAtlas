@@ -14,9 +14,18 @@ export default function Factions({ store }) {
   const [editTarget, setEditTarget] = useState(null)
   const [selectedFactionId, setSelectedFactionId] = useState(null)
   const [form, setForm] = useState(emptyForm())
+  const [sortBy, setSortBy] = useState('name-asc')
 
   const activeFaction = factions.find(f => f.id === selectedFactionId)
   const factionMembers = characters.filter(c => c.factionId === selectedFactionId)
+  const memberCount = (f) => characters.filter(c => c.factionId === f.id).length
+  const sortedFactions = [...factions].sort((a, b) => {
+    if (sortBy === 'name-asc') return a.name.localeCompare(b.name)
+    if (sortBy === 'name-desc') return b.name.localeCompare(a.name)
+    if (sortBy === 'members-desc') return memberCount(b) - memberCount(a)
+    if (sortBy === 'members-asc') return memberCount(a) - memberCount(b)
+    return 0
+  })
 
   const openCreate = () => {
     setEditTarget(null)
@@ -25,7 +34,7 @@ export default function Factions({ store }) {
   }
 
   const openEdit = (e, faction) => {
-    e.stopPropagation()
+    e?.stopPropagation()
     setEditTarget(faction)
     setForm({ name: faction.name, logo: faction.logo || [], description: faction.description || '' })
     setShowForm(true)
@@ -83,8 +92,17 @@ export default function Factions({ store }) {
         </div>
 
         {!selectedFactionId ? (
+          <>
+            <div className="mb-4">
+              <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="field px-2 py-1.5 text-xs">
+                <option value="name-asc">Name A→Z</option>
+                <option value="name-desc">Name Z→A</option>
+                <option value="members-desc">Most Members</option>
+                <option value="members-asc">Fewest Members</option>
+              </select>
+            </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {factions.map(faction => (
+            {sortedFactions.map(faction => (
               <div
                 key={faction.id}
                 onClick={() => setSelectedFactionId(faction.id)}
@@ -101,22 +119,36 @@ export default function Factions({ store }) {
                     </span>
                   </div>
                   <p className="text-[var(--text-muted)] text-sm mt-1 line-clamp-2">{faction.description || 'No description provided.'}</p>
-                  <div className="flex gap-3 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={(e) => openEdit(e, faction)} className="text-xs text-[var(--accent)] hover:underline">Edit</button>
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={(e) => openEdit(e, faction)}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Edit
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); if (confirm('Delete?')) setFactions(f => f.filter(x => x.id !== faction.id)) }} className="text-xs text-red-500/60 hover:text-red-500 hover:underline">Delete</button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+          </>
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="panel p-8 flex gap-8">
               <div className="w-32 h-32 flex items-center justify-center rounded-xl border border-[var(--border)] bg-[#0c0c12] flex-shrink-0">
                 <FactionLogo shapes={activeFaction.logo} size={110} />
               </div>
-              <div>
-                <h2 className="text-xs font-bold text-[var(--accent)] uppercase tracking-[0.2em] mb-2">Organization Profile</h2>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <h2 className="text-xs font-bold text-[var(--accent)] uppercase tracking-[0.2em]">Organization Profile</h2>
+                  <button
+                    onClick={(e) => openEdit(e, activeFaction)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Edit
+                  </button>
+                </div>
                 <p className="text-[var(--text-main)] text-lg leading-relaxed max-w-2xl">
                   {activeFaction.description || 'Historical records for this faction are currently being compiled.'}
                 </p>

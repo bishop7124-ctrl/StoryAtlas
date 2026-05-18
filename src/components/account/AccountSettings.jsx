@@ -34,8 +34,122 @@ function PlanBadge({ membership }) {
   )
 }
 
+function getProfileDraft(user) {
+  const metadata = user?.user_metadata || {}
+  return {
+    fullName: metadata.full_name || metadata.name || user?.displayName || '',
+    alias: metadata.alias || metadata.writer_alias || '',
+    bio: metadata.bio || '',
+    website: metadata.website || '',
+    avatarUrl: metadata.avatar_url || user?.photoURL || '',
+  }
+}
+
+function ProfileDetails({ user, updateProfile }) {
+  const [profileDraft, setProfileDraft] = useState(() => getProfileDraft(user))
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [profileMessage, setProfileMessage] = useState('')
+  const [profileError, setProfileError] = useState('')
+  const profileDisplayName = profileDraft.fullName.trim() || profileDraft.alias.trim() || user.email?.split('@')[0] || 'Writer'
+  const avatarInitial = profileDisplayName[0]?.toUpperCase() || '?'
+  const createdAt = user.created_at || user.createdAt
+
+  const updateProfileField = (field) => (event) => {
+    setProfileDraft(current => ({ ...current, [field]: event.target.value }))
+    setProfileMessage('')
+    setProfileError('')
+  }
+
+  const saveProfile = async (event) => {
+    event.preventDefault()
+
+    try {
+      setProfileBusy(true)
+      setProfileMessage('')
+      setProfileError('')
+      const nextProfile = {
+        ...(user.user_metadata || {}),
+        full_name: profileDraft.fullName.trim(),
+        name: profileDraft.fullName.trim(),
+        alias: profileDraft.alias.trim(),
+        writer_alias: profileDraft.alias.trim(),
+        bio: profileDraft.bio.trim(),
+        website: profileDraft.website.trim(),
+        avatar_url: profileDraft.avatarUrl.trim(),
+      }
+      await updateProfile(nextProfile)
+      setProfileMessage('Profile details saved.')
+    } catch (error) {
+      setProfileError(error.message || 'Profile details could not be saved right now.')
+    } finally {
+      setProfileBusy(false)
+    }
+  }
+
+  return (
+    <section className="account-settings-panel account-profile-panel">
+      <div className="account-panel-heading">
+        <div>
+          <p className="eyebrow">Profile</p>
+          <h2>Writer details</h2>
+        </div>
+        <div className="account-profile-avatar" aria-hidden="true">
+          {profileDraft.avatarUrl ? (
+            <img src={profileDraft.avatarUrl} alt="" referrerPolicy="no-referrer" />
+          ) : (
+            <span>{avatarInitial}</span>
+          )}
+        </div>
+      </div>
+
+      <form className="account-profile-form" onSubmit={saveProfile}>
+        <label>
+          <span>Name</span>
+          <input value={profileDraft.fullName} onChange={updateProfileField('fullName')} placeholder="Your name" />
+        </label>
+        <label>
+          <span>Writing alias</span>
+          <input value={profileDraft.alias} onChange={updateProfileField('alias')} placeholder="Pen name or studio name" />
+        </label>
+        <label className="account-profile-wide">
+          <span>Bio</span>
+          <textarea value={profileDraft.bio} onChange={updateProfileField('bio')} placeholder="A short note for your creative profile" rows={4} />
+        </label>
+        <label>
+          <span>Website</span>
+          <input value={profileDraft.website} onChange={updateProfileField('website')} placeholder="https://example.com" inputMode="url" />
+        </label>
+        <label>
+          <span>Avatar URL</span>
+          <input value={profileDraft.avatarUrl} onChange={updateProfileField('avatarUrl')} placeholder="https://..." inputMode="url" />
+        </label>
+
+        <div className="account-profile-summary account-profile-wide">
+          <div>
+            <span>Email</span>
+            <strong>{user.email}</strong>
+          </div>
+          <div>
+            <span>Account created</span>
+            <strong>{createdAt ? formatter.format(new Date(createdAt)) : 'Unknown'}</strong>
+          </div>
+        </div>
+
+        <div className="account-actions account-profile-wide">
+          <button type="submit" className="account-primary-button" disabled={profileBusy}>
+            {profileBusy ? 'Saving...' : 'Save profile'}
+          </button>
+        </div>
+
+        {profileMessage && <p className="account-success account-profile-wide">{profileMessage}</p>}
+        {profileError && <p className="account-error account-profile-wide">{profileError}</p>}
+      </form>
+    </section>
+  )
+}
+
 export default function AccountSettings({ open, onClose }) {
-  const { user, getAccessToken } = useAuth()
+  const { user, getAccessToken, updateProfile } = useAuth()
   const membership = useMemo(() => getMembership(user), [user])
   const [billingBusy, setBillingBusy] = useState('')
   const [billingError, setBillingError] = useState('')
@@ -45,7 +159,7 @@ export default function AccountSettings({ open, onClose }) {
   const openBilling = async (type) => {
     const endpoint = billingEndpoints[type]
     if (!endpoint) {
-      setBillingError('Billing endpoints are not configured yet.')
+      setBillingError('Paid memberships are coming soon. Check back shortly!')
       return
     }
 
@@ -82,6 +196,8 @@ export default function AccountSettings({ open, onClose }) {
         </header>
 
         <main className="account-settings-grid">
+          <ProfileDetails key={user.id} user={user} updateProfile={updateProfile} />
+
           <section className="account-settings-panel">
             <div className="account-panel-heading">
               <div>
@@ -96,9 +212,7 @@ export default function AccountSettings({ open, onClose }) {
                 <p className="account-plan-name">Paid membership</p>
                 <p className="account-plan-price">£{MEMBERSHIP_PRICE_GBP}<span>/pm</span></p>
               </div>
-              <p>
-                Full editing access after the free trial, with payment handled through Stripe Checkout and subscription changes handled through Stripe Customer Portal.
-              </p>
+              <p>Full editing access beyond the free trial period.</p>
             </div>
 
             <div className="account-status-list">
@@ -144,16 +258,6 @@ export default function AccountSettings({ open, onClose }) {
             {billingError && <p className="account-error">{billingError}</p>}
           </section>
 
-          <aside className="account-settings-panel account-setup-panel">
-            <p className="eyebrow">Payment setup</p>
-            <h2>Recommended integration</h2>
-            <p>
-              Use a Supabase Edge Function to create Stripe Checkout sessions for the £10 monthly subscription, then update each user’s server metadata from Stripe webhooks.
-            </p>
-            <p>
-              Configure `VITE_CREATE_CHECKOUT_SESSION_URL` and `VITE_CUSTOMER_PORTAL_URL` when those functions are deployed.
-            </p>
-          </aside>
         </main>
       </div>
     </div>

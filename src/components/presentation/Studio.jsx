@@ -14,7 +14,6 @@ export function StudioFrame({
   contextRail,
   contextRailOpen = true,
   onToggleContextRail,
-  actions,
   topBar,
   utilityContent,
   children,
@@ -26,18 +25,17 @@ export function StudioFrame({
       <header className="studio-spine" aria-label="Studio navigation">
         <div className="studio-brand" title={`${projectTitle} - ${projectType}`}>
           <div className="studio-brand-mark"><YOWLogo /></div>
-          <div>
-            <p className="studio-kicker">Your Own World</p>
+          <div className="studio-brand-text">
+            <span className="studio-kicker">Your Own World</span>
+            <span className="studio-brand-sep">·</span>
             <h1>{projectTitle}</h1>
           </div>
-          {account && <div className="studio-account-slot">{account}</div>}
+          {primaryAction && (
+            <div className="studio-primary-action">
+              {primaryAction}
+            </div>
+          )}
         </div>
-
-        {primaryAction && (
-          <div className="studio-primary-action">
-            {primaryAction}
-          </div>
-        )}
 
         <nav className="studio-room-list" aria-label="Workspace">
           {rooms.map(room => (
@@ -64,6 +62,8 @@ export function StudioFrame({
           )}
           {utilityContent}
         </div>
+
+        {account && <div className="studio-account-slot">{account}</div>}
       </header>
 
       {children}
@@ -96,7 +96,7 @@ export function StudioWorkspace({
   children,
 }) {
   return (
-    <main className={`studio-workspace studio-workspace-${roomId}`}>
+    <main className={cx('studio-workspace', `studio-workspace-${roomId}`, tabs && 'has-tabs')}>
       <header className="studio-workspace-header">
         <div className="studio-title-block">
           {eyebrow && <p className="studio-kicker">{eyebrow}</p>}

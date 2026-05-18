@@ -1,9 +1,12 @@
-// Renders a faction logo from an array of shape objects.
+// Renders a faction logo from an array of shape objects, or a logo object.
 // Each shape: { id, type, cx, cy, size, color }
 
+import { normalizeFactionLogo } from './logoData'
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function getShapeElement(shape, extraProps = {}) {
   const { type, cx, cy, size, color } = shape
-  const base = { fill: color, ...extraProps }
+  const base = { fill: color || 'currentColor', ...extraProps }
 
   switch (type) {
     case 'circle':
@@ -72,9 +75,12 @@ export function getShapeElement(shape, extraProps = {}) {
 }
 
 export default function FactionLogo({ shapes = [], size = 64 }) {
-  if (!shapes || shapes.length === 0) {
+  const logo = normalizeFactionLogo(shapes)
+
+  if (logo.shapes.length === 0) {
     return (
       <svg viewBox="0 0 100 100" width={size} height={size}>
+        {!logo.backgroundTransparent && <rect width="100" height="100" fill={logo.backgroundColor} />}
         <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray="8 4" opacity="0.3" />
         <text x="50" y="57" textAnchor="middle" fontSize="32" fill="currentColor" opacity="0.25">?</text>
       </svg>
@@ -83,7 +89,8 @@ export default function FactionLogo({ shapes = [], size = 64 }) {
 
   return (
     <svg viewBox="0 0 100 100" width={size} height={size}>
-      {shapes.map((shape, i) => (
+      {!logo.backgroundTransparent && <rect width="100" height="100" fill={logo.backgroundColor} />}
+      {logo.shapes.map((shape, i) => (
         <g key={shape.id || i}>
           {getShapeElement(shape)}
         </g>

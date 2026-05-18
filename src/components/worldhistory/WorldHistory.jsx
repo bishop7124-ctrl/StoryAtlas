@@ -70,6 +70,7 @@ function HistoryForm({ initial, onSave, onCancel }) {
 export default function WorldHistory({ store }) {
   const { worldHistory, addHistoryEntry, updateHistoryEntry, deleteHistoryEntry } = store
   const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('title-asc')
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
@@ -89,12 +90,23 @@ export default function WorldHistory({ store }) {
     (h.content || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const grouped = filtered.reduce((acc, h) => {
+  const entrySorter = (a, b) => {
+    if (sortBy === 'title-asc' || sortBy === 'era-asc' || sortBy === 'era-desc') return a.title.localeCompare(b.title)
+    if (sortBy === 'title-desc') return b.title.localeCompare(a.title)
+    return 0
+  }
+  const groups = filtered.reduce((acc, h) => {
     const era = h.era || 'Unknown Era'
     if (!acc[era]) acc[era] = []
     acc[era].push(h)
     return acc
   }, {})
+  Object.keys(groups).forEach(era => groups[era].sort(entrySorter))
+  const grouped = (sortBy === 'era-asc')
+    ? Object.fromEntries(Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)))
+    : (sortBy === 'era-desc')
+      ? Object.fromEntries(Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)))
+      : groups
 
   const closeForm = () => { setShowForm(false); setEditTarget(null) }
 
@@ -125,8 +137,20 @@ export default function WorldHistory({ store }) {
         tools={<StudioButton tone="primary" size="sm" onClick={() => { setEditTarget(null); setShowForm(true) }}>New</StudioButton>}
       >
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" className="field w-full px-2.5 py-1.5 text-xs placeholder:text-[var(--text-muted)]" />
-          {filtered.length === 0 && (
-            <p className="text-[var(--text-muted)] text-xs p-4 text-center">{(worldHistory || []).length === 0 ? 'No entries yet.' : 'No matches.'}</p>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="field w-full px-2 py-1.5 text-xs">
+            <option value="title-asc">Title A→Z</option>
+            <option value="title-desc">Title Z→A</option>
+            <option value="era-asc">Era A→Z</option>
+            <option value="era-desc">Era Z→A</option>
+          </select>
+          {filtered.length === 0 && (worldHistory || []).length === 0 && (
+            <div className="p-4 text-center space-y-2">
+              <p className="text-[var(--text-muted)] text-xs">No history entries yet.</p>
+              <p className="text-[var(--text-muted)] text-[10px] leading-relaxed">Add world-building events — ages, eras, wars, founding myths — using the New button above. Timeline events also appear here automatically.</p>
+            </div>
+          )}
+          {filtered.length === 0 && (worldHistory || []).length > 0 && (
+            <p className="text-[var(--text-muted)] text-xs p-4 text-center">No matches.</p>
           )}
           {Object.entries(grouped).map(([era, entries]) => (
             <div key={era}>
