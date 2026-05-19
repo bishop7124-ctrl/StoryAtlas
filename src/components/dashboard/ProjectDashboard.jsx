@@ -248,7 +248,7 @@ const NAV_ROOMS = [
     getSummary: (stats) => {
       const parts = []
       if (stats.timeline.length) parts.push(`${stats.timeline.length} events`)
-      if (stats.worldHistory.length) parts.push(`${stats.worldHistory.length} eras`)
+      if (stats.worldHistory.length) parts.push(`${stats.worldHistory.length} events`)
       return parts.join(' · ') || '0 events'
     },
   },

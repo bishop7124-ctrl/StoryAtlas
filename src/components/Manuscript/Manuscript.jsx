@@ -965,18 +965,6 @@ export default function Manuscript({ store }) {
           )}
           Manuscript
         </button>
-        <div className="w-px bg-[var(--border)] self-stretch my-1.5" />
-        <button
-          onClick={() => setView('outline')}
-          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
-            view === 'outline' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
-        >
-          {view === 'outline' && (
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
-          )}
-          Outline
-        </button>
       </div>
 
       {/* Top toolbar — only shown in manuscript view */}
@@ -1136,12 +1124,6 @@ export default function Manuscript({ store }) {
           </aside>
         )}
 
-        {/* Outline editor view */}
-        {view === 'outline' && (
-          <div className="flex-1 overflow-hidden">
-            <StoryOutline store={store} />
-          </div>
-        )}
       </div>
 
       {/* Outline summary popup */}

@@ -121,10 +121,6 @@ function AppInner() {
     setDataLoading(true)
     loadUserData(userId)
       .then(data => {
-        if (!hasRemoteData(data) && hasLocalData()) {
-          finishRemoteLoad()
-          return
-        }
         importData(data)
       })
       .catch(error => {

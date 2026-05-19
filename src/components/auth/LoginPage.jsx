@@ -81,8 +81,8 @@ export default function LoginPage() {
   const { signIn, signUp } = useAuth()
   const [screen, setScreen] = useState('home')
   const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState(import.meta.env.VITE_DEV_EMAIL ?? '')
+  const [password, setPassword] = useState(import.meta.env.VITE_DEV_PASSWORD ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
@@ -243,6 +243,15 @@ export default function LoginPage() {
                   </p>
                 </div>
                 <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+                  Already confirmed?{' '}
+                  <button
+                    onClick={() => { setSent(false); setMode('login'); setError('') }}
+                    className="text-[var(--accent)] hover:underline font-medium"
+                  >
+                    Go to login
+                  </button>
+                </p>
+                <p className="mt-3 text-center text-sm text-[var(--text-muted)]">
                   Wrong address?{' '}
                   <button
                     onClick={() => { setSent(false); setEmail(''); setPassword('') }}

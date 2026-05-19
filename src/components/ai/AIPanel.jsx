@@ -6,10 +6,10 @@ const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) 
 const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
 
 const DEFAULT_SETTINGS = {
-  activeProvider: 'google',
+  activeProvider: 'openrouter',
   google:      { apiKey: '', model: 'gemini-2.0-flash' },
   anthropic:   { apiKey: '', model: 'claude-sonnet-4-6' },
-  openrouter:  { apiKey: '', model: 'google/gemma-3-27b-it' },
+  openrouter:  { apiKey: import.meta.env.VITE_OPENROUTER_API_KEY ?? '', model: 'google/gemma-3-27b-it' },
   openai:      { apiKey: '', model: '', baseUrl: 'https://api.openai.com/v1' },
 }
 
@@ -511,7 +511,17 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
 
 export default function AIPanel({ store, open, onClose, initialContext, docked = false, onPopOut }) {
   const novelId = store.activeNovelId
-  const [aiSettings, setAiSettings] = useState(() => ({ ...DEFAULT_SETTINGS, ...load('nf_aiSettings', {}) }))
+  const [aiSettings, setAiSettings] = useState(() => {
+    const stored = load('nf_aiSettings', {})
+    const merged = { ...DEFAULT_SETTINGS, ...stored }
+    // Fill in env-seeded keys only when the stored value is blank
+    for (const [prov, def] of Object.entries(DEFAULT_SETTINGS)) {
+      if (typeof def === 'object' && def.apiKey && !merged[prov]?.apiKey) {
+        merged[prov] = { ...merged[prov], apiKey: def.apiKey }
+      }
+    }
+    return merged
+  })
   const [sessions,   setSessions]   = useState(() => load(`nf_chats_${novelId}`, []))
   const [view,       setView]       = useState('sessions') // 'sessions' | 'settings' | 'context' | 'chat'
   const [activeId,   setActiveId]   = useState(null)

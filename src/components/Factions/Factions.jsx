@@ -108,7 +108,7 @@ export default function Factions({ store }) {
                 onClick={() => setSelectedFactionId(faction.id)}
                 className="panel p-5 flex items-start gap-5 hover:border-[var(--accent)]/50 cursor-pointer transition-all group"
               >
-                <div className="w-16 h-16 flex items-center justify-center rounded-lg border border-[var(--border)] bg-[#0c0c12] flex-shrink-0">
+                <div className="w-16 h-16 flex items-center justify-center rounded-lg border border-[var(--border)] flex-shrink-0">
                   <FactionLogo shapes={faction.logo} size={52} />
                 </div>
                 <div className="flex-1">
@@ -136,7 +136,7 @@ export default function Factions({ store }) {
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="panel p-8 flex gap-8">
-              <div className="w-32 h-32 flex items-center justify-center rounded-xl border border-[var(--border)] bg-[#0c0c12] flex-shrink-0">
+              <div className="w-32 h-32 flex items-center justify-center rounded-xl border border-[var(--border)] flex-shrink-0">
                 <FactionLogo shapes={activeFaction.logo} size={110} />
               </div>
               <div className="flex-1 min-w-0">
