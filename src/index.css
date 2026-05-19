@@ -858,23 +858,19 @@ body {
 .studio-workspace {
   min-width: 0;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 16px;
 }
 
-.studio-workspace.has-tabs {
-  grid-template-rows: auto auto minmax(0, 1fr);
-}
-
 .studio-workspace-header {
-  min-height: 104px;
+  min-height: 52px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 22px;
+  padding: 8px 16px;
   border: 1px solid var(--border);
   border-radius: 5px 5px 18px 5px;
   background:
@@ -885,10 +881,10 @@ body {
 }
 
 .studio-workspace-header h2 {
-  margin: 5px 0 0;
-  font-size: clamp(30px, 4.2vw, 58px);
-  line-height: .9;
-  font-weight: 900;
+  margin: 2px 0 0;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.2;
+  font-weight: 700;
 }
 
 .studio-header-meta {
@@ -940,6 +936,7 @@ body {
 }
 
 .studio-surface {
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 86%, #000);
@@ -1083,20 +1080,20 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 28px;
-  padding-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .studio-page-header h1,
 .studio-wall-title {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: var(--studio-ink);
   font-family: var(--font-serif);
-  font-size: clamp(38px, 5vw, 68px);
-  line-height: .92;
-  font-weight: 900;
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1.2;
+  font-weight: 800;
 }
 
 .studio-page-header p:not(.studio-kicker) {
@@ -1296,6 +1293,16 @@ textarea:focus {
   justify-content: flex-end;
   background: linear-gradient(90deg, rgba(0,0,0,.12), rgba(0,0,0,.68));
   backdrop-filter: blur(5px);
+}
+
+.studio-sheet-backdrop.is-centered {
+  justify-content: center;
+  align-items: center;
+}
+
+.studio-sheet.is-centered {
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.44);
 }
 
 .studio-sheet,
@@ -2527,14 +2534,6 @@ textarea:focus {
   width: 100%;
 }
 
-.studio-workspace {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.studio-workspace.has-tabs {
-  grid-template-rows: auto auto minmax(0, 1fr);
-}
-
 .studio-surface {
   border-radius: 5px 18px 5px 5px;
   background:
@@ -2550,8 +2549,8 @@ textarea:focus {
 }
 
 .studio-workspace-header {
-  min-height: 104px;
-  align-items: flex-end;
+  min-height: 52px;
+  align-items: center;
   border-radius: 5px 5px 18px 5px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--studio-paper) 68%, transparent), color-mix(in srgb, var(--bg-nav) 64%, transparent)),
@@ -2561,9 +2560,9 @@ textarea:focus {
 }
 
 .studio-workspace-header h2 {
-  font-size: clamp(30px, 4.2vw, 58px);
-  line-height: .9;
-  font-weight: 900;
+  font-size: clamp(15px, 1.2vw, 18px);
+  line-height: 1.2;
+  font-weight: 700;
 }
 
 .studio-section-tabs,
@@ -2933,8 +2932,8 @@ body {
 .studio-workspace {
   min-width: 0;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 0;
   padding: 0;
   background:
@@ -2943,12 +2942,12 @@ body {
 }
 
 .studio-workspace-header {
-  min-height: 58px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 12px 20px;
+  padding: 6px 20px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: 0;
@@ -2957,10 +2956,10 @@ body {
 }
 
 .studio-workspace-header h2 {
-  margin: 1px 0 0;
+  margin: 0;
   color: var(--text-main);
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 660;
   line-height: 1.2;
 }
@@ -3012,6 +3011,7 @@ body {
 }
 
 .studio-surface {
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   border: 0;
@@ -3020,6 +3020,11 @@ body {
     linear-gradient(180deg, color-mix(in srgb, var(--text-main) 2%, transparent), transparent 150px),
     var(--bg-main);
   box-shadow: inset 1px 0 0 color-mix(in srgb, var(--border) 34%, transparent);
+}
+
+.studio-workspace-footer {
+  border-top: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--bg-nav);
 }
 
 .studio-workspace-manuscript .studio-surface {
@@ -3090,20 +3095,20 @@ body {
 
 .studio-page-header,
 .page-header {
-  margin-bottom: 26px;
-  padding-bottom: 18px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
 }
 
 .studio-page-header h1,
 .studio-wall-title,
 .page-title {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--text-main);
   font-family: var(--font-serif);
-  font-size: clamp(28px, 3.4vw, 48px);
-  line-height: 1.04;
-  font-weight: 520;
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1.2;
+  font-weight: 700;
 }
 
 .studio-note,
@@ -4040,9 +4045,10 @@ textarea:focus {
 }
 
 .timeline-list {
+  --tl-axis: clamp(28px, 4vw, 44px);
   width: min(100%, 760px);
   margin: 0 auto;
-  padding: clamp(22px, 4vw, 48px) clamp(16px, 4vw, 38px) 90px;
+  padding: clamp(22px, 4vw, 48px) clamp(16px, 4vw, 38px) 90px 0;
   position: relative;
 }
 
@@ -4051,26 +4057,49 @@ textarea:focus {
   position: absolute;
   top: 42px;
   bottom: 90px;
-  left: clamp(30px, calc(4vw + 10px), 48px);
+  left: var(--tl-axis);
   width: 1px;
   background: color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 .timeline-item {
   position: relative;
-  padding-left: clamp(30px, 5vw, 42px);
+  padding-left: calc(var(--tl-axis) + 20px);
 }
 
 .timeline-item + .timeline-item {
   margin-top: clamp(18px, 3vw, 28px);
 }
 
+.timeline-dot {
+  position: absolute;
+  left: var(--tl-axis);
+  top: 22px;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 72%, var(--border));
+  border-radius: 999px;
+  background: var(--bg-main);
+  box-shadow: 0 0 0 4px var(--bg-main);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.timeline-item.is-history .timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-color: color-mix(in srgb, var(--text-muted) 64%, var(--border));
+}
+
+.timeline-item.is-expanded .timeline-dot {
+  background: var(--accent);
+}
+
 .timeline-item-main {
   width: 100%;
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: clamp(12px, 2vw, 18px);
-  padding: 12px clamp(12px, 2vw, 16px) 12px 0;
+  display: block;
+  padding: 12px clamp(12px, 2vw, 16px);
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg-nav) 34%, transparent);
@@ -4078,7 +4107,7 @@ textarea:focus {
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .timeline-item-main:hover {
@@ -4091,37 +4120,8 @@ textarea:focus {
   background: color-mix(in srgb, var(--accent-fade) 56%, transparent);
 }
 
-.timeline-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 22px;
-  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--border));
-  border-radius: 999px;
-  background: var(--bg-main);
-  box-shadow: 0 0 0 6px var(--bg-main);
-}
-
-.timeline-item.is-history .timeline-dot {
-  width: 12px;
-  height: 12px;
-  border-color: color-mix(in srgb, var(--text-muted) 64%, var(--border));
-}
-
-.timeline-item.is-birthday .timeline-dot {
-  width: 6px;
-  height: 6px;
-  margin-top: 17px;
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--text-muted));
-  box-shadow: 0 0 0 5px var(--bg-main);
-}
-
-.timeline-item.is-expanded .timeline-dot {
-  background: var(--accent);
-}
-
 .timeline-item-copy {
   display: block;
-  padding-bottom: 0;
 }
 
 .timeline-date {
@@ -4154,44 +4154,89 @@ textarea:focus {
   -webkit-line-clamp: 2;
 }
 
+/* Birthday items: dot-only, tooltip on hover */
 .timeline-item.is-birthday {
-  padding-left: clamp(34px, 5vw, 46px);
+  height: 14px;
+  padding-left: 0;
 }
 
 .timeline-item.is-birthday + .timeline-item,
 .timeline-item + .timeline-item.is-birthday {
-  margin-top: clamp(12px, 2.3vw, 20px);
+  margin-top: clamp(8px, 1.5vw, 14px);
 }
 
-.timeline-item.is-birthday .timeline-item-main {
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
-  padding-top: 5px;
-  padding-bottom: 5px;
-  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
-  background: color-mix(in srgb, var(--accent-fade) 32%, transparent);
+.timeline-item.is-birthday .timeline-dot {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 7px;
+  height: 7px;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--text-muted));
+  box-shadow: 0 0 0 3px var(--bg-main);
 }
 
-.timeline-item.is-birthday .timeline-item-copy {
-  padding-bottom: 0;
+.timeline-birthday-row {
+  position: relative;
+  height: 100%;
 }
 
-.timeline-item.is-birthday .timeline-date {
-  color: color-mix(in srgb, var(--accent) 78%, var(--text-muted));
-  font-size: 8px;
+.timeline-birthday-row:hover .timeline-dot {
+  background: color-mix(in srgb, var(--accent) 40%, var(--bg-main));
+  border-color: var(--accent);
 }
 
-.timeline-item.is-birthday .timeline-item-copy strong {
-  margin-top: 2px;
-  color: color-mix(in srgb, var(--text-main) 82%, var(--text-muted));
-  font-family: var(--font);
-  font-size: clamp(10px, 1.2vw, 12px);
-  font-weight: 640;
-  line-height: 1.25;
-}
-
-.timeline-item.is-birthday .timeline-item-copy small {
+.timeline-birthday-tooltip {
   display: none;
+  position: absolute;
+  left: calc(var(--tl-axis) + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-nav);
+  border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+  border-radius: 7px;
+  padding: 7px 11px;
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: 0 4px 16px color-mix(in srgb, #000 18%, transparent);
+  pointer-events: none;
+}
+
+.timeline-birthday-row:hover .timeline-birthday-tooltip {
+  display: block;
+}
+
+.timeline-birthday-tooltip-date {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 640;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.timeline-birthday-tooltip-name {
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.3;
+}
+
+.timeline-birthday-tooltip-role {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Current year badge */
+.timeline-current-year {
+  font-size: 11px;
+  font-weight: 560;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent-fade) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 6px;
+  padding: 3px 9px;
+  letter-spacing: .02em;
+  white-space: nowrap;
 }
 
 .timeline-detail {
@@ -4234,22 +4279,20 @@ textarea:focus {
 
 @media (max-width: 640px) {
   .timeline-list {
-    padding-inline: 14px;
+    --tl-axis: 26px;
+    padding-inline-end: 14px;
   }
 
-  .timeline-list::before {
-    left: 28px;
+  .timeline-item {
+    padding-left: calc(var(--tl-axis) + 14px);
   }
 
-  .timeline-item,
   .timeline-item.is-birthday {
-    padding-left: 26px;
+    padding-left: 0;
   }
 
   .timeline-item-main {
-    grid-template-columns: 14px minmax(0, 1fr);
-    gap: 10px;
-    padding-right: 4px;
+    padding: 10px 10px;
   }
 }
 
@@ -5600,8 +5643,8 @@ body {
   }
 
   .studio-workspace-header h2 {
-    font-size: 21px;
-    line-height: 1.1;
+    font-size: 15px;
+    line-height: 1.2;
   }
 
   .studio-header-actions,
@@ -5673,8 +5716,8 @@ body {
 
   .studio-page-header h1,
   .studio-wall-title {
-    font-size: clamp(24px, 8vw, 34px);
-    line-height: 1.08;
+    font-size: clamp(16px, 4vw, 20px);
+    line-height: 1.2;
   }
 
   .studio-note,
@@ -6709,10 +6752,6 @@ body {
     overflow: hidden;
   }
 
-  .studio-workspace.has-tabs {
-    grid-template-rows: auto auto minmax(0, 1fr);
-  }
-
   .studio-workspace-header {
     min-width: 0;
     padding: 9px 10px;
@@ -6851,7 +6890,7 @@ body {
   }
 
   .studio-workspace-header h2 {
-    font-size: 19px;
+    font-size: 15px;
   }
 
   .studio-header-meta {

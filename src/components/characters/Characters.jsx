@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Modal from '../shared/Modal'
 import { FACTION_ICONS } from '../../constants/factionIcons'
 import { REL_TYPES } from '../../constants/Constants'
@@ -99,6 +99,85 @@ function TabStrip({ tabs, activeTab, onChange }) {
           {label}
         </button>
       ))}
+    </div>
+  )
+}
+
+function ComboSelect({ value, onChange, options, placeholder, allowCustom = false }) {
+  const [query, setQuery] = useState(null)
+  const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(0)
+  const listRef = useRef(null)
+
+  const selectedLabel = options.find(o => o.value === value)?.label ?? (allowCustom ? (value || '') : '')
+  const displayValue = query !== null ? query : selectedLabel
+  const filtered = query
+    ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
+    : options
+
+  useEffect(() => {
+    listRef.current?.children[highlighted]?.scrollIntoView({ block: 'nearest' })
+  }, [highlighted])
+
+  const commit = (opt) => {
+    onChange(opt.value)
+    setQuery(null)
+    setOpen(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (!open) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault()
+        setOpen(true)
+        setHighlighted(Math.max(0, options.findIndex(o => o.value === value)))
+      }
+      return
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted(h => Math.min(h + 1, filtered.length - 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted(h => Math.max(h - 1, 0)) }
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (filtered[highlighted]) commit(filtered[highlighted])
+      else if (allowCustom && query?.trim()) { onChange(query.trim()); setQuery(null); setOpen(false) }
+    }
+    else if (e.key === 'Escape') { setOpen(false); setQuery(null) }
+    else if (e.key === 'Tab') {
+      if (filtered[highlighted]) commit(filtered[highlighted])
+      setOpen(false); setQuery(null)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <input
+        className={INPUT}
+        value={displayValue}
+        onChange={e => { setQuery(e.target.value); setHighlighted(0); setOpen(true) }}
+        onFocus={() => { setOpen(true); setHighlighted(Math.max(0, options.findIndex(o => o.value === value))) }}
+        onBlur={() => setTimeout(() => { setOpen(false); setQuery(null) }, 150)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {open && (
+        <ul ref={listRef} className="absolute z-50 top-full left-0 right-0 mt-1 max-h-44 overflow-y-auto bg-[var(--bg-nav)] border border-[var(--border)] rounded-lg shadow-xl py-1">
+          {filtered.length > 0 ? filtered.map((opt, i) => (
+            <li
+              key={String(opt.value)}
+              className={`px-3 py-1.5 text-sm cursor-pointer transition-colors ${i === highlighted ? 'bg-[var(--accent-fade)] text-[var(--accent)]' : 'text-[var(--text-main)] hover:bg-[var(--bg-main)]'}`}
+              onMouseDown={() => commit(opt)}
+              onMouseEnter={() => setHighlighted(i)}
+            >
+              {opt.label}
+            </li>
+          )) : (
+            <li className="px-3 py-1.5 text-sm text-[var(--text-muted)] italic">
+              {allowCustom && query ? `Press Enter to use "${query}"` : 'No matches'}
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   )
 }
@@ -253,25 +332,23 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
 
         <div className="col-span-1">
           <label className={LABEL}>Faction / Allegiance</label>
-          <select className={INPUT} value={form.factionId} onChange={handleChange('factionId')}>
-            <option value="">No Faction</option>
-            {factions.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
+          <ComboSelect
+            value={form.factionId}
+            onChange={v => setForm(prev => ({ ...prev, factionId: v }))}
+            options={[{ value: '', label: 'No Faction' }, ...factions.map(f => ({ value: f.id, label: f.name }))]}
+            placeholder="No Faction"
+          />
         </div>
 
         <div className="col-span-1">
           <label className={LABEL}>Role</label>
-          <select className={INPUT} value={form.role} onChange={handleChange('role')}>
-            <option value="">Select role</option>
-            {form.role && !CHARACTER_ROLE_PRESETS.includes(form.role) && (
-              <option value={form.role}>{form.role}</option>
-            )}
-            {CHARACTER_ROLE_PRESETS.map(role => (
-              <option key={role} value={role}>{role}</option>
-            ))}
-          </select>
+          <ComboSelect
+            value={form.role}
+            onChange={v => setForm(prev => ({ ...prev, role: v }))}
+            options={[{ value: '', label: 'Select role' }, ...CHARACTER_ROLE_PRESETS.map(r => ({ value: r, label: r }))]}
+            placeholder="Select or type role..."
+            allowCustom
+          />
         </div>
 
         <TextField
@@ -517,25 +594,18 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
         )}
         {form.relationships.map((rel, index) => (
           <div key={`rel-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-            <select
-              className={INPUT}
+            <ComboSelect
               value={rel.targetId}
-              onChange={(e) => upsertRelationship(index, { targetId: e.target.value })}
-            >
-              <option value="">Select character</option>
-              {relationshipTargets.map(c => (
-                <option key={`target-${c.id}`} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <select
-              className={INPUT}
+              onChange={v => upsertRelationship(index, { targetId: v })}
+              options={[{ value: '', label: 'Select character' }, ...relationshipTargets.map(c => ({ value: c.id, label: c.name }))]}
+              placeholder="Select character"
+            />
+            <ComboSelect
               value={rel.type}
-              onChange={(e) => upsertRelationship(index, { type: e.target.value })}
-            >
-              {REL_TYPES.filter(t => !t.structural).map(t => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-            </select>
+              onChange={v => upsertRelationship(index, { type: v })}
+              options={REL_TYPES.filter(t => !t.structural).map(t => ({ value: t.id, label: t.label }))}
+              placeholder="Relationship type"
+            />
             <button type="button" onClick={() => removeRelationship(index)} className="px-3 text-red-400 hover:text-red-300">✕</button>
           </div>
         ))}
@@ -620,9 +690,13 @@ export default function Characters({ store }) {
   const activeProfileTab = profileTabs.some(([id]) => id === profileTab) ? profileTab : 'overview'
 
   const handleSave = (formData) => {
-    saveCharacter(formData, editTarget?.id || null)
+    const savedId = saveCharacter(formData, editTarget?.id || null)
     setShowForm(false)
     setEditTarget(null)
+    if (!editTarget) {
+      setSelectedCharacterId(savedId)
+      setProfileTab('overview')
+    }
   }
 
   const getFactionIconUrl = (char) => {
@@ -796,7 +870,7 @@ export default function Characters({ store }) {
       </StudioDetail>
 
       {showForm && (
-        <Modal title={editTarget ? `Edit ${editTarget.name}` : "Create Character"} onClose={() => setShowForm(false)} wide>
+        <Modal title={editTarget ? `Edit ${editTarget.name}` : "Create Character"} onClose={() => setShowForm(false)} wide centered>
           <CharacterForm
             initial={editTarget}
             onSave={handleSave}

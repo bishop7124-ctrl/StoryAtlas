@@ -512,6 +512,8 @@ export function useStore(userId = null, options = {}) {
   const saveCharacter = (data, id) => {
     const characterId = id || uid()
     const childIds = data.childIds || []
+    const parentIds = data.parentIds || []
+    const spouseIds = data.spouseIds || []
     setCharacters(prev => {
       const next = id
         ? prev.map(c => c.id === id ? { ...c, ...data } : c)
@@ -519,13 +521,46 @@ export function useStore(userId = null, options = {}) {
 
       return next.map(c => {
         if (c.id === characterId || c.novelId !== activeNovelId) return c
-        const parents = c.parentIds || []
+        let updated = c
+        let changed = false
+
+        // childIds → sync parentIds on children
+        const cParents = updated.parentIds || []
         const shouldBeChild = childIds.includes(c.id)
-        if (shouldBeChild && !parents.includes(characterId)) return { ...c, parentIds: [...parents, characterId] }
-        if (!shouldBeChild && parents.includes(characterId)) return { ...c, parentIds: parents.filter(parentId => parentId !== characterId) }
-        return c
+        if (shouldBeChild && !cParents.includes(characterId)) {
+          updated = { ...updated, parentIds: [...cParents, characterId] }
+          changed = true
+        } else if (!shouldBeChild && cParents.includes(characterId)) {
+          updated = { ...updated, parentIds: cParents.filter(p => p !== characterId) }
+          changed = true
+        }
+
+        // parentIds → sync childIds on parents
+        const cChildren = updated.childIds || []
+        const shouldBeParent = parentIds.includes(c.id)
+        if (shouldBeParent && !cChildren.includes(characterId)) {
+          updated = { ...updated, childIds: [...cChildren, characterId] }
+          changed = true
+        } else if (!shouldBeParent && cChildren.includes(characterId)) {
+          updated = { ...updated, childIds: cChildren.filter(ch => ch !== characterId) }
+          changed = true
+        }
+
+        // spouseIds → sync bidirectionally
+        const cSpouses = updated.spouseIds || []
+        const shouldBeSpouse = spouseIds.includes(c.id)
+        if (shouldBeSpouse && !cSpouses.includes(characterId)) {
+          updated = { ...updated, spouseIds: [...cSpouses, characterId] }
+          changed = true
+        } else if (!shouldBeSpouse && cSpouses.includes(characterId)) {
+          updated = { ...updated, spouseIds: cSpouses.filter(s => s !== characterId) }
+          changed = true
+        }
+
+        return changed ? updated : c
       })
     })
+    return characterId
   }
   const deleteCharacter = (id) => setCharacters(prev => prev.filter(c => c.id !== id))
 

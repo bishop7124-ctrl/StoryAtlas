@@ -91,12 +91,6 @@ const FONT_OPTIONS = [
   { id: 'dyslexia',  label: 'Readable',   value: 'Atkinson Hyperlegible, Verdana, Arial, sans-serif' },
 ]
 
-const RADIUS_OPTIONS = [
-  { id: 'sharp',   label: 'Sharp' },
-  { id: 'default', label: 'Default' },
-  { id: 'rounded', label: 'Soft' },
-]
-
 const CUSTOM_COLOR_FIELDS = [
   { key: 'bgMain',    label: 'Background' },
   { key: 'bgNav',     label: 'Panels' },
@@ -146,7 +140,7 @@ const DEFAULT_CUSTOM_COLORS = PRESET_THEMES[0].swatches
 
 // ─── Theme editor ─────────────────────────────────────────────────────────────
 
-function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, radiusChoice, setRadiusChoice, customColors, setCustomColors, savedPresets, setSavedPresets, onClose }) {
+function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, customColors, setCustomColors, savedPresets, setSavedPresets, onClose }) {
   const [savePresetName, setSavePresetName] = useState('')
 
   const applyPalette = (swatches) => {
@@ -371,23 +365,6 @@ function ThemeEditor({ theme, setTheme, fontChoice, setFontChoice, radiusChoice,
                 }}>
                 <div style={{ fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
                 <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>The quick brown fox</div>
-              </button>
-            ))}
-          </div>
-
-          <p className="eyebrow mb-3">Corner Style</p>
-          <div className="flex gap-2 mb-6">
-            {RADIUS_OPTIONS.map(opt => (
-              <button key={opt.id} onClick={() => setRadiusChoice(opt.id)}
-                style={{
-                  flex: 1, padding: '8px 0',
-                  borderRadius: opt.id === 'sharp' ? 2 : opt.id === 'default' ? 5 : 999,
-                  border: `1px solid ${radiusChoice === opt.id ? 'var(--accent)' : 'var(--border)'}`,
-                  background: radiusChoice === opt.id ? 'var(--accent-fade)' : 'transparent',
-                  color: radiusChoice === opt.id ? 'var(--accent)' : 'var(--text-muted)',
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: '.06em', textTransform: 'uppercase',
-                }}>
-                {opt.label}
               </button>
             ))}
           </div>
@@ -729,7 +706,6 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
   const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || enabledSectionIds.has(s.id))
 
   const [viewMode, setViewMode] = useState('planning')
-  const [lhnOpen, setLhnOpen] = useState(true)
   const [aiOpen, setAiOpen] = useState(false)
   const [theme, setTheme] = useState(loadThemeChoice)
   const [showThemeEditor, setShowThemeEditor] = useState(false)
@@ -915,12 +891,8 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
           title={activeRoom?.label || activeSection?.label}
           meta={viewMode === 'writing' ? projectTypeCfg.writingTab : (activeSection?.label !== activeRoom?.label ? activeSection?.label : undefined)}
           roomId={section === 'map' ? 'atlas-map' : activeRoom?.id}
-          actions={viewMode === 'planning' ? (
-            <StudioButton tone="secondary" size="sm" onClick={() => setLhnOpen(v => !v)}>
-              {lhnOpen ? 'Hide tools' : 'Show tools'}
-            </StudioButton>
-          ) : null}
-          tabs={viewMode === 'planning' && lhnOpen && activeRoomSections.length > 1 ? (
+          actions={null}
+          tabs={viewMode === 'planning' && activeRoomSections.length > 1 ? (
             <>
               {activeRoomSections.map(s => (
                 <StudioTab key={s.id} onClick={() => setSection(s.id)} active={section === s.id}>
@@ -930,36 +902,21 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
               ))}
             </>
           ) : null}
+          footer={
+            viewMode === 'planning'
+              ? <AIAssistant store={store} section={section} onOpenChat={() => setAiOpen(v => !v)} aiOpen={aiOpen} />
+              : <AIAssistant store={store} section="manuscript" onOpenChat={() => setAiOpen(v => !v)} aiOpen={aiOpen} />
+          }
         >
-          <div className="h-full relative flex flex-col">
+          <div className="h-full overflow-hidden">
             {viewMode === 'planning' ? (
-              <>
-                <main className="flex-1 overflow-hidden relative min-h-0">
-                  <SectionErrorBoundary key={section}>
-                    {databaseContent[section] || databaseContent['characters']}
-                  </SectionErrorBoundary>
-                </main>
-                <AIAssistant
-                  store={store}
-                  section={section}
-                  onOpenChat={() => setAiOpen(v => !v)}
-                  aiOpen={aiOpen}
-                />
-              </>
+              <SectionErrorBoundary key={section}>
+                {databaseContent[section] || databaseContent['characters']}
+              </SectionErrorBoundary>
             ) : (
-              <>
-                <main className="flex-1 overflow-hidden min-h-0">
-                  <SectionErrorBoundary key="manuscript">
-                    <Manuscript store={store} />
-                  </SectionErrorBoundary>
-                </main>
-                <AIAssistant
-                  store={store}
-                  section="manuscript"
-                  onOpenChat={() => setAiOpen(v => !v)}
-                  aiOpen={aiOpen}
-                />
-              </>
+              <SectionErrorBoundary key="manuscript">
+                <Manuscript store={store} />
+              </SectionErrorBoundary>
             )}
           </div>
         </StudioWorkspace>

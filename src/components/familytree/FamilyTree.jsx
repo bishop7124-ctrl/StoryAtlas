@@ -143,6 +143,23 @@ export default function FamilyTree({ store }) {
         });
       });
 
+      // Center a single child directly under the midpoint of its parents' trunk
+      const parentGroupsSeen = new Map();
+      members.forEach((child) => {
+        const pIds = (child.parentIds || []).filter((pid) => positions.has(pid));
+        if (pIds.length < 2) return;
+        const key = [...pIds].sort().join(",");
+        if (!parentGroupsSeen.has(key)) parentGroupsSeen.set(key, { parentIds: pIds, childIds: [] });
+        parentGroupsSeen.get(key).childIds.push(child.id);
+      });
+      parentGroupsSeen.forEach(({ parentIds, childIds }) => {
+        if (childIds.length !== 1) return;
+        const pCenters = parentIds.map((pid) => positions.get(pid).x + NODE_W / 2);
+        const trunkX = Math.round((Math.min(...pCenters) + Math.max(...pCenters)) / 2);
+        const childPos = positions.get(childIds[0]);
+        positions.set(childIds[0], { ...childPos, x: trunkX - Math.round(NODE_W / 2) });
+      });
+
       const width = Math.max(
         680,
         ...generationRows.map((row) => PAD * 2 + row.people.length * NODE_W + Math.max(0, row.people.length - 1) * X_GAP)
@@ -227,34 +244,75 @@ export default function FamilyTree({ store }) {
                         </text>
                       ))}
 
-                      {section.members.map((child) => {
-                        const childPos = section.positions.get(child.id);
-                        if (!childPos) return null;
-                        const parentIds = (child.parentIds || []).filter((pid) => section.positions.has(pid));
-                        if (parentIds.length === 0) return null;
-                        const childX = childPos.x + NODE_W / 2;
-                        const childY = childPos.y;
-                        if (parentIds.length === 1) {
-                          const parentPos = section.positions.get(parentIds[0]);
-                          return <line key={`pc-${parentIds[0]}-${child.id}`} x1={parentPos.x + NODE_W / 2} y1={parentPos.y + NODE_H} x2={childX} y2={childY} stroke="var(--border)" strokeWidth="1.7" />;
-                        }
-                        const parentAnchors = parentIds.map((pid) => {
-                          const p = section.positions.get(pid);
-                          return { pid, x: p.x + NODE_W / 2, y: p.y + NODE_H };
+                      {(() => {
+                        // Group children by their sorted parent set so siblings share a trunk
+                        const groups = new Map();
+                        section.members.forEach((child) => {
+                          const pIds = (child.parentIds || []).filter((pid) => section.positions.has(pid));
+                          if (pIds.length === 0) return;
+                          const key = [...pIds].sort().join(",");
+                          if (!groups.has(key)) groups.set(key, { parentIds: pIds, childIds: [] });
+                          groups.get(key).childIds.push(child.id);
                         });
-                        const minX = Math.min(...parentAnchors.map((p) => p.x));
-                        const maxX = Math.max(...parentAnchors.map((p) => p.x));
-                        const splitY = childY - 26;
-                        return (
-                          <g key={`pc-split-${child.id}`}>
-                            <line x1={childX} y1={childY} x2={childX} y2={splitY} stroke="var(--border)" strokeWidth="1.7" />
-                            <line x1={minX} y1={splitY} x2={maxX} y2={splitY} stroke="var(--border)" strokeWidth="1.7" />
-                            {parentAnchors.map((p) => (
-                              <line key={`pc-branch-${p.pid}-${child.id}`} x1={p.x} y1={p.y} x2={p.x} y2={splitY} stroke="var(--border)" strokeWidth="1.7" />
-                            ))}
-                          </g>
-                        );
-                      })}
+
+                        const lines = [];
+                        const sw = { stroke: "var(--border)", strokeWidth: "1.7" };
+
+                        groups.forEach(({ parentIds, childIds }, key) => {
+                          const pAnchors = parentIds.map((pid) => {
+                            const p = section.positions.get(pid);
+                            return { x: p.x + NODE_W / 2, y: p.y + NODE_H };
+                          });
+                          const cAnchors = childIds.map((cid) => {
+                            const p = section.positions.get(cid);
+                            return { x: p.x + NODE_W / 2, y: p.y };
+                          });
+
+                          const parentBottomY = Math.max(...pAnchors.map((a) => a.y));
+                          const childTopY = Math.min(...cAnchors.map((a) => a.y));
+                          const gap = childTopY - parentBottomY;
+
+                          const minPX = Math.min(...pAnchors.map((a) => a.x));
+                          const maxPX = Math.max(...pAnchors.map((a) => a.x));
+                          const trunkX = parentIds.length === 1 ? pAnchors[0].x : Math.round((minPX + maxPX) / 2);
+
+                          const minCX = Math.min(...cAnchors.map((a) => a.x));
+                          const maxCX = Math.max(...cAnchors.map((a) => a.x));
+
+                          // junctionY: where parent legs meet; splitY: where trunk fans to children
+                          const junctionY = parentIds.length > 1 ? parentBottomY + Math.round(gap * 0.42) : parentBottomY;
+                          const splitY = childIds.length > 1 ? childTopY - Math.round(gap * 0.42) : childTopY;
+
+                          // 1-to-1: straight vertical line
+                          if (parentIds.length === 1 && childIds.length === 1) {
+                            lines.push(<line key={key} x1={pAnchors[0].x} y1={pAnchors[0].y} x2={cAnchors[0].x} y2={cAnchors[0].y} {...sw} />);
+                            return;
+                          }
+
+                          // Parent legs down + junction horizontal (multiple parents only)
+                          if (parentIds.length > 1) {
+                            pAnchors.forEach((a, i) => {
+                              lines.push(<line key={`${key}-pl${i}`} x1={a.x} y1={a.y} x2={a.x} y2={junctionY} {...sw} />);
+                            });
+                            lines.push(<line key={`${key}-jh`} x1={minPX} y1={junctionY} x2={maxPX} y2={junctionY} {...sw} />);
+                          }
+
+                          // Trunk from junction/parent down to split/child
+                          lines.push(<line key={`${key}-trunk`} x1={trunkX} y1={junctionY} x2={trunkX} y2={splitY} {...sw} />);
+
+                          // Split horizontal + child legs (multiple children only)
+                          if (childIds.length > 1) {
+                            const splitMinX = Math.min(minCX, trunkX);
+                            const splitMaxX = Math.max(maxCX, trunkX);
+                            lines.push(<line key={`${key}-sh`} x1={splitMinX} y1={splitY} x2={splitMaxX} y2={splitY} {...sw} />);
+                            cAnchors.forEach((a, i) => {
+                              lines.push(<line key={`${key}-cl${i}`} x1={a.x} y1={splitY} x2={a.x} y2={a.y} {...sw} />);
+                            });
+                          }
+                        });
+
+                        return lines;
+                      })()}
 
                       {section.members.map((char) => {
                         const p1 = section.positions.get(char.id);
@@ -301,6 +359,7 @@ export default function FamilyTree({ store }) {
                         if (!p) return null;
                         const ageLabel = getAgeLabel(char);
                         const hasPhoto = Boolean(char.image);
+                        const isDeceased = Boolean(char.deathDate);
                         const photoSize = 46;
                         const photoX = p.x + 7;
                         const photoY = p.y + (NODE_H - photoSize) / 2;
@@ -329,16 +388,19 @@ export default function FamilyTree({ store }) {
                                 </clipPath>
                               </defs>
                             )}
-                            <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill="var(--bg-nav)" stroke={selectedCharacterId === char.id ? "var(--accent)" : "var(--border)"} strokeWidth={selectedCharacterId === char.id ? "2.6" : "1.4"} />
+                            <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill={isDeceased ? "color-mix(in srgb, var(--bg-nav) 70%, #000 30%)" : "var(--bg-nav)"} stroke={selectedCharacterId === char.id ? "var(--accent)" : isDeceased ? "color-mix(in srgb, var(--border) 60%, #000 40%)" : "var(--border)"} strokeWidth={selectedCharacterId === char.id ? "2.6" : "1.4"} />
+                            {isDeceased && (
+                              <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="9" fill="none" stroke="color-mix(in srgb, var(--border) 50%, #888 50%)" strokeWidth="1" strokeDasharray="4 3" style={{ pointerEvents: "none" }} />
+                            )}
                             {hasPhoto && (
                               <>
-                                <image href={char.image} x={photoX} y={photoY} width={photoSize} height={photoSize} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none" }} />
+                                <image href={char.image} x={photoX} y={photoY} width={photoSize} height={photoSize} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice" style={{ pointerEvents: "none", filter: isDeceased ? "grayscale(0.6)" : undefined }} />
                                 <rect x={photoX} y={photoY} width={photoSize} height={photoSize} rx="6" fill="none" stroke="var(--border)" strokeWidth="1" style={{ pointerEvents: "none" }} />
                               </>
                             )}
-                            <text x={textX} y={p.y + 22} fill="var(--text-main)" fontSize="12" fontWeight="700">{char.name}</text>
+                            <text x={textX} y={p.y + 22} fill={isDeceased ? "var(--text-muted)" : "var(--text-main)"} fontSize="12" fontWeight="700">{char.name}{isDeceased ? " †" : ""}</text>
                             <text x={textX} y={p.y + 38} fill="var(--text-muted)" fontSize="10">{char.role || "Character"}</text>
-                            {ageLabel && <text x={textX} y={p.y + 54} fill="var(--accent)" fontSize="10" fontWeight="600">Age: {ageLabel}</text>}
+                            {ageLabel && <text x={textX} y={p.y + 54} fill={isDeceased ? "color-mix(in srgb, var(--text-muted) 80%, #888 20%)" : "var(--accent)"} fontSize="10" fontWeight="600">{isDeceased ? "Died:" : "Age:"} {ageLabel}</text>}
                           </g>
                         );
                       })}

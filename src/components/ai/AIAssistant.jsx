@@ -338,7 +338,7 @@ export default function AIAssistant({ store, section, onOpenChat, aiOpen }) {
   const isLoading = status === 'loading'
 
   return (
-    <div className="border-t border-[var(--border)] bg-[var(--bg-nav)] flex-shrink-0">
+    <div className="flex-shrink-0">
 
       {/* Response / action area */}
       {status === 'preview_create' && parsed && (

@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { getProjectType } from '../../constants/projectTypes'
-import StoryOutline from '../outline/StoryOutline'
 
 function useDebounce(callback, delay) {
   const timeoutRef = useRef(null)

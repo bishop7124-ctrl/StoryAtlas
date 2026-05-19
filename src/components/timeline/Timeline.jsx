@@ -130,7 +130,7 @@ function isWorldHistoryEvent(event) {
 }
 
 export default function Timeline({ store }) {
-  const { timeline, worldHistory, characters = [], locations = [], addEvent, updateEvent, deleteEvent } = store
+  const { timeline, worldHistory, characters = [], locations = [], addEvent, updateEvent, deleteEvent, currentYear } = store
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -228,6 +228,9 @@ export default function Timeline({ store }) {
           <h2 className="font-serif text-xl font-bold text-[var(--text-main)]">Timeline</h2>
         </div>
         <div className="flex items-center gap-3">
+          {currentYear ? (
+            <span className="timeline-current-year">Current year: {currentYear}</span>
+          ) : null}
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search events…"
@@ -260,12 +263,25 @@ export default function Timeline({ store }) {
                   key={ev.id}
                   className={`timeline-item ${isExpanded ? 'is-expanded' : ''} ${isHistory ? 'is-history' : ''} ${isBirthday ? 'is-birthday' : ''}`}
                 >
+                  {isBirthday ? (
+                    <div className="timeline-birthday-row">
+                      <span className="timeline-dot" />
+                      <div className="timeline-birthday-tooltip">
+                        {ev.date && <div className="timeline-birthday-tooltip-date">{ev.date}</div>}
+                        <div className="timeline-birthday-tooltip-name">{ev.title}</div>
+                        {ev.description && ev.description !== 'Character birth' && (
+                          <div className="timeline-birthday-tooltip-role">{ev.description}</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                  <span className="timeline-dot" />
                   <button
                     type="button"
                     className="timeline-item-main"
                     onClick={() => handleTileClick(ev)}
                   >
-                    <span className="timeline-dot" />
                     <span className="timeline-item-copy">
                       <span className="timeline-date">{ev.date || 'Undated'}</span>
                       <strong>{ev.title}</strong>
@@ -362,6 +378,8 @@ export default function Timeline({ store }) {
                     </div>
                   )}
                     </div>
+                  )}
+                    </>
                   )}
                 </article>
               )

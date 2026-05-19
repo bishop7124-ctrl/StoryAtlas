@@ -87,25 +87,13 @@ export function StudioFrame({
 }
 
 export function StudioWorkspace({
-  eyebrow,
-  title,
-  meta,
   tabs,
-  actions,
   roomId = 'studio',
+  footer,
   children,
 }) {
   return (
     <main className={cx('studio-workspace', `studio-workspace-${roomId}`, tabs && 'has-tabs')}>
-      <header className="studio-workspace-header">
-        <div className="studio-title-block">
-          {eyebrow && <p className="studio-kicker">{eyebrow}</p>}
-          <h2>{title}</h2>
-          {meta && <p className="studio-header-meta">{meta}</p>}
-        </div>
-        {actions && <div className="studio-header-actions">{actions}</div>}
-      </header>
-
       {tabs && (
         <nav className="studio-section-tabs" aria-label="Room sections">
           {tabs}
@@ -115,6 +103,12 @@ export function StudioWorkspace({
       <section className="studio-surface">
         {children}
       </section>
+
+      {footer && (
+        <div className="studio-workspace-footer">
+          {footer}
+        </div>
+      )}
     </main>
   )
 }
@@ -191,10 +185,10 @@ export function StudioEmpty({ title, body, action, variant = 'page' }) {
   )
 }
 
-export function StudioSheet({ title, eyebrow = 'Editor', onClose, children, narrow = false }) {
+export function StudioSheet({ title, eyebrow = 'Editor', onClose, children, narrow = false, centered = false }) {
   return (
-    <div className="studio-sheet-backdrop" onClick={onClose}>
-      <section className={cx('studio-sheet', narrow && 'is-narrow')} onClick={e => e.stopPropagation()}>
+    <div className={cx('studio-sheet-backdrop', centered && 'is-centered')} onClick={onClose}>
+      <section className={cx('studio-sheet', narrow && 'is-narrow', centered && 'is-centered')} onClick={e => e.stopPropagation()}>
         <header>
           <div>
             <p className="studio-kicker">{eyebrow}</p>

@@ -40,39 +40,6 @@ class ErrorBoundary extends Component {
   }
 }
 
-const DATA_KEYS = [
-  'nf_novels',
-  'nf_characters',
-  'nf_factions',
-  'nf_locations',
-  'nf_timeline',
-  'nf_worldHistory',
-  'nf_acts',
-  'nf_chapters',
-  'nf_scenes',
-  'nf_loreEntries',
-  'nf_ideaEntries',
-  'nf_whiteboards'
-]
-
-const hasEntries = (value) => Array.isArray(value) && value.length > 0
-
-const hasRemoteData = (data) => {
-  if (!data) return false
-  if (DATA_KEYS.some(key => hasEntries(data[key.replace('nf_', '')]))) return true
-  return Boolean(data.activeNovelId || data.currentYear)
-}
-
-const hasLocalData = () => {
-  try {
-    return DATA_KEYS.some(key => hasEntries(JSON.parse(localStorage.getItem(key)))) ||
-      Boolean(JSON.parse(localStorage.getItem('nf_activeNovel'))) ||
-      Boolean(JSON.parse(localStorage.getItem('nf_currentYear')))
-  } catch {
-    return false
-  }
-}
-
 function AppInner() {
   const { user, loading: authLoading } = useAuth()
   const userId = user?.uid || user?.id || null

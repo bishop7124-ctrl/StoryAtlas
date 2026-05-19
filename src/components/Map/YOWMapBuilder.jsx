@@ -396,6 +396,77 @@ function paintBrush(hm, cx, cy, bs, str, tool) {
   }
 }
 
+function blendCoastlineAround(hm, cx, cy, bs) {
+  const coastWidth = Math.min(90, Math.max(36, bs * 1.4))
+  const radius = Math.ceil(bs + coastWidth + 4)
+  const x1 = Math.max(0, Math.floor(cx - radius))
+  const y1 = Math.max(0, Math.floor(cy - radius))
+  const x2 = Math.min(MAP_W - 1, Math.ceil(cx + radius))
+  const y2 = Math.min(MAP_H - 1, Math.ceil(cy + radius))
+  const width = x2 - x1 + 1
+  const height = y2 - y1 + 1
+  const source = new Float32Array(width * height)
+  const distance = new Float32Array(width * height)
+  const far = coastWidth + 2
+  let hasWater = false
+  let hasLand = false
+
+  for (let y = 0; y < height; y++) {
+    const srcStart = (y1 + y) * MAP_W + x1
+    const rowStart = y * width
+    source.set(hm.subarray(srcStart, srcStart + width), rowStart)
+    for (let x = 0; x < width; x++) {
+      const h = source[rowStart + x]
+      const water = h < 0.34
+      if (water) hasWater = true
+      else hasLand = true
+      distance[rowStart + x] = water ? 0 : far
+    }
+  }
+  if (!hasWater || !hasLand) return
+
+  const diagonal = Math.SQRT2
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x
+      let best = distance[idx]
+      if (x > 0) best = Math.min(best, distance[idx - 1] + 1)
+      if (y > 0) best = Math.min(best, distance[idx - width] + 1)
+      if (x > 0 && y > 0) best = Math.min(best, distance[idx - width - 1] + diagonal)
+      if (x < width - 1 && y > 0) best = Math.min(best, distance[idx - width + 1] + diagonal)
+      distance[idx] = best
+    }
+  }
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const idx = y * width + x
+      let best = distance[idx]
+      if (x < width - 1) best = Math.min(best, distance[idx + 1] + 1)
+      if (y < height - 1) best = Math.min(best, distance[idx + width] + 1)
+      if (x < width - 1 && y < height - 1) best = Math.min(best, distance[idx + width + 1] + diagonal)
+      if (x > 0 && y < height - 1) best = Math.min(best, distance[idx + width - 1] + diagonal)
+      distance[idx] = best
+    }
+  }
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x
+      const h = source[idx]
+      if (h < 0.34 || distance[idx] > coastWidth) continue
+      const avg = (
+        source[idx - 1] + source[idx + 1] +
+        source[idx - width] + source[idx + width] +
+        source[idx - width - 1] + source[idx - width + 1] +
+        source[idx + width - 1] + source[idx + width + 1]
+      ) / 8
+      const coastInfluence = 1 - smoothstep(0, coastWidth, distance[idx])
+      const strength = 0.42 * coastInfluence
+      hm[(y1 + y) * MAP_W + x1 + x] = h + (avg - h) * strength
+    }
+  }
+}
+
 const TEXTURE_TOOLS = new Set(['rock', 'sand', 'grassland', 'farmland', 'swampland'])
 
 function textureRgba(toolName, x, y) {
@@ -515,6 +586,123 @@ function distanceToSegment(px, py, ax, ay, bx, by) {
   const dx = px - (ax + vx * t)
   const dy = py - (ay + vy * t)
   return Math.sqrt(dx * dx + dy * dy)
+}
+
+function randomiseLandmassEdge(points, borderWidth = 48, seed = Math.random() * 99999) {
+  if (!points || points.length < 3) return points
+  const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length
+  const cy = points.reduce((sum, p) => sum + p.y, 0) / points.length
+  const amplitude = Math.max(8, Math.min(46, borderWidth * 0.65))
+  const resampled = []
+
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % points.length]
+    const length = Math.hypot(b.x - a.x, b.y - a.y)
+    const steps = Math.max(1, Math.ceil(length / 16))
+
+    for (let step = 0; step < steps; step++) {
+      const t = step / steps
+      const x = a.x + (b.x - a.x) * t
+      const y = a.y + (b.y - a.y) * t
+      const dx = x - cx
+      const dy = y - cy
+      const len = Math.hypot(dx, dy) || 1
+      const nx = dx / len
+      const ny = dy / len
+      const detail = fbm(x * 0.013, y * 0.013, seed, 5)
+      const crinkle = fbm(x * 0.041, y * 0.041, seed + 417, 3)
+      const offset = (detail * 0.78 + crinkle * 0.22) * amplitude
+      const tangentOffset = (fbm(x * 0.029, y * 0.029, seed + 883, 3) * amplitude * 0.22)
+      resampled.push({
+        x: Math.max(0, Math.min(MAP_W - 1, x + nx * offset + -ny * tangentOffset)),
+        y: Math.max(0, Math.min(MAP_H - 1, y + ny * offset + nx * tangentOffset)),
+      })
+    }
+  }
+
+  return resampled
+}
+
+function fillLandmass(hm, points, borderWidth = 48) {
+  if (!points || points.length < 3) return
+  const minX = Math.max(0, Math.floor(Math.min(...points.map(p => p.x))))
+  const maxX = Math.min(MAP_W - 1, Math.ceil(Math.max(...points.map(p => p.x))))
+  const minY = Math.max(0, Math.floor(Math.min(...points.map(p => p.y))))
+  const maxY = Math.min(MAP_H - 1, Math.ceil(Math.max(...points.map(p => p.y))))
+  const width = maxX - minX + 1
+  const height = maxY - minY + 1
+  const coastWidth = Math.max(4, borderWidth)
+  const shoreHeight = 0.36
+  const landHeight = 0.5
+  const mask = new Uint8Array(width * height)
+  const distance = new Float32Array(width * height)
+  const far = coastWidth + 2
+
+  for (let y = minY; y <= maxY; y++) {
+    const scanY = y + 0.5
+    const crossings = []
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[j]
+      const b = points[i]
+      if ((a.y > scanY) === (b.y > scanY)) continue
+      crossings.push(a.x + (scanY - a.y) * (b.x - a.x) / (b.y - a.y))
+    }
+    crossings.sort((a, b) => a - b)
+    for (let i = 0; i < crossings.length - 1; i += 2) {
+      const x1 = Math.max(minX, Math.ceil(crossings[i]))
+      const x2 = Math.min(maxX, Math.floor(crossings[i + 1]))
+      for (let x = x1; x <= x2; x++) mask[(y - minY) * width + (x - minX)] = 1
+    }
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x
+      if (!mask[idx]) {
+        distance[idx] = 0
+        continue
+      }
+      const touchesWater = x === 0 || y === 0 || x === width - 1 || y === height - 1 ||
+        !mask[idx - 1] || !mask[idx + 1] || !mask[idx - width] || !mask[idx + width]
+      distance[idx] = touchesWater ? 0 : far
+    }
+  }
+
+  const diagonal = Math.SQRT2
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x
+      if (!mask[idx]) continue
+      let best = distance[idx]
+      if (x > 0) best = Math.min(best, distance[idx - 1] + 1)
+      if (y > 0) best = Math.min(best, distance[idx - width] + 1)
+      if (x > 0 && y > 0) best = Math.min(best, distance[idx - width - 1] + diagonal)
+      if (x < width - 1 && y > 0) best = Math.min(best, distance[idx - width + 1] + diagonal)
+      distance[idx] = best
+    }
+  }
+  for (let y = height - 1; y >= 0; y--) {
+    for (let x = width - 1; x >= 0; x--) {
+      const idx = y * width + x
+      if (!mask[idx]) continue
+      let best = distance[idx]
+      if (x < width - 1) best = Math.min(best, distance[idx + 1] + 1)
+      if (y < height - 1) best = Math.min(best, distance[idx + width] + 1)
+      if (x < width - 1 && y < height - 1) best = Math.min(best, distance[idx + width + 1] + diagonal)
+      if (x > 0 && y < height - 1) best = Math.min(best, distance[idx + width - 1] + diagonal)
+      distance[idx] = best
+    }
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x
+      if (!mask[idx]) continue
+      const coastT = smoothstep(0, coastWidth, Math.min(coastWidth, distance[idx]))
+      hm[(minY + y) * MAP_W + minX + x] = shoreHeight + (landHeight - shoreHeight) * coastT
+    }
+  }
 }
 
 function drawStampIndicator(ctx, stamp) {
@@ -763,6 +951,11 @@ const NEW_MAP_TYPES = [
 
 const TERRAIN_LAYER_ID = 'terrain'
 const DEFAULT_OBJECT_LAYER_ID = 'layer-1'
+const TERRAIN_LAYER_TOOL_IDS = new Set([
+  'raise', 'lower', 'smooth', 'flatten', 'water', 'landmass',
+  'rock', 'sand', 'grassland', 'farmland', 'swampland',
+  'wall', 'path', 'room', 'erase-texture',
+])
 
 function defaultMapLayers() {
   return [
@@ -791,6 +984,10 @@ function objectLayerId(item) {
 
 function objectOrder(item, fallback = 0) {
   return Number.isFinite(item?.objectOrder) ? item.objectOrder : fallback
+}
+
+function isTerrainLayerTool(toolId) {
+  return TERRAIN_LAYER_TOOL_IDS.has(toolId)
 }
 
 function clampMapPoint(point) {
@@ -831,6 +1028,7 @@ export default function MapBuilder({ store }) {
   const panRef = useRef({ x: 0, y: 0 })
   const zoomRef = useRef(0.75)
   const regionDragRef = useRef(null)
+  const landmassDragRef = useRef(null)
   const pathWaypointsRef = useRef([])
   const draggingStampRef = useRef(null)
   const draggingPinRef = useRef(null)
@@ -862,6 +1060,8 @@ export default function MapBuilder({ store }) {
   const [pinModal, setPinModal]   = useState(null)
   const [regionModal, setRegionModal] = useState(null)
   const [regionDraft, setRegionDraft] = useState(null)
+  const [landmassDraft, setLandmassDraft] = useState(null)
+  const [landmassEdgeMode, setLandmassEdgeMode] = useState('random')
   const [labelModal, setLabelModal] = useState(null)
   const [selectedStamp, setSelectedStamp] = useState('mountain')
   const [generateModal, setGenerateModal] = useState(false)
@@ -881,7 +1081,8 @@ export default function MapBuilder({ store }) {
   const [mode, setMode] = useState('edit')
   const [hoveredPreview, setHoveredPreview] = useState(null)
   const [pinnedPreview, setPinnedPreview] = useState(null)
-  const [activeLayerId, setActiveLayerId] = useState(DEFAULT_OBJECT_LAYER_ID)
+  const [activeLayerId, setActiveLayerId] = useState(TERRAIN_LAYER_ID)
+  const previousActiveLayerIdRef = useRef(activeLayerId)
   const [selectedObject, setSelectedObject] = useState(null)
   const [wallBrickColor, setWallBrickColor] = useState('red')
   const [downloadMenu, setDownloadMenu] = useState(false)
@@ -913,6 +1114,35 @@ export default function MapBuilder({ store }) {
   useEffect(() => { selectedObjectRef.current = selectedObject }, [selectedObject])
   useEffect(() => { mapLayersRef.current = mapLayers; setTimeout(renderMap, 0) }, [activeMap?.mapLayers])
   useEffect(() => { wallBrickColorRef.current = wallBrickColor }, [wallBrickColor])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (previousActiveLayerIdRef.current === activeLayerId) return
+    previousActiveLayerIdRef.current = activeLayerId
+
+    const sel = selectedObjectRef.current
+    if (sel) {
+      const item = findMapObject(sel.type, sel.id)
+      if (!item || objectLayerId(item) !== activeLayerId) clearObjectSelection()
+    }
+
+    if (activeLayerId !== TERRAIN_LAYER_ID && isTerrainLayerTool(toolRef.current)) {
+      if (toolRef.current === 'water') setBrushSize(size => Math.max(size, 18))
+      setTool('select')
+      if (landmassDragRef.current) {
+        landmassDragRef.current = null
+        setLandmassDraft(null)
+      }
+      if (roomDraftRef.current) {
+        roomDraftRef.current = null
+        setRoomDraft(null)
+      }
+      if (pathWaypointsRef.current.length > 0) {
+        pathWaypointsRef.current = []
+        setPathWaypoints([])
+      }
+    }
+    setTimeout(renderMap, 0)
+  })
   useEffect(() => {
     if (!activeMap) return
     if (!Array.isArray(activeMap.mapLayers) || activeMap.mapLayers.length === 0) {
@@ -1472,9 +1702,18 @@ export default function MapBuilder({ store }) {
     return new Set(mapLayersRef.current.filter(layer => !layer.locked && layer.visible !== false).map(layer => layer.id))
   }
 
+  function activeSelectableObjectLayerIds() {
+    const activeLayer = mapLayersRef.current.find(layer => layer.id === activeLayerId)
+    if (!activeLayer || activeLayer.locked || activeLayer.visible === false) return new Set()
+    return new Set([activeLayer.id])
+  }
+
   function selectMapObject(type, id) {
+    const item = findMapObject(type, id)
+    if (item && objectLayerId(item) !== activeLayerId) return false
     setSelectedObject({ type, id })
     setSelectedStampId(type === 'stamp' ? id : null)
+    return true
   }
 
   function clearObjectSelection() {
@@ -1558,29 +1797,28 @@ export default function MapBuilder({ store }) {
     return inside
   }
 
-  function hitTestObject(pos, includeRegions = true) {
-    const visibleLayers = visibleObjectLayerIds()
-    const inVisibleLayer = item => visibleLayers.has(objectLayerId(item))
-    const stamps = (activeMap?.mapStamps || []).filter(inVisibleLayer)
+  function hitTestObject(pos, includeRegions = true, layerIds = visibleObjectLayerIds()) {
+    const inSelectableLayer = item => layerIds.has(objectLayerId(item))
+    const stamps = (activeMap?.mapStamps || []).filter(inSelectableLayer)
     for (let i = stamps.length - 1; i >= 0; i--) {
       const s = stamps[i]
       const sz = (s.size || 44) / 2 + 10
       if (Math.hypot(pos.x - s.mapX, pos.y - s.mapY) <= sz) return { type: 'stamp', item: s }
     }
-    const labels = (activeMap?.mapLabels || []).filter(inVisibleLayer)
+    const labels = (activeMap?.mapLabels || []).filter(inSelectableLayer)
     for (let i = labels.length - 1; i >= 0; i--) {
       const l = labels[i]
       const size = l.size || 28
       const halfW = Math.max(36, String(l.text || '').length * size * 0.34)
       if (Math.abs(pos.x - l.mapX) <= halfW && Math.abs(pos.y - l.mapY) <= size * 0.75) return { type: 'label', item: l }
     }
-    const pins = (activeMap?.mapPins || []).filter(inVisibleLayer)
+    const pins = (activeMap?.mapPins || []).filter(inSelectableLayer)
     for (let i = pins.length - 1; i >= 0; i--) {
       const p = pins[i]
       if (Math.hypot(pos.x - p.mapX, pos.y - p.mapY) <= Math.max(24, (p.size || 36) * 0.75)) return { type: 'pin', item: p }
     }
     if (includeRegions) {
-      const regions = (activeMap?.mapRegions || []).filter(inVisibleLayer)
+      const regions = (activeMap?.mapRegions || []).filter(inSelectableLayer)
       for (let i = regions.length - 1; i >= 0; i--) {
         const r = regions[i]
         if (r.points?.length >= 3 && pointInPolygon(pos, r.points)) return { type: 'region', item: r }
@@ -1602,12 +1840,14 @@ export default function MapBuilder({ store }) {
     'erase-texture': 0,
   }
 
-  const isTerrainTool  = ['raise','lower','smooth','flatten','water'].includes(tool)
+  const isSculptTool = ['raise','lower','smooth','flatten','water'].includes(tool)
+  const isTerrainTool  = isSculptTool || tool === 'landmass'
   const isOverlayTool  = tool in OVERLAY_TOOL_MAP
-  const isPanTool = tool === 'pan'
+  const isSelectTool = tool === 'select'
   const selectTool = useCallback((nextTool) => {
     setTool(nextTool)
-    if (['raise','lower','smooth','flatten','water','rock','sand','grassland','farmland','swampland','erase-texture'].includes(nextTool)) {
+    if (isTerrainLayerTool(nextTool)) {
+      clearObjectSelection()
       setActiveLayerId(TERRAIN_LAYER_ID)
     } else if (['pin', 'region', 'label', 'stamp'].includes(nextTool) && activeLayerId === TERRAIN_LAYER_ID) {
       setActiveLayerId(mapLayers.find(layer => !layer.locked)?.id || DEFAULT_OBJECT_LAYER_ID)
@@ -1622,6 +1862,10 @@ export default function MapBuilder({ store }) {
         const list = mapType === 'interior' || mapType === 'dungeon' ? INTERIOR_STAMPS : TOWN_STAMPS
         return list.includes(prev) ? prev : wanted
       })
+    }
+    if (landmassDragRef.current) {
+      landmassDragRef.current = null
+      setLandmassDraft(null)
     }
     if (pathWaypointsRef.current.length > 0) {
       pathWaypointsRef.current = []
@@ -1641,6 +1885,7 @@ export default function MapBuilder({ store }) {
         if (pos) {
           if (SCULPT_SET.has(t)) {
             paintBrush(hmRef.current, pos.x, pos.y, brushSizeRef.current, brushStrRef.current, t)
+            if (t === 'raise' || t === 'lower') blendCoastlineAround(hmRef.current, pos.x, pos.y, brushSizeRef.current)
             renderMap()
             throttledSave()
           } else if (t in OVERLAY_MAP_LOCAL && t !== 'room') {
@@ -1659,7 +1904,7 @@ export default function MapBuilder({ store }) {
   }
 
   function handleMouseDown(e) {
-    if (e.button === 1 || e.button === 2 || e.shiftKey || isPanTool) {
+    if (e.button === 1 || e.button === 2 || e.shiftKey) {
       e.preventDefault()
       panDragRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y }
       return
@@ -1678,7 +1923,7 @@ export default function MapBuilder({ store }) {
       return
     }
 
-    const selectedBounds = selectedObjectBounds()
+    const selectedBounds = isSelectTool ? selectedObjectBounds() : null
     if (selectedBounds && selectedObject) {
       const handleRadius = Math.max(12, 14 / zoomRef.current)
       if (Math.hypot(pos.x - selectedBounds.right, pos.y - selectedBounds.bottom) <= handleRadius) {
@@ -1698,13 +1943,15 @@ export default function MapBuilder({ store }) {
       }
     }
 
-    const existing = hitTestObject(pos, tool !== 'region')
-    if (existing && ['pin', 'region', 'label', 'stamp'].includes(existing.type)) {
-      selectMapObject(existing.type, existing.item.id)
-      draggingObjectRef.current = { type: existing.type, id: existing.item.id, startX: pos.x, startY: pos.y, startItem: existing.item }
+    if (isSelectTool) {
+      const existing = hitTestObject(pos, true, activeSelectableObjectLayerIds())
+      if (existing && ['pin', 'region', 'label', 'stamp'].includes(existing.type)) {
+        selectMapObject(existing.type, existing.item.id)
+        draggingObjectRef.current = { type: existing.type, id: existing.item.id, startX: pos.x, startY: pos.y, startItem: existing.item }
+        return
+      }
+      if (selectedObject) clearObjectSelection()
       return
-    } else if (selectedObject) {
-      clearObjectSelection()
     }
 
     if (tool === 'room') {
@@ -1714,7 +1961,8 @@ export default function MapBuilder({ store }) {
     }
     if (tool === 'pin')    {
       // Hit-test existing pins for dragging
-      const pins = activeMap?.mapPins || []
+      const activeLayerIds = activeSelectableObjectLayerIds()
+      const pins = (activeMap?.mapPins || []).filter(pin => activeLayerIds.has(objectLayerId(pin)))
       let hit = null
       for (let i = pins.length - 1; i >= 0; i--) {
         const p = pins[i]
@@ -1730,7 +1978,8 @@ export default function MapBuilder({ store }) {
     }
     if (tool === 'label')  { setLabelModal(pos);  return }
     if (tool === 'stamp')  {
-      const stamps = activeMap?.mapStamps || []
+      const activeLayerIds = activeSelectableObjectLayerIds()
+      const stamps = (activeMap?.mapStamps || []).filter(stamp => activeLayerIds.has(objectLayerId(stamp)))
       // Hit-test existing stamps (reverse order so topmost is checked first)
       let hit = null
       for (let i = stamps.length - 1; i >= 0; i--) {
@@ -1753,6 +2002,11 @@ export default function MapBuilder({ store }) {
     if (tool === 'region') {
       regionDragRef.current = { points: [pos] }
       setRegionDraft({ points: [pos] })
+      return
+    }
+    if (tool === 'landmass') {
+      landmassDragRef.current = { points: [pos] }
+      setLandmassDraft({ points: [pos] })
       return
     }
     if (pathMode === 'points' && (isTerrainTool || isOverlayTool)) {
@@ -1858,6 +2112,16 @@ export default function MapBuilder({ store }) {
       const next = { points: [...pts, pos] }
       regionDragRef.current = next
       setRegionDraft(next)
+      return
+    }
+    if (landmassDragRef.current) {
+      const pos = canvasPos(e)
+      const pts = landmassDragRef.current.points
+      const last = pts[pts.length - 1]
+      if (Math.hypot(pos.x - last.x, pos.y - last.y) < 8) return
+      const next = { points: [...pts, pos] }
+      landmassDragRef.current = next
+      setLandmassDraft(next)
       return
     }
     if (!paintingRef.current) return
@@ -2010,6 +2274,19 @@ export default function MapBuilder({ store }) {
         setRegionModal({ points: pts })
       }
     }
+    if (landmassDragRef.current) {
+      const pts = landmassDragRef.current.points
+      landmassDragRef.current = null
+      setLandmassDraft(null)
+      if (pts.length >= 5) {
+        pushUndo()
+        const borderWidth = Math.max(32, brushSize * 2)
+        const landmassPoints = landmassEdgeMode === 'random' ? randomiseLandmassEdge(pts, borderWidth) : pts
+        fillLandmass(hmRef.current, landmassPoints, borderWidth)
+        renderMap()
+        throttledSave()
+      }
+    }
     if (paintLoopRef.current) {
       cancelAnimationFrame(paintLoopRef.current)
       paintLoopRef.current = null
@@ -2022,8 +2299,9 @@ export default function MapBuilder({ store }) {
   }
 
   function rawStroke(pos) {
-    if (isTerrainTool) {
+    if (isSculptTool) {
       paintBrush(hmRef.current, pos.x, pos.y, brushSize, brushStr, tool)
+      if (tool === 'raise' || tool === 'lower') blendCoastlineAround(hmRef.current, pos.x, pos.y, brushSize)
     } else if (isOverlayTool && tool !== 'room') {
       const needsColorOv = brushCustomColor || TEXTURE_TOOLS.has(tool) || tool === 'wall'
       if (needsColorOv && !colorOvRef.current) colorOvRef.current = createColorOverlay()
@@ -2203,7 +2481,13 @@ export default function MapBuilder({ store }) {
   }
 
   function selectObjectFromList(type, item) {
-    setActiveLayerId(objectLayerId(item))
+    const layerId = objectLayerId(item)
+    if (activeLayerId !== layerId) {
+      setActiveLayerId(layerId)
+      clearObjectSelection()
+      setTimeout(renderMap, 0)
+      return
+    }
     selectMapObject(type, item.id)
     setTimeout(renderMap, 0)
   }
@@ -2240,7 +2524,7 @@ export default function MapBuilder({ store }) {
       mapLabels: (m.mapLabels || []).map(item => item.id === current.item.id && current.type === 'label' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'label' ? { ...item, objectOrder: currentOrder } : item),
       mapStamps: (m.mapStamps || []).map(item => item.id === current.item.id && current.type === 'stamp' ? { ...item, objectOrder: targetOrder } : item.id === target.item.id && target.type === 'stamp' ? { ...item, objectOrder: currentOrder } : item),
     }))
-    selectMapObject(type, id)
+    if (activeLayerId === layerId) selectMapObject(type, id)
     setTimeout(renderMap, 0)
   }
 
@@ -2370,6 +2654,7 @@ export default function MapBuilder({ store }) {
     { id: 'smooth',  label: '≈ Smooth'  },
     { id: 'flatten', label: '═ Flatten' },
     { id: 'water',   label: '💧 Water'  },
+    { id: 'landmass', label: '▰ Land'   },
   ]
   const TEXTURE_TOOL_LIST = [
     { id: 'rock',         label: '▧ Rock'      },
@@ -2396,7 +2681,7 @@ export default function MapBuilder({ store }) {
     : (mapType === 'interior' || mapType === 'dungeon') ? INTERIOR_STAMPS
     : WORLD_STAMPS
   const VIEW_TOOLS = [
-    { id: 'pan', label: '✥ Pan' },
+    { id: 'select', label: '↖ Select' },
   ]
 
   if (!project) return null
@@ -2532,7 +2817,7 @@ export default function MapBuilder({ store }) {
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:10, display:'flex', flexDirection:'column', gap:8 }}>
 
               {/* Brush size */}
-              {!isPanTool && (
+              {!isSelectTool && (
                 <label style={{ display:'flex', flexDirection:'column', gap:3, fontSize:11, color:'var(--muted)' }}>
                   <div style={{ display:'flex', justifyContent:'space-between' }}>
                     <span>Brush</span><span>{Math.min(brushSize, brushMax)}</span>
@@ -2542,15 +2827,32 @@ export default function MapBuilder({ store }) {
               )}
 
               {/* Strength */}
-              {isTerrainTool && (
+              {isSculptTool && (
                 <label style={{ display:'flex', flexDirection:'column', gap:3, fontSize:11, color:'var(--muted)' }}>
                   <span>Strength</span>
                   <input type="range" min="1" max="20" value={Math.round(brushStr * 250)} onChange={e => setBrushStr(e.target.value / 250)} style={{ accentColor:'var(--accent)', width:'100%' }} />
                 </label>
               )}
 
+              {tool === 'landmass' && (
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <div style={{ fontSize:11, color:'var(--muted)' }}>Edge</div>
+                  <div style={{ display:'flex', gap:4 }}>
+                    {[
+                      { id: 'exact', label: 'Exact' },
+                      { id: 'random', label: 'Bumpy' },
+                    ].map(option => (
+                      <button key={option.id} onClick={() => setLandmassEdgeMode(option.id)}
+                        style={{ flex:1, padding:'3px 4px', borderRadius:5, fontSize:10, cursor:'pointer', fontFamily:'inherit', background:landmassEdgeMode === option.id ? 'var(--accent)' : 'var(--surface2)', border:`1px solid ${landmassEdgeMode === option.id ? 'var(--accent)' : 'var(--border)'}`, color:landmassEdgeMode === option.id ? '#fff' : 'var(--muted)' }}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Path mode */}
-              {(isTerrainTool || isOverlayTool) && mapType !== 'world' && mapType !== 'regional' && (
+              {(isSculptTool || isOverlayTool) && mapType !== 'world' && mapType !== 'regional' && (
                 <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
                   <div style={{ fontSize:11, color:'var(--muted)' }}>Mode</div>
                   <div style={{ display:'flex', gap:4 }}>
@@ -2662,7 +2964,7 @@ export default function MapBuilder({ store }) {
 
               {/* Hint text */}
               <div style={{ fontSize:10, color:'var(--faint)', lineHeight:1.4, paddingTop:2 }}>
-                {tool === 'region' ? 'Draw freehand to outline a region' : tool === 'label' ? 'Click map to add a label' : tool === 'stamp' ? 'Click to place · drag to move' : tool === 'water' ? 'Tiny brush for rivers & waterways' : pathMode === 'points' ? 'Click waypoints · Finish to draw' : 'Scroll to zoom · Shift-drag to pan'}
+                {tool === 'select' ? 'Click objects on the active layer' : tool === 'region' ? 'Draw freehand to outline a region' : tool === 'landmass' ? (landmassEdgeMode === 'random' ? 'Draw an outline; edge will become bumpy' : 'Draw an exact land outline') : tool === 'label' ? 'Click map to add a label' : tool === 'stamp' ? 'Click to place · drag to move' : tool === 'water' ? 'Tiny brush for rivers & waterways' : pathMode === 'points' ? 'Click waypoints · Finish to draw' : 'Scroll to zoom · Shift-drag to pan'}
               </div>
             </div>
           </div>
@@ -2686,11 +2988,16 @@ export default function MapBuilder({ store }) {
             onPointerMove={handleTouchPointerMove}
             onPointerUp={handleTouchPointerUp}
             onPointerCancel={handleTouchPointerUp}
-            style={{ position:'absolute', left:pan.x, top:pan.y, cursor:effectiveViewMode || isPanTool ? 'grab' : tool === 'stamp' ? 'crosshair' : 'crosshair', display:'block', width:MAP_W * zoom, height:MAP_H * zoom, imageRendering:'auto', borderRadius:10, boxShadow:'0 22px 54px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.08)', background:'#07111d', touchAction:'none' }}
+            style={{ position:'absolute', left:pan.x, top:pan.y, cursor:effectiveViewMode ? 'grab' : isSelectTool ? 'default' : 'crosshair', display:'block', width:MAP_W * zoom, height:MAP_H * zoom, imageRendering:'auto', borderRadius:10, boxShadow:'0 22px 54px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.08)', background:'#07111d', touchAction:'none' }}
           />
           {regionDraft && regionDraft.points && regionDraft.points.length >= 2 && (
             <svg style={{ position:'absolute', left:pan.x, top:pan.y, width:MAP_W * zoom, height:MAP_H * zoom, pointerEvents:'none', borderRadius:10 }} viewBox={`0 0 ${MAP_W} ${MAP_H}`}>
               <polygon points={regionDraft.points.map(p => `${p.x},${p.y}`).join(' ')} fill="rgba(56, 189, 248, 0.18)" stroke="rgba(255,255,255,0.85)" strokeWidth={3 / zoom} strokeDasharray={`${12 / zoom} ${8 / zoom}`} strokeLinejoin="round" strokeLinecap="round" />
+            </svg>
+          )}
+          {landmassDraft && landmassDraft.points && landmassDraft.points.length >= 2 && (
+            <svg style={{ position:'absolute', left:pan.x, top:pan.y, width:MAP_W * zoom, height:MAP_H * zoom, pointerEvents:'none', borderRadius:10 }} viewBox={`0 0 ${MAP_W} ${MAP_H}`}>
+              <polygon points={landmassDraft.points.map(p => `${p.x},${p.y}`).join(' ')} fill="rgba(83, 132, 61, 0.24)" stroke="rgba(246, 217, 134, 0.9)" strokeWidth={3 / zoom} strokeDasharray={`${12 / zoom} ${8 / zoom}`} strokeLinejoin="round" strokeLinecap="round" />
             </svg>
           )}
           {roomDraft && Math.abs(roomDraft.x2 - roomDraft.x1) > 4 && (
