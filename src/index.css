@@ -4298,6 +4298,8 @@ textarea:focus {
 
 .studio-workspace-overview .studio-surface {
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   background:
     radial-gradient(circle at 14% 16%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 24%),
     linear-gradient(90deg, color-mix(in srgb, var(--bg-main) 86%, #23160d 14%), color-mix(in srgb, var(--bg-main) 94%, #030202 6%));
@@ -5558,7 +5560,7 @@ body {
   .studio-shell.is-context-collapsed {
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
-    overflow: hidden;
+    overflow: clip;
   }
 
   .studio-spine {
@@ -6653,7 +6655,7 @@ body {
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden;
+    overflow: clip;
   }
 
   .studio-spine {
@@ -6749,7 +6751,7 @@ body {
     grid-column: 1;
     grid-row: 2;
     grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
+    overflow: clip;
   }
 
   .studio-workspace-header {
@@ -6845,6 +6847,7 @@ body {
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 
   .studio-index {
