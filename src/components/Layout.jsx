@@ -908,7 +908,7 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
               : <AIAssistant store={store} section="manuscript" onOpenChat={() => setAiOpen(v => !v)} aiOpen={aiOpen} />
           }
         >
-          <div className="h-full overflow-hidden">
+          <div className="h-full">
             {viewMode === 'planning' ? (
               <SectionErrorBoundary key={section}>
                 {databaseContent[section] || databaseContent['characters']}
