@@ -5518,7 +5518,13 @@ body {
 
 @media (max-width: 860px) {
   html,
-  body,
+  body {
+    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   #root {
     min-height: 100%;
     height: 100%;
@@ -6844,6 +6850,18 @@ body {
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+
+  /* Make the content wrapper a flex column so section roots get
+     flex-allocated heights instead of unreliable height: 100% chains */
+  .studio-surface > .flex-1 {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .studio-surface > .flex-1 > * {
+    flex: 1 1 0;
+    min-height: 0;
   }
 
   .studio-board,
