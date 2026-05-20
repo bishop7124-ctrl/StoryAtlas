@@ -5531,6 +5531,13 @@ body {
     overflow: clip;
   }
 
+  .auth-shell {
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
   body {
     -webkit-text-size-adjust: 100%;
   }
