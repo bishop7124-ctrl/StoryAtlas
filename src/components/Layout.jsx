@@ -781,6 +781,17 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
     return () => window.removeEventListener('switch-section', handleTeleport)
   }, [setSection])
 
+  // iOS Safari requires a passive touchstart listener on scroll containers
+  // to properly recognise them as touch-scroll targets.
+  useEffect(() => {
+    const noop = () => {}
+    const els = document.querySelectorAll(
+      '.studio-surface, .studio-split, .studio-split-dossier, .studio-split-notebook, .overflow-auto, .overflow-y-auto, .overflow-y-scroll'
+    )
+    els.forEach(el => el.addEventListener('touchstart', noop, { passive: true }))
+    return () => els.forEach(el => el.removeEventListener('touchstart', noop))
+  }, [section, viewMode])
+
   const initialContext = useMemo(() => {
     if (viewMode === 'writing') return { characterIds: [], locationIds: [], loreEntryIds: [], chapterIds: store.chapters.map(c => c.id), customInstruction: '' }
     if (section === 'characters' && store.selectedCharacterId) return { characterIds: [store.selectedCharacterId], locationIds: [], loreEntryIds: [], chapterIds: [], customInstruction: '' }
