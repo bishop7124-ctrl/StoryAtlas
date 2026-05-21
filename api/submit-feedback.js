@@ -24,13 +24,18 @@ export default async function handler(req, res) {
   const categoryLine = category ? `\nCategory: ${category}` : ''
   const fromLine     = email ? `\nFrom: ${name ? `${name} <${email}>` : email}` : name ? `\nFrom: ${name}` : ''
 
-  await transporter.sendMail({
-    from:    `"YOW Feedback" <${ownerEmail}>`,
-    to:      ownerEmail,
-    replyTo: email || ownerEmail,
-    subject: `[YOW ${typeLabel}] ${title.trim()}`,
-    text: `Type: ${typeLabel}${categoryLine}${fromLine}\n\n${title.trim()}\n\n${message.trim()}`,
-  })
+  try {
+    await transporter.sendMail({
+      from:    `"YOW Feedback" <${ownerEmail}>`,
+      to:      ownerEmail,
+      replyTo: email || ownerEmail,
+      subject: `[YOW ${typeLabel}] ${title.trim()}`,
+      text: `Type: ${typeLabel}${categoryLine}${fromLine}\n\n${title.trim()}\n\n${message.trim()}`,
+    })
+  } catch (err) {
+    console.error('nodemailer error:', err)
+    return res.status(500).json({ error: `Failed to send email: ${err.message}` })
+  }
 
   return res.status(200).json({ ok: true })
 }
