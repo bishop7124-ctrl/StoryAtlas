@@ -326,7 +326,7 @@ function StatusQueue({ stats, onOpenProject }) {
   )
 }
 
-function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, organizing, isDragging, isDropTarget, dropBefore, onDragStart, onDragOver, onDrop, onDragEnd, isFirst, isLast, onMoveUp, onMoveDown, isFocus, onSetFocus, compact, onCycleStatus }) {
+function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, onSetFocus, compact, onCycleStatus }) {
   const [hovered, setHovered] = useState(false)
   const [coverError, setCoverError] = useState('')
   const novel = stats.project
@@ -370,24 +370,12 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, organizin
       className="novel-card"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      draggable={organizing}
-      onDragStart={organizing ? onDragStart : undefined}
-      onDragOver={organizing ? onDragOver : undefined}
-      onDrop={organizing ? onDrop : undefined}
-      onDragEnd={organizing ? onDragEnd : undefined}
-      style={{
-        opacity: isDragging ? 0.35 : 1,
-        cursor: organizing ? 'grab' : undefined,
-        outline: isDropTarget ? `2px solid var(--accent)` : undefined,
-        outlineOffset: isDropTarget ? (dropBefore ? '-2px' : '-2px') : undefined,
-        boxShadow: isDropTarget ? `${dropBefore ? '-4px' : '4px'} 0 0 0 var(--accent)` : undefined,
-      }}
     >
       {/* Cover */}
       <div
         className="novel-card-cover"
-        onClick={() => !organizing && onOpen?.(novel.id)}
-        style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title), cursor: organizing ? 'default' : undefined }}
+        onClick={() => onOpen?.(novel.id)}
+        style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title) }}
       >
         {novel.coverPhoto ? (
           <img src={novel.coverPhoto} alt="" />
@@ -431,30 +419,10 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, organizin
           )}
         </div>
         {coverError && <p className="novel-cover-error">{coverError}</p>}
-        {organizing && (
-          <div className="novel-card-organize-controls" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', gap: 3 }}>
-              <button className="card-order-btn" onClick={onMoveUp} disabled={isFirst} title="Move left">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-              </button>
-              <button className="card-order-btn" onClick={onMoveDown} disabled={isLast} title="Move right">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
-            </div>
-            <button
-              className={`card-focus-btn${isFocus ? ' card-focus-btn--active' : ''}`}
-              onClick={onSetFocus}
-              title={isFocus ? 'Remove active project' : 'Set as active project'}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill={isFocus ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-              {isFocus ? 'Active' : 'Set active'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Title */}
-      <div className="novel-card-foot" onClick={() => !organizing && onOpen?.(novel.id)}>
+      <div className="novel-card-foot" onClick={() => onOpen?.(novel.id)}>
         <p>{novel.title}</p>
         <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginTop: 2 }}>
           {cfg.label} · {stats.updatedLabel}
@@ -463,7 +431,7 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, organizin
       </div>
 
       {/* Hover popup */}
-      {hovered && !organizing && (
+      {hovered && (
         <div className="novel-card-popup">
           <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 8, minHeight: 32 }}>
             {novel.description || 'No description yet.'}
@@ -793,10 +761,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   const [showSeriesForm, setShowSeriesForm] = useState(false)
   const [seriesName, setSeriesName] = useState('')
   const [editingSeries, setEditingSeries] = useState(null)
-  const [organizing, setOrganizing] = useState(false)
-  const [dragging, setDragging] = useState(null) // visual feedback only
-  const [dropTarget, setDropTarget] = useState(null) // { type, id, before }
-  const dragRef = useRef(null) // { type: 'series'|'novel', id, seriesId? } — sync, used in handlers
   const [seriesFilter, setSeriesFilter] = useState(null)
   const [openSeriesId, setOpenSeriesId] = useState(null)
   const userProfile = user?.user_metadata || {}
@@ -820,37 +784,10 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
     }
   }
 
-  const clearDrag = () => { dragRef.current = null; setDragging(null); setDropTarget(null) }
-
-  const moveProjectUp = (id, groupStats) => {
-    const groupIds = groupStats.map(s => s.project.id)
-    const idx = groupIds.indexOf(id)
-    if (idx <= 0) return
-    const allIds = store.allProjectStats.map(s => s.project.id)
-    const posA = allIds.indexOf(groupIds[idx - 1])
-    const posB = allIds.indexOf(id)
-    ;[allIds[posA], allIds[posB]] = [allIds[posB], allIds[posA]]
-    store.reorderNovels(allIds)
-  }
-  const moveProjectDown = (id, groupStats) => {
-    const groupIds = groupStats.map(s => s.project.id)
-    const idx = groupIds.indexOf(id)
-    if (idx >= groupIds.length - 1) return
-    const allIds = store.allProjectStats.map(s => s.project.id)
-    const posA = allIds.indexOf(id)
-    const posB = allIds.indexOf(groupIds[idx + 1])
-    ;[allIds[posA], allIds[posB]] = [allIds[posB], allIds[posA]]
-    store.reorderNovels(allIds)
-  }
   const handleSetFocus = (id) => {
     const isAlready = store.allProjectStats.find(s => s.project.id === id)?.project.focus
     store.allProjectStats.forEach(s => { if (s.project.focus) store.updateNovel(s.project.id, { focus: false }) })
     if (!isAlready) store.updateNovel(id, { focus: true })
-  }
-  const handleSetActiveSeries = (id) => {
-    const isAlready = store.series.find(s => s.id === id)?.focus
-    store.series.forEach(s => { if (s.focus) store.updateSeries(s.id, { focus: false }) })
-    if (!isAlready) store.updateSeries(id, { focus: true })
   }
   const handleCycleStatus = (id, currentStatus) => {
     const normalizedStatus = STATUS_DATA[currentStatus]?.aliasFor ?? currentStatus ?? null
@@ -860,47 +797,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   }
   const handleSetStatus = (id, status) => {
     store.updateNovel(id, { status })
-  }
-
-  const moveSeriesUp = (id) => {
-    const ids = store.series.map(s => s.id)
-    const idx = ids.indexOf(id)
-    if (idx <= 0) return
-    ;[ids[idx - 1], ids[idx]] = [ids[idx], ids[idx - 1]]
-    store.reorderSeries(ids)
-  }
-  const moveSeriesDown = (id) => {
-    const ids = store.series.map(s => s.id)
-    const idx = ids.indexOf(id)
-    if (idx >= ids.length - 1) return
-    ;[ids[idx + 1], ids[idx]] = [ids[idx], ids[idx + 1]]
-    store.reorderSeries(ids)
-  }
-
-  const handleNovelDragStart = (e, id, seriesId) => {
-    dragRef.current = { type: 'novel', id, seriesId }
-    setDragging({ type: 'novel', id, seriesId })
-    e.dataTransfer.effectAllowed = 'move'
-  }
-  const handleNovelDragOver = (e, id) => {
-    const drag = dragRef.current
-    if (drag?.type !== 'novel' || drag.id === id) return
-    e.preventDefault()
-    const rect = e.currentTarget.getBoundingClientRect()
-    setDropTarget({ type: 'novel', id, before: e.clientX < rect.left + rect.width / 2 })
-  }
-  const handleNovelDrop = (e, targetId, targetSeriesId) => {
-    e.preventDefault()
-    const drag = dragRef.current
-    if (!drag || drag.type !== 'novel' || drag.id === targetId) return clearDrag()
-    const allIds = store.allProjectStats.map(s => s.project.id)
-    const from = allIds.indexOf(drag.id)
-    allIds.splice(from, 1)
-    const toIdx = allIds.indexOf(targetId) + (dropTarget?.before ? 0 : 1)
-    allIds.splice(Math.max(0, toIdx), 0, drag.id)
-    if (drag.seriesId !== targetSeriesId) store.updateNovel(drag.id, { seriesId: targetSeriesId || null })
-    store.reorderNovels(allIds)
-    clearDrag()
   }
 
   const handleCreateSeries = (e) => {
@@ -984,16 +880,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {store.novels.length > 1 && (
-            <button
-              className={`library-organize-button${organizing ? ' library-organize-button--active' : ''}`}
-              type="button"
-              onClick={() => { setOrganizing(o => !o); clearDrag() }}
-              title={organizing ? 'Done organizing' : 'Organize library'}
-            >
-              {organizing ? 'Done' : 'Organize'}
-            </button>
-          )}
           <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
             ✦
           </button>
@@ -1002,7 +888,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       </div>
 
       {/* ── Full-height active project hero ── */}
-      {focusStats && !organizing && (
+      {focusStats && (
         <ActiveProjectHero
           stats={focusStats}
           allStats={store.allProjectStats}
@@ -1015,8 +901,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
 
       {/* Content */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '36px 28px 56px' }}>
-        {/* Welcome + heading only when no active project or in organize mode */}
-        {(!focusStats || organizing) && (
+        {!focusStats && (
           <>
             <p className="library-welcome">Welcome, {userName}!</p>
             <div className="library-hero" style={{ justifyContent: 'center' }}>
@@ -1027,7 +912,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
 
 
         {/* ── Series filter strip (full-view only) ── */}
-        {(!focusStats || organizing) && store.series.length > 0 && (
+        {!focusStats && store.series.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, alignItems: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>Series</span>
             <button
@@ -1052,38 +937,14 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           </div>
         )}
 
-        {/* ── Full grouped grid (organize mode or no active project) ── */}
-        {(organizing || !focusStats) && projectGroups.map(group => {
-          const seriesIdx = store.series.findIndex(s => s.id === group.id)
+        {!focusStats && projectGroups.map(group => {
           const thisSeries = store.series.find(s => s.id === group.id)
           return (
             <section className="library-series-section" key={group.id}>
               <div className="library-series-heading">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {organizing && group.id !== 'standalone' && (
-                    <span style={{ display: 'inline-flex', gap: 2 }}>
-                      <button type="button" className="series-order-button" onClick={() => moveSeriesUp(group.id)} disabled={seriesIdx <= 0} title="Move up">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-                      </button>
-                      <button type="button" className="series-order-button" onClick={() => moveSeriesDown(group.id)} disabled={seriesIdx >= store.series.length - 1} title="Move down">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                      </button>
-                    </span>
-                  )}
                   <h2>{group.title}</h2>
-                  {organizing && group.id !== 'standalone' && (
-                    <button
-                      type="button"
-                      className={`series-order-button${thisSeries?.focus ? ' series-order-button--active' : ''}`}
-                      onClick={() => handleSetActiveSeries(group.id)}
-                      title={thisSeries?.focus ? 'Remove active series' : 'Set as active series'}
-                      style={{ width: 'auto', padding: '0 8px', gap: 5, display: 'inline-flex', alignItems: 'center' }}
-                    >
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill={thisSeries?.focus ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                      {thisSeries?.focus ? 'Active' : 'Set active'}
-                    </button>
-                  )}
-                  {!organizing && group.id !== 'standalone' && (
+                  {group.id !== 'standalone' && (
                     <button type="button" onClick={() => setEditingSeries(thisSeries)} title="Edit series" className="series-edit-icon-button">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
                     </button>
@@ -1091,42 +952,27 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                 </div>
                 <span>{group.stats.length} project{group.stats.length === 1 ? '' : 's'}</span>
               </div>
-              <div className="novel-grid" onDragOver={organizing ? e => e.preventDefault() : undefined} onDrop={organizing && group.stats.length === 0 ? e => handleNovelDrop(e, null, group.id === 'standalone' ? null : group.id) : undefined}>
-                {group.stats.map((stats, i) => {
-                  const isNovelDropTarget = dropTarget?.type === 'novel' && dropTarget.id === stats.project.id
-                  return (
-                    <NovelCard
-                      key={stats.project.id}
-                      stats={stats}
-                      onOpen={organizing ? undefined : onOpenProject}
-                      onDelete={handleDelete}
-                      onUpdateCover={handleUpdateCover}
-                      onExport={handleExportProject}
-                      organizing={organizing}
-                      isDragging={dragging?.type === 'novel' && dragging.id === stats.project.id}
-                      isDropTarget={isNovelDropTarget}
-                      dropBefore={isNovelDropTarget && dropTarget.before}
-                      onDragStart={e => handleNovelDragStart(e, stats.project.id, stats.project.seriesId)}
-                      onDragOver={e => handleNovelDragOver(e, stats.project.id)}
-                      onDrop={e => handleNovelDrop(e, stats.project.id, stats.project.seriesId)}
-                      onDragEnd={clearDrag}
-                      isFirst={i === 0}
-                      isLast={i === group.stats.length - 1}
-                      onMoveUp={() => moveProjectUp(stats.project.id, group.stats)}
-                      onMoveDown={() => moveProjectDown(stats.project.id, group.stats)}
-                      isFocus={!!stats.project.focus}
-                      onSetFocus={() => handleSetFocus(stats.project.id)}
-                      onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
-                    />
-                  )
-                })}
+              <div className="novel-grid">
+                {group.stats.map((stats) => (
+                  <NovelCard
+                    key={stats.project.id}
+                    stats={stats}
+                    onOpen={onOpenProject}
+                    onDelete={handleDelete}
+                    onUpdateCover={handleUpdateCover}
+                    onExport={handleExportProject}
+                    isFocus={!!stats.project.focus}
+                    onSetFocus={() => handleSetFocus(stats.project.id)}
+                    onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
+                  />
+                ))}
               </div>
             </section>
           )
         })}
 
-        {/* ── Series + Standalone (active project set, normal mode) ── */}
-        {focusStats && !organizing && (() => {
+        {/* ── Series + Standalone (active project set) ── */}
+        {focusStats && (() => {
           const seriesById = new Map((store.series || []).map(s => [s.id, s]))
           const nonFocusStats = store.allProjectStats.filter(s => !s.project.focus)
           const seriesWithProjects = (store.series || []).filter(s =>
