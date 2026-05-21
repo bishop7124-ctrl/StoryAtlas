@@ -326,7 +326,7 @@ function StatusQueue({ stats, onOpenProject }) {
   )
 }
 
-function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, onSetFocus, compact, onCycleStatus }) {
+function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, onSetFocus, compact, onCycleStatus, isViewOnly }) {
   const [hovered, setHovered] = useState(false)
   const [coverError, setCoverError] = useState('')
   const novel = stats.project
@@ -356,6 +356,9 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, 
             <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 36, fontWeight: 900, color: 'rgba(255,255,255,0.1)', userSelect: 'none' }}>{novel.title[0]?.toUpperCase()}</span>
           )}
           {isFocus && <span className="novel-focus-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>}
+          {isViewOnly && (
+            <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 9, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', background: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.7)', padding: '2px 6px', borderRadius: 4 }}>View only</span>
+          )}
         </div>
         <div className="novel-card-foot">
           <p style={{ fontSize: 10, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{novel.title}</p>
@@ -755,7 +758,7 @@ function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, 
   )
 }
 
-export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout }) {
+export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [showSeriesForm, setShowSeriesForm] = useState(false)
@@ -868,7 +871,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       <div className="library-top-bar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="library-brand-logo"><YOWLogo /></span>
-          {!store.readOnly && (
+          {!store.readOnly && !membership?.freeProjectId && (
             <>
               <button className="library-new-project-button" type="button" onClick={() => setShowForm(true)}>
                 New Project
@@ -964,6 +967,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                     isFocus={!!stats.project.focus}
                     onSetFocus={() => handleSetFocus(stats.project.id)}
                     onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
+                    isViewOnly={membership?.freeProjectId !== null && membership?.freeProjectId !== undefined && membership?.freeProjectId !== stats.project.id}
                   />
                 ))}
               </div>
@@ -1035,6 +1039,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                         onExport={handleExportProject}
                         isFocus={false}
                         onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
+                        isViewOnly={membership?.freeProjectId !== null && membership?.freeProjectId !== undefined && membership?.freeProjectId !== stats.project.id}
                       />
                     ))}
                   </div>
@@ -1049,11 +1054,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
         {store.novels.length === 0 && !store.readOnly && (
           <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
             Create your first project to get started.
-          </p>
-        )}
-        {store.readOnly && (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
-            Your trial has ended. Projects are available in read-only mode until membership is active.
           </p>
         )}
       </div>

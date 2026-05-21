@@ -700,7 +700,7 @@ function ProjectSettings({ store, onClose }) {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-export default function Layout({ store, section, setSection, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout }) {
+export default function Layout({ store, section, setSection, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const projectTypeCfg = getProjectType(store.activeNovel?.type)
   const enabledSectionIds = new Set(getEnabledSections(store.activeNovel))
   const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || enabledSectionIds.has(s.id))
@@ -965,7 +965,7 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
         />
       )}
 
-      <AIPanel store={store} open={aiOpen} onClose={() => setAiOpen(false)} initialContext={initialContext} />
+      <AIPanel store={store} open={aiOpen} onClose={() => setAiOpen(false)} initialContext={initialContext} membership={membership} />
     </>
   )
 }

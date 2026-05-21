@@ -178,7 +178,7 @@ async function requestBillingUrl(endpoint, accessToken, body) {
 }
 
 function PlanBadge({ membership }) {
-  const label = membership.isPaid ? 'Paid' : membership.isTrialActive ? 'Free trial' : 'Read only'
+  const label = membership.isPaid ? 'Paid' : membership.isTrialActive ? 'Free trial' : 'Free'
   return (
     <span className={`account-plan-badge account-plan-${membership.plan}`}>
       {label}
@@ -392,23 +392,39 @@ export default function AccountSettings({ open, onClose }) {
             </div>
 
             <div className="account-status-list">
-              <div>
-                <span>Trial ends</span>
-                <strong>{formatter.format(membership.trialEndsAt)}</strong>
-              </div>
-              <div>
-                <span>Trial time left</span>
-                <strong>{membership.isPaid ? 'Covered by membership' : `${membership.daysRemaining} day${membership.daysRemaining === 1 ? '' : 's'}`}</strong>
-              </div>
+              {membership.isTrialActive && (
+                <>
+                  <div>
+                    <span>Trial ends</span>
+                    <strong>{formatter.format(membership.trialEndsAt)}</strong>
+                  </div>
+                  <div>
+                    <span>Trial time left</span>
+                    <strong>{`${membership.daysRemaining} day${membership.daysRemaining === 1 ? '' : 's'}`}</strong>
+                  </div>
+                </>
+              )}
+              {membership.isPaid && (
+                <div>
+                  <span>Trial</span>
+                  <strong>Covered by membership</strong>
+                </div>
+              )}
+              {membership.isFree && (
+                <div>
+                  <span>Active project</span>
+                  <strong>{membership.freeProjectId ? 'Set' : 'Not yet chosen'}</strong>
+                </div>
+              )}
               <div>
                 <span>Current access</span>
-                <strong>{membership.isReadOnly ? 'Read only' : 'Editing enabled'}</strong>
+                <strong>{membership.isPaid ? 'Full access' : membership.isTrialActive ? 'Full access (trial)' : 'Free plan'}</strong>
               </div>
             </div>
 
-            {membership.isReadOnly && (
+            {membership.isFree && (
               <div className="account-readonly-note">
-                Your free trial has ended, so projects can be opened and read but changes are paused until a paid membership is active.
+                You are on the free plan. One project is fully editable — all others are view-only. Upgrade for unlimited projects and AI access.
               </div>
             )}
 
@@ -419,16 +435,18 @@ export default function AccountSettings({ open, onClose }) {
                 onClick={() => openBilling(membership.isPaid ? 'portal' : 'checkout')}
                 disabled={billingBusy === 'checkout' || billingBusy === 'portal'}
               >
-                {billingBusy ? 'Opening...' : membership.isPaid ? 'Manage membership' : 'Start paid membership'}
+                {billingBusy ? 'Opening...' : membership.isPaid ? 'Manage membership' : 'Upgrade to paid'}
               </button>
-              <button
-                type="button"
-                className="account-secondary-button"
-                onClick={() => openBilling('portal')}
-                disabled={billingBusy === 'portal'}
-              >
-                {billingBusy === 'portal' ? 'Opening…' : 'Manage payment'}
-              </button>
+              {membership.isPaid && (
+                <button
+                  type="button"
+                  className="account-secondary-button"
+                  onClick={() => openBilling('portal')}
+                  disabled={billingBusy === 'portal'}
+                >
+                  {billingBusy === 'portal' ? 'Opening…' : 'Manage payment'}
+                </button>
+              )}
             </div>
 
             {billingMessage && <p className="account-success">{billingMessage}</p>}

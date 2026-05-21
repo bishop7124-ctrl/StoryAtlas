@@ -509,7 +509,50 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
 
 // ── Root Panel ────────────────────────────────────────────────────────────────
 
-export default function AIPanel({ store, open, onClose, initialContext, docked = false, onPopOut }) {
+function AIUpgradeWall({ onClose, docked }) {
+  const panelMode = docked
+    ? 'ai-panel-docked rounded-lg'
+    : 'fixed right-3 bottom-3 left-3 top-20 sm:left-auto sm:top-auto sm:right-5 sm:bottom-5 sm:w-[430px] sm:h-[min(680px,calc(100vh-7rem))] rounded-xl'
+
+  return (
+    <div
+      className={`z-50 bg-[var(--bg-nav)] border border-[var(--border)] flex flex-col shadow-2xl overflow-hidden ${panelMode}`}
+      role="dialog"
+      aria-label="AI chat"
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--accent)]">✦</span>
+          <span className="block text-sm font-bold text-[var(--text-main)] uppercase tracking-wider">AI Chat</span>
+        </div>
+        {!docked && (
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        )}
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 px-8 py-10">
+        <div className="text-4xl opacity-40">✦</div>
+        <div>
+          <p className="text-sm font-bold text-[var(--text-main)] mb-2">AI assistant is a paid feature</p>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Upgrade your plan to unlock AI-powered writing assistance, brainstorming, and worldbuilding help.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-account-settings'))}
+          className="mt-2 bg-[var(--accent)] text-[var(--bg-main)] font-bold text-sm px-5 py-2 rounded-lg hover:opacity-90 transition-opacity"
+        >
+          View plans
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default function AIPanel({ store, open, onClose, initialContext, membership, docked = false, onPopOut }) {
+  if (open && membership?.isFree) return <AIUpgradeWall onClose={onClose} docked={docked} />
   const novelId = store.activeNovelId
   const [aiSettings, setAiSettings] = useState(() => {
     const stored = load('nf_aiSettings', {})

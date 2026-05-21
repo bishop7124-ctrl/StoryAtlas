@@ -12,6 +12,7 @@ import CookieBanner from './components/legal/CookieBanner'
 import LegalModal from './components/legal/LegalModal'
 import AboutPage from './components/about/AboutPage'
 import YOWLogo from './components/brand/YOWLogo'
+import FreeProjectSelector from './components/account/FreeProjectSelector'
 import { getMembership } from './utils/membership'
 
 class ErrorBoundary extends Component {
@@ -45,10 +46,10 @@ class ErrorBoundary extends Component {
 }
 
 function AppInner() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, updateProfile } = useAuth()
   const userId = user?.uid || user?.id || null
   const membership = getMembership(user)
-  const store = useStore(userId, { readOnly: membership.isReadOnly })
+  const store = useStore(userId, { readOnly: membership.isReadOnly, freeProjectId: membership.freeProjectId })
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
   const [section, setSection] = useState('dashboard')
@@ -56,7 +57,8 @@ function AppInner() {
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [readOnlyNotice, setReadOnlyNotice] = useState(false)
+  const [readOnlyNotice, setReadOnlyNotice] = useState('')
+  const [freeProjectBusy, setFreeProjectBusy] = useState(false)
   const [legalPage, setLegalPage] = useState(null)
   const [aboutOpen, setAboutOpen] = useState(false)
   const loadedUid = useRef(null)
@@ -70,10 +72,20 @@ function AppInner() {
   }, [userId])
 
   useEffect(() => {
-    const handleReadOnly = () => {
-      setReadOnlyNotice(true)
+    const handleOpenAccount = () => setAccountOpen(true)
+    window.addEventListener('open-account-settings', handleOpenAccount)
+    return () => window.removeEventListener('open-account-settings', handleOpenAccount)
+  }, [])
+
+  useEffect(() => {
+    const handleReadOnly = (event) => {
+      const reason = event.detail?.reason
+      let msg = 'Your trial has ended. Upgrade in Account settings to edit again.'
+      if (reason === 'free-project') msg = 'This project is view-only on your free plan. Upgrade to edit all projects.'
+      if (reason === 'free-limit') msg = 'Free plan includes one active project. Upgrade to create unlimited projects.'
+      setReadOnlyNotice(msg)
       window.clearTimeout(handleReadOnly.timeout)
-      handleReadOnly.timeout = window.setTimeout(() => setReadOnlyNotice(false), 3600)
+      handleReadOnly.timeout = window.setTimeout(() => setReadOnlyNotice(''), 4000)
     }
     window.addEventListener('membership-read-only', handleReadOnly)
     return () => {
@@ -132,14 +144,32 @@ function AppInner() {
     </>
   )
 
+  const showFreeSelector = membership.isFree && !membership.freeProjectId && store.novels.length >= 1
+
+  const handleFreeProjectConfirm = async (projectId) => {
+    try {
+      setFreeProjectBusy(true)
+      await updateProfile({ ...(user.user_metadata || {}), free_project_id: projectId })
+    } catch {
+      // non-fatal — user can retry on next load
+    } finally {
+      setFreeProjectBusy(false)
+    }
+  }
+
   const accountPage = (
     <>
       <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} />
       <HelpContact open={helpOpen} onClose={() => setHelpOpen(false)} />
       {readOnlyNotice && (
-        <div className="membership-toast">
-          Your trial has ended. Upgrade in Account settings to edit again.
-        </div>
+        <div className="membership-toast">{readOnlyNotice}</div>
+      )}
+      {showFreeSelector && (
+        <FreeProjectSelector
+          novels={store.novels}
+          onConfirm={handleFreeProjectConfirm}
+          busy={freeProjectBusy}
+        />
       )}
     </>
   )
@@ -161,19 +191,20 @@ function AppInner() {
   return (viewMode === 'editor' && store.activeNovel)
     ? (
       <>
-        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
+        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} />
         {accountPage}
         {globalOverlays}
       </>
     )
     : (
       <>
-        <NovelManager store={store} user={user} onOpenProject={handleOpenProject} onOpenChat={() => setLibraryAiOpen(true)} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
+        <NovelManager store={store} user={user} onOpenProject={handleOpenProject} onOpenChat={() => setLibraryAiOpen(true)} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} />
         <AIPanel
           store={store}
           open={libraryAiOpen}
           onClose={() => setLibraryAiOpen(false)}
           initialContext={{ characterIds: [], locationIds: [], loreEntryIds: [], chapterIds: [], customInstruction: '' }}
+          membership={membership}
         />
         {accountPage}
         {globalOverlays}

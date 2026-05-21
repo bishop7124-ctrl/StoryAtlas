@@ -55,7 +55,8 @@ function debounce(fn, ms) {
 }
 
 export function useStore(userId = null, options = {}) {
-  const readOnly = Boolean(options.readOnly)
+  const globalReadOnly = Boolean(options.readOnly)
+  const freeProjectId = options.freeProjectId ?? null
   const [novels, setNovels] = useState(() => load('nf_novels', []))
   const [activeNovelId, setActiveNovelId] = useState(() => load('nf_activeNovel', null))
   const [characters, setCharacters] = useState(() => load('nf_characters', []))
@@ -702,6 +703,10 @@ export function useStore(userId = null, options = {}) {
   }
 
   const addNovel = (data) => {
+    if (freeProjectId !== null) {
+      notifyReadOnly('free-limit')
+      return null
+    }
     const novel = { id: uid(), createdAt: new Date().toISOString(), ...data }
     setNovels(prev => [...prev, novel]); setActiveNovelId(novel.id); return novel
   }
@@ -783,20 +788,27 @@ export function useStore(userId = null, options = {}) {
     setSelectedIdeaEntryId(null)
   }
 
-  const notifyReadOnly = () => {
+  // Per-project read-only: free tier users can only edit their chosen project
+  const readOnly = globalReadOnly || (
+    freeProjectId !== null && activeNovelId !== null && activeNovelId !== freeProjectId
+  )
+
+  const notifyReadOnly = (reason = 'trial-ended') => {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('membership-read-only'))
+      window.dispatchEvent(new CustomEvent('membership-read-only', { detail: { reason } }))
     }
   }
 
   const readOnlyValue = (name) => {
-    notifyReadOnly()
+    const reason = globalReadOnly ? 'trial-ended' : 'free-project'
+    notifyReadOnly(reason)
     if (name.startsWith('add') || name === 'saveLocation') return null
     return undefined
   }
 
   const api = {
     readOnly,
+    freeProjectId,
     novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData,
     series, addSeries, deleteSeries, updateSeries, reorderSeries, reorderNovels,
     allProjectStats, activeProjectStats,
