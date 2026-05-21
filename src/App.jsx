@@ -7,6 +7,10 @@ import Layout from './components/Layout'
 import LoginPage from './components/auth/LoginPage'
 import AIPanel from './components/ai/AIPanel'
 import AccountSettings from './components/account/AccountSettings'
+import HelpContact from './components/help/HelpContact'
+import CookieBanner from './components/legal/CookieBanner'
+import LegalModal from './components/legal/LegalModal'
+import AboutPage from './components/about/AboutPage'
 import YOWLogo from './components/brand/YOWLogo'
 import { getMembership } from './utils/membership'
 
@@ -48,18 +52,22 @@ function AppInner() {
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
   const [section, setSection] = useState('dashboard')
+  const [viewMode, setViewMode] = useState('manager')
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [readOnlyNotice, setReadOnlyNotice] = useState(false)
+  const [legalPage, setLegalPage] = useState(null)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const loadedUid = useRef(null)
-  const prevNovelId = useRef(null)
 
   useEffect(() => {
-    if (store.activeNovelId && store.activeNovelId !== prevNovelId.current) {
-      setSection('dashboard')
-    }
-    prevNovelId.current = store.activeNovelId ?? null
+    if (!store.activeNovelId) setViewMode('manager')
   }, [store.activeNovelId])
+
+  useEffect(() => {
+    setViewMode('manager')
+  }, [userId])
 
   useEffect(() => {
     const handleReadOnly = () => {
@@ -73,6 +81,15 @@ function AppInner() {
       window.clearTimeout(handleReadOnly.timeout)
     }
   }, [])
+
+  // Apply profile-saved theme on login (overrides local if set)
+  useEffect(() => {
+    const profileTheme = user?.user_metadata?.theme
+    if (profileTheme) {
+      localStorage.setItem('nf-theme', profileTheme)
+      window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: profileTheme } }))
+    }
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user) {
@@ -106,11 +123,19 @@ function AppInner() {
     )
   }
 
-  if (!user) return <LoginPage />
+  if (!user) return (
+    <>
+      <LoginPage onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
+      <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
+      <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
+      <AboutPage open={aboutOpen} onClose={() => setAboutOpen(false)} />
+    </>
+  )
 
   const accountPage = (
     <>
       <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <HelpContact open={helpOpen} onClose={() => setHelpOpen(false)} />
       {readOnlyNotice && (
         <div className="membership-toast">
           Your trial has ended. Upgrade in Account settings to edit again.
@@ -119,16 +144,31 @@ function AppInner() {
     </>
   )
 
-  return store.activeNovel
+  const handleOpenProject = (id) => {
+    store.setActiveNovelId(id)
+    setSection('dashboard')
+    setViewMode('editor')
+  }
+
+  const globalOverlays = (
+    <>
+      <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
+      <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
+      <AboutPage open={aboutOpen} onClose={() => setAboutOpen(false)} />
+    </>
+  )
+
+  return (viewMode === 'editor' && store.activeNovel)
     ? (
       <>
-        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} />
+        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
         {accountPage}
+        {globalOverlays}
       </>
     )
     : (
       <>
-        <NovelManager store={store} user={user} onOpenChat={() => setLibraryAiOpen(true)} onOpenAccount={() => setAccountOpen(true)} />
+        <NovelManager store={store} user={user} onOpenProject={handleOpenProject} onOpenChat={() => setLibraryAiOpen(true)} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
         <AIPanel
           store={store}
           open={libraryAiOpen}
@@ -136,6 +176,7 @@ function AppInner() {
           initialContext={{ characterIds: [], locationIds: [], loreEntryIds: [], chapterIds: [], customInstruction: '' }}
         />
         {accountPage}
+        {globalOverlays}
       </>
     )
 }

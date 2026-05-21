@@ -77,7 +77,7 @@ function HeroIllustration() {
   )
 }
 
-export default function LoginPage() {
+export default function LoginPage({ onOpenLegal, onOpenAbout }) {
   const { signIn, signUp } = useAuth()
   const [screen, setScreen] = useState('home')
   const [mode, setMode] = useState('login')
@@ -147,6 +147,9 @@ export default function LoginPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onOpenAbout && (
+              <button type="button" className="btn btn-secondary" onClick={onOpenAbout}>About</button>
+            )}
             <button type="button" className="btn btn-secondary" data-testid="home-nav-login" onClick={() => openAuth('login')}>Log in</button>
             <button type="button" className="btn btn-primary" data-testid="home-nav-start" onClick={() => openAuth('signup')}>Get started</button>
           </div>
@@ -180,6 +183,23 @@ export default function LoginPage() {
             ))}
           </section>
         </main>
+
+        <footer className="yow-home-footer">
+          <p className="yow-home-footer-copy">© 2026 YourOwnWorld. All rights reserved.</p>
+          <nav className="yow-home-footer-nav" aria-label="Legal and info links">
+            {onOpenAbout && (
+              <button type="button" onClick={onOpenAbout} className="yow-footer-link">About</button>
+            )}
+            {onOpenLegal && (
+              <>
+                <button type="button" onClick={() => onOpenLegal('privacy')}  className="yow-footer-link">Privacy</button>
+                <button type="button" onClick={() => onOpenLegal('terms')}    className="yow-footer-link">Terms</button>
+                <button type="button" onClick={() => onOpenLegal('ethics')}   className="yow-footer-link">Ethics</button>
+                <button type="button" onClick={() => onOpenLegal('cookies')}  className="yow-footer-link">Cookies</button>
+              </>
+            )}
+          </nav>
+        </footer>
       </div>
     )
   }
@@ -332,6 +352,15 @@ export default function LoginPage() {
                     Back to homepage
                   </button>
                 </p>
+
+                {onOpenLegal && (
+                  <div className="mt-6 flex justify-center gap-4 flex-wrap">
+                    <button type="button" onClick={() => onOpenLegal('privacy')} className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Privacy</button>
+                    <button type="button" onClick={() => onOpenLegal('terms')}   className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Terms</button>
+                    <button type="button" onClick={() => onOpenLegal('ethics')}  className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Ethics</button>
+                    <button type="button" onClick={() => onOpenLegal('cookies')} className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Cookies</button>
+                  </div>
+                )}
               </>
             )}
           </div>

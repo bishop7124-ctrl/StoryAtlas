@@ -744,6 +744,14 @@ export function useStore(userId = null, options = {}) {
     setNovels(prev => prev.map(n => n.seriesId === id ? { ...n, seriesId: null } : n))
   }
   const updateSeries = (id, data) => setSeries(prev => prev.map(s => s.id === id ? { ...s, ...data } : s))
+  const reorderSeries = (orderedIds) => setSeries(prev => {
+    const map = new Map(prev.map(s => [s.id, s]))
+    return orderedIds.map(id => map.get(id)).filter(Boolean)
+  })
+  const reorderNovels = (orderedIds) => setNovels(prev => {
+    const map = new Map(prev.map(n => [n.id, n]))
+    return orderedIds.map(id => map.get(id)).filter(Boolean)
+  })
   const deleteNovel = (id) => {
     setNovels(prev => prev.filter(n => n.id !== id))
     setCharacters(prev => prev.filter(c => c.novelId !== id))
@@ -790,7 +798,7 @@ export function useStore(userId = null, options = {}) {
   const api = {
     readOnly,
     novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData,
-    series, addSeries, deleteSeries, updateSeries,
+    series, addSeries, deleteSeries, updateSeries, reorderSeries, reorderNovels,
     allProjectStats, activeProjectStats,
     characters: seriesScope(characters, 'characters'),
     saveCharacter, deleteCharacter,
@@ -829,7 +837,7 @@ export function useStore(userId = null, options = {}) {
   if (!readOnly) return api
 
   const guardedMethods = [
-    'addNovel', 'updateNovel', 'deleteNovel', 'addSeries', 'deleteSeries', 'updateSeries',
+    'addNovel', 'updateNovel', 'deleteNovel', 'addSeries', 'deleteSeries', 'updateSeries', 'reorderSeries', 'reorderNovels',
     'saveCharacter', 'deleteCharacter', 'setFactions', 'saveLocation', 'deleteLocation',
     'addEvent', 'updateEvent', 'deleteEvent', 'addHistoryEntry', 'updateHistoryEntry', 'deleteHistoryEntry',
     'updateCurrentYear', 'addLoreEntry', 'updateLoreEntry', 'deleteLoreEntry',

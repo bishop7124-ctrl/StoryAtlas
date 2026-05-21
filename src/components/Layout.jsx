@@ -700,7 +700,7 @@ function ProjectSettings({ store, onClose }) {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-export default function Layout({ store, section, setSection, onOpenAccount }) {
+export default function Layout({ store, section, setSection, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout }) {
   const projectTypeCfg = getProjectType(store.activeNovel?.type)
   const enabledSectionIds = new Set(getEnabledSections(store.activeNovel))
   const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || enabledSectionIds.has(s.id))
@@ -781,6 +781,15 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
     return () => window.removeEventListener('switch-section', handleTeleport)
   }, [setSection])
 
+  // Apply theme when changed from AccountSettings or on profile load
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail?.theme) setTheme(e.detail.theme)
+    }
+    window.addEventListener('profile-theme-apply', handler)
+    return () => window.removeEventListener('profile-theme-apply', handler)
+  }, [])
+
   // iOS Safari requires a passive touchstart listener on scroll containers
   // to properly recognise them as touch-scroll targets.
   useEffect(() => {
@@ -847,7 +856,7 @@ export default function Layout({ store, section, setSection, onOpenAccount }) {
         rooms={roomNav}
         activeRoomId={activeRoom?.id}
         onOpenRoom={openRoom}
-        account={<UserMenu onOpenAccount={onOpenAccount} />}
+        account={<UserMenu onOpenAccount={onOpenAccount} onOpenHelp={onOpenHelp} onOpenLegal={onOpenLegal} onOpenAbout={onOpenAbout} />}
         primaryAction={(
           <StudioButton
             tone={viewMode === 'writing' ? 'primary' : 'secondary'}

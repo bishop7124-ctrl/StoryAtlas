@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 
-export default function UserMenu({ onOpenAccount }) {
+export default function UserMenu({ onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout }) {
   const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -55,12 +55,45 @@ export default function UserMenu({ onOpenAccount }) {
               Account settings
             </button>
           )}
-          <button
-            onClick={() => { setOpen(false); signOut() }}
-            className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-red-400 hover:bg-red-400/5 transition-colors"
-          >
-            Sign out
-          </button>
+          {onOpenHelp && (
+            <button
+              onClick={() => { setOpen(false); onOpenHelp() }}
+              className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
+            >
+              Help &amp; Support
+            </button>
+          )}
+          {onOpenAbout && (
+            <button
+              onClick={() => { setOpen(false); onOpenAbout() }}
+              className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
+            >
+              About &amp; Roadmap
+            </button>
+          )}
+          {onOpenLegal && (
+            <div className="border-t border-[var(--border)]">
+              <div className="px-4 py-2 flex flex-wrap gap-x-3 gap-y-1">
+                {[['privacy','Privacy'],['terms','Terms'],['ethics','Ethics'],['cookies','Cookies']].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setOpen(false); onOpenLegal(key) }}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="border-t border-[var(--border)]">
+            <button
+              onClick={() => { setOpen(false); signOut() }}
+              className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-red-400 hover:bg-red-400/5 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       )}
     </div>

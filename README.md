@@ -46,6 +46,36 @@ Run lint checks:
 npm run lint
 ```
 
+## Stripe Subscriptions
+
+Paid membership uses Stripe Checkout, Stripe Billing webhooks, and the Stripe customer portal through Supabase Edge Functions.
+
+Create a monthly recurring Price in Stripe, then set these Supabase function secrets:
+
+```bash
+supabase secrets set STRIPE_SECRET_KEY=rk_test_...
+supabase secrets set STRIPE_PRICE_ID=price_...
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set SITE_URL=http://localhost:5173
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Deploy the functions:
+
+```bash
+supabase functions deploy create-checkout-session
+supabase functions deploy create-customer-portal
+supabase functions deploy stripe-webhook
+```
+
+Configure the Stripe webhook endpoint to point at:
+
+```text
+https://your-project.supabase.co/functions/v1/stripe-webhook
+```
+
+Subscribe it to `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, and `customer.subscription.*` events. Configure the Stripe customer portal in the Stripe Dashboard so members can update payment methods and manage cancellation.
+
 ## Data Storage
 
 Application data is saved in browser localStorage under `nf_*` keys.

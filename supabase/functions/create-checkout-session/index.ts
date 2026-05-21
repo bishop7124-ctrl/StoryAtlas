@@ -1,8 +1,8 @@
-import Stripe from 'npm:stripe@17.5.0'
+import Stripe from 'npm:stripe@22.1.1'
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', { apiVersion: '2024-12-18.acacia' })
+const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', { apiVersion: '2026-04-22.dahlia' })
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') || '',
   Deno.env.get('SUPABASE_ANON_KEY') || '',
@@ -27,7 +27,10 @@ Deno.serve(async (req) => {
     client_reference_id: user.id,
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: { user_id: user.id },
-    subscription_data: { metadata: { user_id: user.id } },
+    subscription_data: {
+      billing_mode: { type: 'flexible' },
+      metadata: { user_id: user.id },
+    },
     success_url: `${siteUrl}/?billing=success`,
     cancel_url: `${siteUrl}/?billing=cancelled`,
   })
