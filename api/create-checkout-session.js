@@ -39,7 +39,6 @@ export default async function handler(req, res) {
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: { user_id: user.id },
       subscription_data: {
-        billing_mode: { type: 'flexible' },
         metadata: { user_id: user.id },
       },
       success_url: `${siteUrl}/?billing=success`,
