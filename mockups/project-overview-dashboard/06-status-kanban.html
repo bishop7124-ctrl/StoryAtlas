@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup 06 - Status Kanban</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>.active-strip{display:grid;grid-template-columns:120px 1fr auto;gap:18px;align-items:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:14px}.active-strip .cover{height:156px}.active-strip h2{font-size:42px;line-height:1}.kanban{display:grid;grid-template-columns:repeat(6,minmax(180px,1fr));gap:12px;margin-top:20px;overflow:auto}.lane{min-height:420px;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--surface) 80%,transparent);padding:10px;display:flex;flex-direction:column;gap:8px}.lane h2{margin:0 0 4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}.ticket{border:1px solid var(--line);border-radius:7px;background:var(--surface);padding:10px;display:grid;gap:7px}.ticket.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 22%,transparent)}.ticket b{font-size:13px}.ticket small{color:var(--muted);font-weight:700}@media(max-width:900px){.active-strip{grid-template-columns:1fr}.active-strip .cover{height:300px}.kanban{grid-template-columns:repeat(6,240px)}}</style>
+</head>
+<body>
+  <main class="shell" id="top">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">Y</div>
+        <div>
+          <h1>Projects Overview</h1>
+          <p>Active project, series library, standalone work, and project statuses.</p>
+        </div>
+      </div>
+      <nav class="actions">
+        <a class="btn primary" href="#">New Project</a>
+        <a class="btn" href="#">New Series</a>
+        <a class="btn" href="#">Organize</a>
+      </nav>
+    </header>
+    <div class="layout">
+    <section class="active-strip active-block"><div class="cover orchard" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div><div><p class="kicker">Active Project</p><h2>The Glass Orchard</h2><p class="desc">A court botanist discovers that the royal gardens are growing memories instead of fruit.</p></div><div class="statline"><span class="status" style="--c:#5bb7d9"><i></i>In progress</span><div class="metric"><b>68,420</b><span>Words</span></div></div></section>
+    <section class="kanban"><div class="lane"><h2>Not started</h2><a class="ticket " href="#"><b>The Ninth Bell</b><small>Novel · Asterfall Cycle</small><div class="progress" style="--p:8%"><span></span></div></a></div><div class="lane"><h2>Draft</h2><a class="ticket " href="#"><b>Salt & Ash</b><small>Novella · Asterfall Cycle</small><div class="progress" style="--p:44%"><span></span></div></a><a class="ticket " href="#"><b>City of Small Gods</b><small>Comic · Standalone</small><div class="progress" style="--p:29%"><span></span></div></a></div><div class="lane"><h2>In progress</h2><a class="ticket active" href="#"><b>The Glass Orchard</b><small>Novel · Asterfall Cycle</small><div class="progress" style="--p:68%"><span></span></div></a><a class="ticket " href="#"><b>Low Moon Republic</b><small>TV Series · Broadcast Shelf</small><div class="progress" style="--p:57%"><span></span></div></a></div><div class="lane"><h2>Editing</h2><a class="ticket " href="#"><b>Mirror Engines</b><small>Screenplay · Standalone</small><div class="progress" style="--p:83%"><span></span></div></a></div><div class="lane"><h2>Complete</h2><a class="ticket " href="#"><b>Pilot: Red Harbor</b><small>TV Episode · Broadcast Shelf</small><div class="progress" style="--p:100%"><span></span></div></a></div><div class="lane"><h2>Paused</h2><a class="ticket " href="#"><b>Vaults of Juniper</b><small>TTRPG Campaign · Tabletop Shelf</small><div class="progress" style="--p:36%"><span></span></div></a></div></section>
+    <section style="margin-top:24px"><div class="section-title"><h2>Series</h2><span>Hover for project list</span></div><div class="grid three">
+  <a class="series-card" href="#series-dashboard" aria-label="Open Asterfall Cycle series dashboard">
+    <div class="cover asterfall" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>A</span></div>
+    <div class="series-foot">
+      <h3>Asterfall Cycle</h3>
+      <p class="tiny">3 projects · Ongoing</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">The Glass Orchard</span><span class="dot" style="--dot:#5bb7d9"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Salt & Ash</span><span class="dot" style="--dot:#a78bfa"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">The Ninth Bell</span><span class="dot" style="--dot:#89919a"></span></li></ul>
+    </div>
+  </a>
+  <a class="series-card" href="#series-dashboard" aria-label="Open Broadcast Shelf series dashboard">
+    <div class="cover broadcast" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>B</span></div>
+    <div class="series-foot">
+      <h3>Broadcast Shelf</h3>
+      <p class="tiny">2 projects · Ongoing</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Low Moon Republic</span><span class="dot" style="--dot:#5bb7d9"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Pilot: Red Harbor</span><span class="dot" style="--dot:#5dc878"></span></li></ul>
+    </div>
+  </a>
+  <a class="series-card" href="#series-dashboard" aria-label="Open Tabletop Shelf series dashboard">
+    <div class="cover tabletop" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div>
+    <div class="series-foot">
+      <h3>Tabletop Shelf</h3>
+      <p class="tiny">1 projects · Hiatus</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Vaults of Juniper</span><span class="dot" style="--dot:#d86b70"></span></li></ul>
+    </div>
+  </a></div></section>
+    
+    <section id="series-dashboard" class="series-dashboard">
+      <div class="series-hero" style="--series-cover: linear-gradient(145deg, #19372c, #a08b48 52%, #121512)">
+        <a class="btn" href="#top">Back to all projects</a>
+        <div>
+          <p class="kicker">Series Dashboard</p>
+          <h2>Asterfall Cycle</h2>
+          <p>Series stats, continuity, shared worldbuilding, and direct access to every project in the cycle.</p>
+        </div>
+        <div class="statline">
+          <div class="metric"><b>3</b><span>Projects</span></div>
+          <div class="metric"><b>95,530</b><span>Words</span></div>
+          <div class="metric"><b>65</b><span>Scenes</span></div>
+          <div class="metric"><b>59</b><span>Characters</span></div>
+        </div>
+      </div>
+      <div class="series-projects">
+        <a class="mini-row" href="#"><div class="cover orchard" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div><span style="min-width:0"><b>The Glass Orchard</b><small>Novel · In progress</small></span></a><a class="mini-row" href="#"><div class="cover ash" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>S</span></div><span style="min-width:0"><b>Salt & Ash</b><small>Novella · Draft</small></span></a><a class="mini-row" href="#"><div class="cover bell" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div><span style="min-width:0"><b>The Ninth Bell</b><small>Novel · Not started</small></span></a>
+      </div>
+    </section>
+  </div>
+  </main>
+</body>
+</html>

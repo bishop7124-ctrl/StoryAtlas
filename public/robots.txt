@@ -1,4 +1,26 @@
 User-agent: *
 Allow: /
 
+# Marketing and public pages
+Allow: /features/
+Allow: /worldbuilding-software/
+Allow: /novel-writing-software/
+Allow: /dnd-campaign-manager/
+Allow: /story-planning-software/
+Allow: /timeline-tool-for-writers/
+Allow: /family-tree-builder/
+Allow: /map-builder-for-writers/
+Allow: /lore-management/
+Allow: /faq/
+Allow: /about/
+Allow: /pricing/
+Allow: /ai-overview/
+Allow: /blog/
+Allow: /llms.txt
+
+# Block access to source assets and API internals
+Disallow: /src/
+Disallow: /api/
+Disallow: /.vite/
+
 Sitemap: https://www.yourownworld.co.uk/sitemap.xml

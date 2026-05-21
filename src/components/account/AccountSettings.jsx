@@ -2,38 +2,32 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { MEMBERSHIP_PRICE_GBP, getMembership } from '../../utils/membership'
 import { getCookieConsent, setCookieConsent } from '../../utils/cookieConsent'
+import { ACCOUNT_THEME_OPTIONS, loadThemeChoice, saveThemeChoice } from '../../utils/theme'
 
 // ─── Theme presets (mirrors Layout.jsx) ──────────────────────────────────────
 
-const ACCOUNT_PRESET_THEMES = [
-  { id: 'atelier',     label: 'Atelier',     swatches: ['#0e1512', '#141c16', '#8fcb9e', '#dce8d7'] },
-  { id: 'scriptorium', label: 'Scriptorium', swatches: ['#14100c', '#241b13', '#c89445', '#f4ead9'] },
-  { id: 'vellum',      label: 'Vellum',      swatches: ['#f3ead9', '#e6d8bf', '#8a3f2d', '#221b14'] },
-  { id: 'nord',        label: 'Nord',        swatches: ['#2e3440', '#3b4252', '#88c0d0', '#eceff4'] },
-  { id: 'rosepine',    label: 'Rosé Pine',   swatches: ['#191724', '#1f1d2e', '#ebbcba', '#e0def4'] },
-  { id: 'gruvbox',     label: 'Gruvbox',     swatches: ['#282828', '#1d2021', '#fabd2f', '#ebdbb2'] },
-]
-
 function PreferencesPanel({ user, updateProfile }) {
-  const [theme, setTheme] = useState(() => localStorage.getItem('nf-theme') || 'atelier')
+  const [theme, setTheme] = useState(loadThemeChoice)
   const [cookieLevel, setCookieLevel] = useState(() => getCookieConsent() || 'essential')
   const [themeSaved, setThemeSaved] = useState(false)
   const [cookieSaved, setCookieSaved] = useState(false)
 
-  const applyTheme = (id) => {
-    setTheme(id)
-    localStorage.setItem('nf-theme', id)
-    window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: id } }))
-  }
+  const persistTheme = async (id) => {
+    const appliedTheme = saveThemeChoice(id)
+    setTheme(appliedTheme)
+    window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: appliedTheme } }))
 
-  const saveTheme = async () => {
     try {
-      await updateProfile({ ...(user.user_metadata || {}), theme })
+      await updateProfile({ ...(user.user_metadata || {}), theme: appliedTheme })
+      setThemeSaved(true)
+      setTimeout(() => setThemeSaved(false), 2200)
     } catch {
       // non-critical — local save already applied
     }
-    setThemeSaved(true)
-    setTimeout(() => setThemeSaved(false), 2200)
+  }
+
+  const saveTheme = async () => {
+    await persistTheme(theme)
   }
 
   const saveCookies = () => {
@@ -75,11 +69,11 @@ function PreferencesPanel({ user, updateProfile }) {
       <div style={{ marginBottom: 28 }}>
         <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>Theme</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginBottom: 14 }}>
-          {ACCOUNT_PRESET_THEMES.map(p => (
+          {ACCOUNT_THEME_OPTIONS.map(p => (
             <button
               key={p.id}
               type="button"
-              onClick={() => applyTheme(p.id)}
+              onClick={() => persistTheme(p.id)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '8px 10px', borderRadius: 7, cursor: 'pointer',

@@ -334,17 +334,24 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
   const [streaming, setStreaming] = useState(false)
   const bottomRef = useRef(null)
   const abortRef  = useRef(false)
+  const inputRef = useRef(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [session.messages])
+  useEffect(() => { inputRef.current?.focus() }, [session.id])
 
   const provider  = aiSettings.activeProvider
   const provCfg   = aiSettings[provider]
   const provLabel = PROVIDERS[provider]?.name || provider
   const modelLabel = provCfg.model || PROVIDERS[provider]?.defaultModel
 
+  const promptStore = useMemo(
+    () => store.getProjectContextData?.(session.novelId) ?? store,
+    [store, session.novelId]
+  )
+
   const systemPrompt = useMemo(
-    () => buildSystemPrompt(store.activeNovel, session.context, store),
-    [store, session.context]
+    () => buildSystemPrompt(promptStore.activeNovel, session.context, promptStore),
+    [promptStore, session.context]
   )
 
   const send = async () => {
@@ -391,6 +398,19 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
     })
   }
 
+  const stop = () => {
+    abortRef.current = true
+    setStreaming(false)
+    const messages = session.messages.map(m => m.streaming ? { ...m, streaming: false } : m)
+    onUpdate(session.id, { messages })
+  }
+
+  const quickPrompts = [
+    'What should I work on next?',
+    'Find continuity risks in this context.',
+    'Give me three scene ideas.',
+  ]
+
   const contextCount = (session.context.characterIds?.length || 0) + (session.context.locationIds?.length || 0) +
     (session.context.loreEntryIds?.length || 0) + (session.context.chapterIds?.length || 0)
 
@@ -410,9 +430,24 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {session.messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center gap-2 opacity-50">
-            <div className="text-2xl">✦</div>
-            <p className="text-xs text-[var(--text-muted)]">Ask anything about your novel.</p>
+          <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-3">
+            <div className="text-2xl text-[var(--accent)] opacity-70">✦</div>
+            <p className="text-xs text-[var(--text-muted)]">Ask anything about your project, or start with one of these.</p>
+            <div className="grid gap-2 w-full max-w-[320px]">
+              {quickPrompts.map(prompt => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => {
+                    setInput(prompt)
+                    inputRef.current?.focus()
+                  }}
+                  className="text-left text-xs text-[var(--text-main)] bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2 hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {session.messages.map(msg => <Message key={msg.id} msg={msg} />)}
@@ -422,14 +457,25 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
       <div className="px-3 pb-3 pt-2 border-t border-[var(--border)] flex-shrink-0">
         <div className="flex gap-2 items-end">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             placeholder="Ask the AI…  (Shift+Enter for new line)"
-            rows={2}
+            rows={1}
             disabled={streaming}
-            className="flex-1 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)] resize-none disabled:opacity-50 transition-colors"
+            className="flex-1 min-h-10 max-h-28 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)] resize-y disabled:opacity-50 transition-colors"
           />
+          {streaming && (
+            <button
+              type="button"
+              onClick={stop}
+              title="Stop response"
+              className="h-9 w-9 flex items-center justify-center border border-[var(--border)] text-[var(--text-muted)] rounded-lg hover:text-[var(--text-main)] hover:border-[var(--accent)] transition-colors flex-shrink-0"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
+            </button>
+          )}
           <button
             onClick={send}
             disabled={!input.trim() || streaming}
@@ -552,8 +598,8 @@ function AIUpgradeWall({ onClose, docked }) {
 }
 
 export default function AIPanel({ store, open, onClose, initialContext, membership, docked = false, onPopOut }) {
-  if (open && membership?.isFree) return <AIUpgradeWall onClose={onClose} docked={docked} />
   const novelId = store.activeNovelId
+  const chatStorageKey = `nf_chats_${novelId ?? 'library'}`
   const [aiSettings, setAiSettings] = useState(() => {
     const stored = load('nf_aiSettings', {})
     const merged = { ...DEFAULT_SETTINGS, ...stored }
@@ -565,14 +611,38 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
     }
     return merged
   })
-  const [sessions,   setSessions]   = useState(() => load(`nf_chats_${novelId}`, []))
+  const [sessions,   setSessions]   = useState(() => load(chatStorageKey, []))
   const [view,       setView]       = useState('sessions') // 'sessions' | 'settings' | 'context' | 'chat'
   const [activeId,   setActiveId]   = useState(null)
   const [fullscreen, setFullscreen] = useState(() => load('nf_aiFullscreen', false))
+  const [minimized,  setMinimized]  = useState(false)
+  const activeChatStorageKey = useRef(chatStorageKey)
 
   useEffect(() => { save('nf_aiSettings', aiSettings) }, [aiSettings])
-  useEffect(() => { save(`nf_chats_${novelId}`, sessions) }, [sessions, novelId])
+  useEffect(() => {
+    if (activeChatStorageKey.current !== chatStorageKey) {
+      activeChatStorageKey.current = chatStorageKey
+      setSessions(load(chatStorageKey, []))
+      setActiveId(null)
+      setView(current => current === 'settings' ? current : 'sessions')
+      return
+    }
+    save(chatStorageKey, sessions)
+  }, [sessions, chatStorageKey])
   useEffect(() => { save('nf_aiFullscreen', fullscreen) }, [fullscreen])
+  useEffect(() => {
+    if (!open || docked) return undefined
+    const handleKey = (event) => {
+      if (event.key === 'Escape') setMinimized(true)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [open, docked])
+
+  const projectStore = useMemo(
+    () => store.getProjectContextData?.(novelId) ?? store,
+    [store, novelId]
+  )
 
   const activeProvider = aiSettings.activeProvider
   const hasKey = !!aiSettings[activeProvider]?.apiKey?.trim()
@@ -609,15 +679,41 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
     if (activeId === id) { setActiveId(null); setView('sessions') }
   }
 
+  const handleClose = () => {
+    setMinimized(false)
+    onClose?.()
+  }
+
   const activeSession = sessions.find(s => s.id === activeId) ?? null
 
   if (!open) return null
+  if (membership?.isFree) return <AIUpgradeWall onClose={onClose} docked={docked} />
+
+  const latestSession = sessions[sessions.length - 1]
+
+  if (!docked && minimized) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        className="ai-tool-launcher"
+        aria-label="Restore AI chat"
+      >
+        <span className="ai-tool-launcher-mark">✦</span>
+        <span className="ai-tool-launcher-copy">
+          <strong>AI Chat</strong>
+          <span>{latestSession ? latestSession.title : 'Ready when you are'}</span>
+        </span>
+        {sessions.length > 0 && <span className="ai-tool-launcher-count">{sessions.length}</span>}
+      </button>
+    )
+  }
 
   const panelMode = fullscreen
     ? 'fixed inset-3 sm:inset-5 rounded-xl'
     : docked
       ? 'ai-panel-docked rounded-lg'
-      : 'fixed right-3 bottom-3 left-3 top-20 sm:left-auto sm:top-auto sm:right-5 sm:bottom-5 sm:w-[430px] sm:h-[min(680px,calc(100vh-7rem))] rounded-xl'
+      : 'ai-tool-panel fixed right-3 bottom-3 left-3 top-20 sm:left-auto sm:top-auto sm:right-5 sm:bottom-5 rounded-xl'
 
   return (
     <div
@@ -632,10 +728,22 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
             <span className="text-[var(--accent)]">✦</span>
             <div className="min-w-0">
               <span className="block text-sm font-bold text-[var(--text-main)] uppercase tracking-wider leading-tight">AI Chat</span>
-              <span className="block text-[10px] text-[var(--text-muted)] leading-tight">{fullscreen ? 'Full screen' : 'Popup'}</span>
+              <span className="block text-[10px] text-[var(--text-muted)] leading-tight">
+                {fullscreen ? 'Full screen' : docked ? 'Docked tool' : 'Integrated tool'}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            {!docked && !fullscreen && (
+              <button
+                type="button"
+                onClick={() => setMinimized(true)}
+                title="Minimize"
+                className="h-7 w-7 inline-flex items-center justify-center text-[var(--text-muted)] border border-[var(--border)] hover:text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14" /></svg>
+              </button>
+            )}
             {docked && !fullscreen && (
               <button
                 type="button"
@@ -669,7 +777,7 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
               )}
             </button>
             {!docked && (
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] p-1 rounded transition-colors">
+              <button onClick={handleClose} title="Close" className="h-7 w-7 inline-flex items-center justify-center text-[var(--text-muted)] border border-transparent hover:text-[var(--text-main)] hover:border-[var(--border)] rounded transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             )}
@@ -687,7 +795,7 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
           )}
           {view === 'context' && (
             <ContextSelector
-              store={store}
+              store={projectStore}
               initialContext={initialContext}
               onStart={handleContextConfirm}
               onCancel={() => setView('sessions')}

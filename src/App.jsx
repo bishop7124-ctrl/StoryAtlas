@@ -14,6 +14,7 @@ import AboutPage from './components/about/AboutPage'
 import YOWLogo from './components/brand/YOWLogo'
 import FreeProjectSelector from './components/account/FreeProjectSelector'
 import { getMembership } from './utils/membership'
+import { applyThemeToDocument, loadThemeChoice, saveThemeChoice } from './utils/theme'
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -64,6 +65,10 @@ function AppInner() {
   const loadedUid = useRef(null)
 
   useEffect(() => {
+    applyThemeToDocument(loadThemeChoice())
+  }, [])
+
+  useEffect(() => {
     if (!store.activeNovelId) setViewMode('manager')
   }, [store.activeNovelId])
 
@@ -98,10 +103,10 @@ function AppInner() {
   useEffect(() => {
     const profileTheme = user?.user_metadata?.theme
     if (profileTheme) {
-      localStorage.setItem('nf-theme', profileTheme)
-      window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: profileTheme } }))
+      const appliedTheme = saveThemeChoice(profileTheme)
+      window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: appliedTheme } }))
     }
-  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.user_metadata?.theme])
 
   useEffect(() => {
     if (!user) {

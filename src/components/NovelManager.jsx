@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import UserMenu from './auth/UserMenu'
 import YOWLogo from './brand/YOWLogo'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
@@ -179,7 +179,7 @@ function StatusBadge({ status, onClick, small }) {
   )
 }
 
-function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onToggleFocus }) {
+function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onToggleFocus, onEditProject }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const novel = stats.project
   const totalWords = allStats.reduce((sum, item) => sum + item.manuscriptWords, 0)
@@ -264,6 +264,9 @@ function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onTog
               <button className="active-project-settings-action" onClick={onToggleFocus}>
                 Remove active project
               </button>
+              <button className="active-project-settings-action" onClick={onEditProject}>
+                Project settings
+              </button>
             </div>
           )}
         </div>
@@ -294,15 +297,42 @@ function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onTog
   )
 }
 
+const STATUS_SORTS = [
+  { id: 'status', label: 'Status' },
+  { id: 'words', label: 'Words' },
+  { id: 'updated', label: 'Updated' },
+  { id: 'title', label: 'Title' },
+]
+
 function StatusQueue({ stats, onOpenProject }) {
+  const [sortBy, setSortBy] = useState('status')
+  const statusRank = new Map(STATUS_PICKER.map((status, index) => [status, index]))
+  const sortedStats = [...stats].sort((a, b) => {
+    if (sortBy === 'words') return b.manuscriptWords - a.manuscriptWords || a.project.title.localeCompare(b.project.title)
+    if (sortBy === 'updated') {
+      const aTime = a.latestTimestamp || Date.parse(a.project.updatedAt || a.project.createdAt || '') || 0
+      const bTime = b.latestTimestamp || Date.parse(b.project.updatedAt || b.project.createdAt || '') || 0
+      return bTime - aTime || a.project.title.localeCompare(b.project.title)
+    }
+    if (sortBy === 'title') return a.project.title.localeCompare(b.project.title)
+    const aStatus = STATUS_DATA[a.project.status]?.aliasFor ?? a.project.status ?? 'not_started'
+    const bStatus = STATUS_DATA[b.project.status]?.aliasFor ?? b.project.status ?? 'not_started'
+    return (statusRank.get(aStatus) ?? 99) - (statusRank.get(bStatus) ?? 99) || a.project.title.localeCompare(b.project.title)
+  })
+
   return (
     <section>
       <div className="dash-section-title">
         <h2>Status Queue</h2>
-        <span>Pipeline</span>
+        <label className="status-sort-control">
+          <span>Sort</span>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            {STATUS_SORTS.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </label>
       </div>
       <div className="project-status-queue">
-        {stats.map(item => {
+        {sortedStats.map(item => {
           const data = STATUS_DATA[item.project.status] ?? STATUS_DATA.not_started
           const cfg = getProjectType(item.project.type)
           return (
@@ -315,7 +345,7 @@ function StatusQueue({ stats, onOpenProject }) {
               <span className="project-status-dot" style={{ '--status-row-color': data.color }} />
               <span className="project-status-copy">
                 <strong>{item.project.title}</strong>
-                <small>{cfg.label}</small>
+                <small>{cfg.label} · {item.manuscriptWords.toLocaleString()} words</small>
               </span>
               <StatusBadge status={item.project.status} />
             </button>
@@ -326,7 +356,7 @@ function StatusQueue({ stats, onOpenProject }) {
   )
 }
 
-function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, onSetFocus, compact, onCycleStatus, isViewOnly }) {
+function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, compact, onCycleStatus, isViewOnly, onEditProject }) {
   const [hovered, setHovered] = useState(false)
   const [coverError, setCoverError] = useState('')
   const novel = stats.project
@@ -362,7 +392,21 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, 
         </div>
         <div className="novel-card-foot">
           <p style={{ fontSize: 10, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{novel.title}</p>
-          <StatusBadge status={novel.status} small onClick={e => { e.stopPropagation(); onCycleStatus?.() }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <StatusBadge status={novel.status} small onClick={e => { e.stopPropagation(); onCycleStatus?.() }} />
+            {onEditProject && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onEditProject() }}
+                title="Project settings"
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'inline-flex' }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -404,6 +448,14 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, 
           </span>
         )}
         <div className="novel-card-cover-actions" onClick={e => e.stopPropagation()}>
+          {onEditProject && (
+            <button className="novel-cover-button" type="button" onClick={onEditProject} title="Project settings" aria-label="Project settings">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V22h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V2h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
+              </svg>
+            </button>
+          )}
           <label className="novel-cover-button" title="Change cover photo">
             <input type="file" accept="image/*" onChange={handleCoverSelect} />
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -459,6 +511,14 @@ function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, 
                 onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
               >
                 Export project
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditProject?.() }}
+                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+              >
+                Settings
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onDelete(novel.id) }}
@@ -661,6 +721,210 @@ function EditSeriesModal({ series, allStats, onSave, onDelete, onClose }) {
   )
 }
 
+function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
+  const [form, setForm] = useState({
+    title: project.title || '',
+    description: project.description || '',
+    type: project.type || DEFAULT_TYPE,
+    status: project.status || null,
+    seriesId: project.seriesId || '',
+    tags: project.tags || [],
+    coverPhoto: project.coverPhoto || null,
+    progress: project.progress ?? '',
+  })
+  const [tagInput, setTagInput] = useState('')
+  const [coverError, setCoverError] = useState('')
+
+  const handleCoverSelect = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !file.type.startsWith('image/')) return
+    try {
+      setCoverError('')
+      const photo = await resizeCoverPhoto(file)
+      setForm(p => ({ ...p, coverPhoto: photo }))
+    } catch {
+      setCoverError('Could not use that image.')
+    }
+  }
+
+  const commitTag = () => {
+    const t = tagInput.trim().toLowerCase()
+    if (t && !form.tags.includes(t)) setForm(p => ({ ...p, tags: [...p.tags, t] }))
+    setTagInput('')
+  }
+
+  const handleTagKey = (e) => {
+    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag() }
+    if (e.key === 'Backspace' && !tagInput && form.tags.length) {
+      setForm(p => ({ ...p, tags: p.tags.slice(0, -1) }))
+    }
+  }
+
+  const handleProgress = value => {
+    const cleaned = value.replace(/[^\d]/g, '')
+    const next = cleaned === '' ? '' : String(Math.min(100, Number(cleaned)))
+    setForm(p => ({ ...p, progress: next }))
+  }
+
+  const handleSave = (e) => {
+    e.preventDefault()
+    if (!form.title.trim()) return
+    onSave(project.id, {
+      ...form,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      seriesId: form.seriesId || null,
+      progress: form.progress === '' ? null : Number(form.progress),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <form
+        onSubmit={handleSave}
+        style={{ width: '100%', maxWidth: 560, background: 'var(--bg-nav)', border: '1px solid var(--border)', borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ position: 'relative', height: 150, flexShrink: 0, background: form.coverPhoto ? undefined : getCoverGradient(form.title || project.title), overflow: 'hidden' }}>
+          {form.coverPhoto && <img src={form.coverPhoto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'linear-gradient(to bottom, rgba(0,0,0,.1), rgba(0,0,0,.36))' }}>
+            <label style={{ cursor: 'pointer', background: 'rgba(0,0,0,.52)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 7, padding: '6px 14px', fontSize: 11, fontWeight: 700, color: '#fff', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+              <input type="file" accept="image/*" onChange={handleCoverSelect} style={{ display: 'none' }} />
+              {form.coverPhoto ? 'Change Cover' : 'Add Cover'}
+            </label>
+            {form.coverPhoto && (
+              <button type="button" onClick={() => setForm(p => ({ ...p, coverPhoto: null }))}
+                style={{ cursor: 'pointer', background: 'rgba(0,0,0,.52)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 7, padding: '6px 14px', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,.65)', letterSpacing: '.06em', textTransform: 'uppercase' }}>
+                Remove
+              </button>
+            )}
+          </div>
+          {coverError && <p style={{ position: 'absolute', bottom: 6, left: 0, right: 0, textAlign: 'center', fontSize: 11, color: '#f87171', margin: 0 }}>{coverError}</p>}
+        </div>
+
+        <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18, overflowY: 'auto', flex: 1 }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-main)' }}>Project Settings</p>
+
+          <input
+            autoFocus
+            placeholder="Project title *"
+            value={form.title}
+            onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+            required
+            style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-main)', outline: 'none' }}
+          />
+
+          <textarea
+            placeholder="Project summary (optional)"
+            value={form.description}
+            onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+            rows={4}
+            style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-main)', resize: 'vertical', outline: 'none', lineHeight: 1.55, minHeight: 88, flexShrink: 0 }}
+          />
+
+          <div className="project-settings-grid">
+            <label>
+              <span>Series</span>
+              <select value={form.seriesId} onChange={e => setForm(p => ({ ...p, seriesId: e.target.value }))}>
+                <option value="">Standalone</option>
+                {series.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Progress</span>
+              <input value={form.progress} onChange={e => handleProgress(e.target.value)} inputMode="numeric" placeholder="0-100" />
+            </label>
+          </div>
+
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Status</p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {STATUS_PICKER.map(key => {
+                const opt = STATUS_DATA[key]
+                const current = STATUS_DATA[form.status]?.aliasFor ?? form.status
+                return (
+                  <button key={key} type="button" onClick={() => setForm(p => ({ ...p, status: current === key ? null : key }))}
+                    style={{
+                      padding: '5px 14px', borderRadius: 999, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      border: `1px solid ${current === key ? opt.color : 'var(--border)'}`,
+                      background: current === key ? `color-mix(in srgb, ${opt.color} 16%, transparent)` : 'transparent',
+                      color: current === key ? opt.color : 'var(--text-muted)',
+                    }}>
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Type</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {TYPE_OPTIONS.map(t => (
+                <button key={t.id} type="button" onClick={() => setForm(p => ({ ...p, type: t.id }))}
+                  style={{
+                    textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                    background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <ProjectTypeImage type={t.id} label={t.label} size={24} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{t.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Tags</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '7px 10px', background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, minHeight: 40, alignItems: 'center' }}>
+              {form.tags.map(tag => (
+                <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 10px', borderRadius: 999, background: 'var(--accent-fade)', border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)', fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>
+                  {tag}
+                  <button type="button" onClick={() => setForm(p => ({ ...p, tags: p.tags.filter(t => t !== tag) }))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 0, lineHeight: 1, fontSize: 14 }}>×</button>
+                </span>
+              ))}
+              <input
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={handleTagKey}
+                onBlur={commitTag}
+                placeholder={form.tags.length ? '' : 'fantasy, sci-fi... (Enter or comma to add)'}
+                style={{ flex: 1, minWidth: 140, background: 'none', border: 'none', outline: 'none', fontSize: 12, color: 'var(--text-main)', padding: '1px 0' }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+          <button type="button" onClick={() => onDelete(project.id)}
+            style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginRight: 'auto' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+            Delete project
+          </button>
+          <button type="button" onClick={onClose}
+            style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
+            Cancel
+          </button>
+          <button type="submit"
+            style={{ padding: '9px 20px', borderRadius: 7, border: 'none', background: 'var(--accent)', color: 'var(--bg-main)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 function SeriesCard({ series, seriesStats, onClick }) {
   const totalWords = seriesStats.reduce((sum, s) => sum + s.manuscriptWords, 0)
   return (
@@ -696,7 +960,50 @@ function SeriesCard({ series, seriesStats, onClick }) {
   )
 }
 
-function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, onCycleStatus }) {
+function ProjectCard({ stats, onClick, onEdit }) {
+  const project = stats.project
+  const cfg = getProjectType(project.type)
+  return (
+    <div className="series-dash-card project-dash-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && onClick()}>
+      <div
+        className="series-dash-card-cover"
+        style={{ background: project.coverPhoto ? undefined : getCoverGradient(project.title) }}
+      >
+        {project.coverPhoto
+          ? <img src={project.coverPhoto} alt="" />
+          : <span className="series-dash-card-letter">{project.title[0]?.toUpperCase()}</span>
+        }
+        <span className="series-dash-card-count">{cfg.label}</span>
+        <button
+          className="dash-card-settings-button"
+          type="button"
+          onClick={e => { e.stopPropagation(); onEdit() }}
+          title="Project settings"
+          aria-label="Project settings"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V22h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V2h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
+          </svg>
+        </button>
+      </div>
+      <div className="series-dash-card-foot">
+        <p className="series-dash-card-name">{project.title}</p>
+        <p className="series-dash-card-words">{stats.manuscriptWords.toLocaleString()} words</p>
+      </div>
+      <div className="series-dash-card-hover">
+        <p>Project</p>
+        <ul>
+          <li><span>Scenes</span><span>{stats.scenes.length}</span></li>
+          <li><span>Characters</span><span>{stats.characters.length}</span></li>
+          <li><span>Status</span><StatusBadge status={project.status} small /></li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, onCycleStatus, onEditProject }) {
   const totalWords = seriesStats.reduce((sum, s) => sum + s.manuscriptWords, 0)
   const statusLabel = STATUS_OPTIONS.find(o => o.id === series.status)?.label
 
@@ -747,6 +1054,7 @@ function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, 
                 onOpen={onOpenProject}
                 isFocus={!!stats.project.focus}
                 onCycleStatus={() => onCycleStatus(stats.project.id, stats.project.status)}
+                onEditProject={() => onEditProject(stats.project)}
               />
             ))}
           </div>
@@ -758,14 +1066,81 @@ function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, 
   )
 }
 
+function ProjectDashboardPanel({ stats, series, onOpenProject, onEdit, onClose, onCycleStatus }) {
+  const project = stats.project
+  const cfg = getProjectType(project.type)
+  const projectSeries = series.find(s => s.id === project.seriesId)
+  const progress = Number.isFinite(Number(project.progress)) ? Math.max(0, Math.min(100, Number(project.progress))) : null
+
+  return (
+    <div className="series-dashboard project-dashboard-panel">
+      <div
+        className="series-dashboard-banner"
+        style={{ background: project.coverPhoto ? undefined : getCoverGradient(project.title) }}
+      >
+        {project.coverPhoto && <img className="series-dashboard-banner-img" src={project.coverPhoto} alt="" />}
+        <div className="series-dashboard-banner-overlay">
+          <button className="series-dashboard-back-btn" onClick={onClose}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5M12 5l-7 7 7 7"/>
+            </svg>
+            All dashboards
+          </button>
+          <div className="series-dashboard-banner-body">
+            <p className="series-dashboard-eyebrow">{cfg.label}</p>
+            <h2 className="series-dashboard-name">{project.title}</h2>
+            {project.description && <p className="series-dashboard-summary">{project.description}</p>}
+            <div className="series-dashboard-stats-row">
+              <span>{stats.manuscriptWords.toLocaleString()} words</span>
+              <span className="series-dashboard-dot">·</span><span>{stats.scenes.length} scenes</span>
+              {projectSeries && <><span className="series-dashboard-dot">·</span><span>{projectSeries.name}</span></>}
+              {progress !== null && <><span className="series-dashboard-dot">·</span><span>{progress}%</span></>}
+            </div>
+            {project.tags?.length > 0 && (
+              <div className="series-dashboard-tags">
+                {project.tags.map(tag => <span key={tag} className="series-dashboard-tag">{tag}</span>)}
+              </div>
+            )}
+          </div>
+          <div className="project-dashboard-actions">
+            <button className="series-dashboard-edit-btn" onClick={onEdit}>Edit</button>
+            <button className="series-dashboard-edit-btn" onClick={() => onOpenProject(project.id)}>Open</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="project-dashboard-summary-grid">
+        <div className="active-project-command-stat">
+          <strong>{stats.characters.length}</strong>
+          <span>Characters</span>
+        </div>
+        <div className="active-project-command-stat">
+          <strong>{stats.locations.length}</strong>
+          <span>Locations</span>
+        </div>
+        <div className="active-project-command-stat">
+          <strong>{stats.loreEntries.length}</strong>
+          <span>Lore</span>
+        </div>
+        <button className="project-dashboard-status-card" onClick={() => onCycleStatus(project.id, project.status)}>
+          <span>Status</span>
+          <StatusBadge status={project.status} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [showSeriesForm, setShowSeriesForm] = useState(false)
   const [seriesName, setSeriesName] = useState('')
   const [editingSeries, setEditingSeries] = useState(null)
+  const [editingProject, setEditingProject] = useState(null)
   const [seriesFilter, setSeriesFilter] = useState(null)
   const [openSeriesId, setOpenSeriesId] = useState(null)
+  const [openProjectDashboardId, setOpenProjectDashboardId] = useState(null)
   const userProfile = user?.user_metadata || {}
   const userName = userProfile.full_name || userProfile.name || userProfile.alias || userProfile.writer_alias || user?.displayName || user?.email?.split('@')[0] || 'User'
 
@@ -785,6 +1160,11 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       store.deleteSeries(id)
       setEditingSeries(null)
     }
+  }
+
+  const handleSaveProject = (id, data) => {
+    store.updateNovel(id, data)
+    setEditingProject(null)
   }
 
   const handleSetFocus = (id) => {
@@ -821,6 +1201,8 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   const handleDelete = (id) => {
     if (confirm('Delete this project and all its content? This cannot be undone.')) {
       store.deleteNovel(id)
+      setEditingProject(null)
+      setOpenProjectDashboardId(null)
     }
   }
 
@@ -844,11 +1226,16 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   }
 
   const focusStats = store.allProjectStats.find(s => s.project.focus) ?? null
-  const focusSeries = store.series.find(s => s.focus) ?? null
 
   const visibleStats = seriesFilter
     ? store.allProjectStats.filter(s => s.project.seriesId === seriesFilter)
     : store.allProjectStats
+
+  const handleOpenLibraryChat = () => {
+    const projectId = openProjectDashboardId || focusStats?.project?.id || store.activeNovelId
+    if (projectId) store.setActiveNovelId(projectId)
+    onOpenChat?.()
+  }
 
   const projectGroups = useMemo(() => {
     const seriesById = new Map((store.series || []).map(s => [s.id, s]))
@@ -883,7 +1270,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
+          <button className="library-chat-button" type="button" onClick={handleOpenLibraryChat} title="Open AI chat" aria-label="Open AI chat">
             ✦
           </button>
           <UserMenu onOpenAccount={onOpenAccount} onOpenHelp={onOpenHelp} onOpenLegal={onOpenLegal} onOpenAbout={onOpenAbout} />
@@ -899,6 +1286,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           onOpen={onOpenProject}
           onSetStatus={(status) => handleSetStatus(focusStats.project.id, status)}
           onToggleFocus={() => handleSetFocus(focusStats.project.id)}
+          onEditProject={() => setEditingProject(focusStats.project)}
         />
       )}
 
@@ -965,9 +1353,9 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                     onUpdateCover={handleUpdateCover}
                     onExport={handleExportProject}
                     isFocus={!!stats.project.focus}
-                    onSetFocus={() => handleSetFocus(stats.project.id)}
                     onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
                     isViewOnly={membership?.freeProjectId !== null && membership?.freeProjectId !== undefined && membership?.freeProjectId !== stats.project.id}
+                    onEditProject={() => setEditingProject(stats.project)}
                   />
                 ))}
               </div>
@@ -998,6 +1386,23 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                   onEdit={() => setEditingSeries(series)}
                   onClose={() => setOpenSeriesId(null)}
                   onCycleStatus={handleCycleStatus}
+                  onEditProject={setEditingProject}
+                />
+              )
+            }
+          }
+
+          if (openProjectDashboardId) {
+            const projectStats = store.allProjectStats.find(s => s.project.id === openProjectDashboardId)
+            if (projectStats) {
+              return (
+                <ProjectDashboardPanel
+                  stats={projectStats}
+                  series={store.series}
+                  onOpenProject={onOpenProject}
+                  onEdit={() => setEditingProject(projectStats.project)}
+                  onClose={() => setOpenProjectDashboardId(null)}
+                  onCycleStatus={handleCycleStatus}
                 />
               )
             }
@@ -1009,10 +1414,10 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
             <section className="command-library-grid">
               <div>
                 <div className="dash-section-title">
-                  <h2>Series</h2>
+                  <h2>Dashboards</h2>
                   <span>Open dashboards</span>
                 </div>
-                {seriesWithProjects.length > 0 ? (
+                {seriesWithProjects.length > 0 || standaloneStats.length > 0 ? (
                   <div className="dash-series-grid">
                     {seriesWithProjects.map(s => {
                       const sStats = store.allProjectStats.filter(st => st.project.seriesId === s.id)
@@ -1021,28 +1426,21 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                           key={s.id}
                           series={s}
                           seriesStats={sStats}
-                          onClick={() => setOpenSeriesId(s.id)}
+                          onClick={() => { setOpenProjectDashboardId(null); setOpenSeriesId(s.id) }}
                         />
                       )
                     })}
-                  </div>
-                ) : (
-                  <div className="dash-series-grid">
                     {standaloneStats.map(stats => (
-                      <NovelCard
+                      <ProjectCard
                         key={stats.project.id}
-                        compact
                         stats={stats}
-                        onOpen={onOpenProject}
-                        onDelete={handleDelete}
-                        onUpdateCover={handleUpdateCover}
-                        onExport={handleExportProject}
-                        isFocus={false}
-                        onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
-                        isViewOnly={membership?.freeProjectId !== null && membership?.freeProjectId !== undefined && membership?.freeProjectId !== stats.project.id}
+                        onClick={() => { setOpenSeriesId(null); setOpenProjectDashboardId(stats.project.id) }}
+                        onEdit={() => setEditingProject(stats.project)}
                       />
                     ))}
                   </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No dashboards yet.</p>
                 )}
               </div>
               <StatusQueue stats={store.allProjectStats} onOpenProject={onOpenProject} />
@@ -1066,6 +1464,17 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           onSave={handleSaveSeries}
           onDelete={handleDeleteSeries}
           onClose={() => setEditingSeries(null)}
+        />
+      )}
+
+      {/* Edit project modal */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          series={store.series}
+          onSave={handleSaveProject}
+          onDelete={handleDelete}
+          onClose={() => setEditingProject(null)}
         />
       )}
 

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup 07 - Constellation</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>.constellation{position:relative;min-height:660px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:radial-gradient(circle at 50% 46%,rgba(184,170,121,.2),transparent 18%),radial-gradient(circle at 20% 20%,rgba(118,169,157,.16),transparent 22%),#101211}.constellation:before{content:"";position:absolute;inset:80px;background:repeating-radial-gradient(circle at 50% 50%,transparent 0 88px,rgba(255,255,255,.055) 89px 90px);}.active-planet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(470px,calc(100% - 40px));border:1px solid color-mix(in srgb,var(--accent) 55%,var(--line));background:rgba(26,29,27,.88);backdrop-filter:blur(12px);border-radius:8px;padding:28px;text-align:center}.active-planet h2{font-size:48px;line-height:.95}.node{position:absolute;width:170px;border:1px solid var(--line);border-radius:8px;background:rgba(26,29,27,.86);padding:12px;text-align:center}.node b{display:block;font-size:13px}.node small{color:var(--muted);font-weight:700}.n0{left:8%;top:12%}.n1{right:10%;top:14%}.n2{left:14%;bottom:16%}.n3{right:14%;bottom:13%}.n4{left:42%;top:8%}.n5{left:42%;bottom:8%}.n6{right:4%;top:48%}@media(max-width:760px){.constellation{min-height:auto;display:grid;gap:10px;padding:12px}.active-planet,.node{position:relative;inset:auto;left:auto;right:auto;top:auto;bottom:auto;transform:none;width:auto}}</style>
+</head>
+<body>
+  <main class="shell" id="top">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">Y</div>
+        <div>
+          <h1>Projects Overview</h1>
+          <p>Active project, series library, standalone work, and project statuses.</p>
+        </div>
+      </div>
+      <nav class="actions">
+        <a class="btn primary" href="#">New Project</a>
+        <a class="btn" href="#">New Series</a>
+        <a class="btn" href="#">Organize</a>
+      </nav>
+    </header>
+    <div class="layout">
+    <section class="constellation">
+      <div class="active-planet active-block"><p class="kicker">Active Project</p><h2>The Glass Orchard</h2><span class="status" style="--c:#5bb7d9"><i></i>In progress</span><p class="desc">A court botanist discovers that the royal gardens are growing memories instead of fruit.</p></div>
+      <a class="node n0" href="#"><b>Salt & Ash</b><small>Draft</small></a><a class="node n1" href="#"><b>The Ninth Bell</b><small>Not started</small></a><a class="node n2" href="#"><b>Mirror Engines</b><small>Editing</small></a><a class="node n3" href="#"><b>Low Moon Republic</b><small>In progress</small></a><a class="node n4" href="#"><b>Pilot: Red Harbor</b><small>Complete</small></a><a class="node n5" href="#"><b>Vaults of Juniper</b><small>Paused</small></a><a class="node n6" href="#"><b>City of Small Gods</b><small>Draft</small></a>
+    </section>
+    <section style="margin-top:24px"><div class="section-title"><h2>Series Systems</h2><span>Hover for project list</span></div><div class="grid three">
+  <a class="series-card" href="#series-dashboard" aria-label="Open Asterfall Cycle series dashboard">
+    <div class="cover asterfall" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>A</span></div>
+    <div class="series-foot">
+      <h3>Asterfall Cycle</h3>
+      <p class="tiny">3 projects · Ongoing</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">The Glass Orchard</span><span class="dot" style="--dot:#5bb7d9"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Salt & Ash</span><span class="dot" style="--dot:#a78bfa"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">The Ninth Bell</span><span class="dot" style="--dot:#89919a"></span></li></ul>
+    </div>
+  </a>
+  <a class="series-card" href="#series-dashboard" aria-label="Open Broadcast Shelf series dashboard">
+    <div class="cover broadcast" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>B</span></div>
+    <div class="series-foot">
+      <h3>Broadcast Shelf</h3>
+      <p class="tiny">2 projects · Ongoing</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Low Moon Republic</span><span class="dot" style="--dot:#5bb7d9"></span></li><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Pilot: Red Harbor</span><span class="dot" style="--dot:#5dc878"></span></li></ul>
+    </div>
+  </a>
+  <a class="series-card" href="#series-dashboard" aria-label="Open Tabletop Shelf series dashboard">
+    <div class="cover tabletop" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div>
+    <div class="series-foot">
+      <h3>Tabletop Shelf</h3>
+      <p class="tiny">1 projects · Hiatus</p>
+    </div>
+    <div class="hover-list">
+      <p>Projects</p>
+      <ul><li><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Vaults of Juniper</span><span class="dot" style="--dot:#d86b70"></span></li></ul>
+    </div>
+  </a></div></section>
+    
+    <section id="series-dashboard" class="series-dashboard">
+      <div class="series-hero" style="--series-cover: linear-gradient(145deg, #19372c, #a08b48 52%, #121512)">
+        <a class="btn" href="#top">Back to all projects</a>
+        <div>
+          <p class="kicker">Series Dashboard</p>
+          <h2>Asterfall Cycle</h2>
+          <p>Series stats, continuity, shared worldbuilding, and direct access to every project in the cycle.</p>
+        </div>
+        <div class="statline">
+          <div class="metric"><b>3</b><span>Projects</span></div>
+          <div class="metric"><b>95,530</b><span>Words</span></div>
+          <div class="metric"><b>65</b><span>Scenes</span></div>
+          <div class="metric"><b>59</b><span>Characters</span></div>
+        </div>
+      </div>
+      <div class="series-projects">
+        <a class="mini-row" href="#"><div class="cover orchard" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div><span style="min-width:0"><b>The Glass Orchard</b><small>Novel · In progress</small></span></a><a class="mini-row" href="#"><div class="cover ash" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>S</span></div><span style="min-width:0"><b>Salt & Ash</b><small>Novella · Draft</small></span></a><a class="mini-row" href="#"><div class="cover bell" aria-hidden="true"><img src="../../public/hero-illustration.png" alt=""><span>T</span></div><span style="min-width:0"><b>The Ninth Bell</b><small>Novel · Not started</small></span></a>
+      </div>
+    </section>
+  </div>
+  </main>
+</body>
+</html>

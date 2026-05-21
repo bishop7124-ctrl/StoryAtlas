@@ -17,6 +17,7 @@ import ProjectDashboard from './dashboard/ProjectDashboard'
 import ScheduleCalendar from './schedule/ScheduleCalendar'
 import { PROJECT_TYPES, getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
 import { StudioFrame, StudioWorkspace, StudioTab, StudioButton } from './presentation/Studio'
+import { applyThemeToDocument as applyDocumentTheme } from '../utils/theme'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,32 @@ class SectionErrorBoundary extends Component {
   }
 }
 
+// ─── Cover photo resize (mirrors NovelManager.jsx) ───────────────────────────
+
+const resizeCoverPhoto = (file) => new Promise((resolve, reject) => {
+  const image = new Image()
+  const objectUrl = URL.createObjectURL(file)
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl)
+    const maxWidth = 900, maxHeight = 1200
+    const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height)
+    const width = Math.max(1, Math.round(image.width * scale))
+    const height = Math.max(1, Math.round(image.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width; canvas.height = height
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = '#111814'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(image, 0, 0, width, height)
+    let quality = 0.82
+    let dataUrl = canvas.toDataURL('image/jpeg', quality)
+    while (dataUrl.length > 900000 && quality > 0.48) { quality -= 0.08; dataUrl = canvas.toDataURL('image/jpeg', quality) }
+    resolve(dataUrl)
+  }
+  image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not read that image.')) }
+  image.src = objectUrl
+})
+
 // ─── Theme data ───────────────────────────────────────────────────────────────
 
 const PRESET_THEMES = [
@@ -100,9 +127,8 @@ const CUSTOM_COLOR_FIELDS = [
   { key: 'border',    label: 'Borders' },
 ]
 
-const PRESET_IDS = new Set(PRESET_THEMES.map(t => t.id))
+const PRESET_IDS = new Set([...PRESET_THEMES, ...QUICK_PALETTES].map(t => t.id))
 const DEFAULT_THEME = PRESET_THEMES[0].id
-const THEME_CSS_VARS = ['--bg-main', '--bg-nav', '--text-main', '--text-muted', '--accent', '--border', '--bg-hover', '--accent-fade', '--logo-filter']
 
 const loadThemeChoice = () => {
   const stored = localStorage.getItem('nf-theme')
@@ -127,13 +153,6 @@ const rgbaFromHex = (hex, alpha) => {
   const rgb = hexToRgb(hex)
   if (!rgb) return `rgba(255,255,255,${alpha})`
   return `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`
-}
-
-const logoFilterForBackground = (hex) => {
-  const rgb = hexToRgb(hex)
-  if (!rgb) return 'none'
-  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255
-  return luminance > 0.56 ? 'brightness(0)' : 'none'
 }
 
 const DEFAULT_CUSTOM_COLORS = PRESET_THEMES[0].swatches
@@ -435,7 +454,9 @@ function ProjectSettings({ store, onClose }) {
     type: novel?.type || 'novel',
     currentYear: store.currentYear ?? 0,
     seriesId: novel?.seriesId || '',
+    progress: novel?.progress ?? '',
   }))
+  const [coverError, setCoverError] = useState('')
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -446,6 +467,7 @@ function ProjectSettings({ store, onClose }) {
       type: novel?.type || 'novel',
       currentYear: store.currentYear ?? 0,
       seriesId: novel?.seriesId || '',
+      progress: novel?.progress ?? '',
     })
   }, [novel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -456,11 +478,26 @@ function ProjectSettings({ store, onClose }) {
 
   const updateDetail = (field, value) => {
     setDetails(prev => ({ ...prev, [field]: value }))
-    if (field === 'currentYear') {
-      store.updateCurrentYear(value)
+    if (field === 'currentYear') { store.updateCurrentYear(value); return }
+    if (field === 'progress') {
+      const num = value === '' ? null : Math.max(0, Math.min(100, Number(value)))
+      patchProject({ progress: num })
       return
     }
     patchProject({ [field]: field === 'seriesId' ? value || null : value })
+  }
+
+  const handleCoverSelect = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !file.type.startsWith('image/')) return
+    try {
+      setCoverError('')
+      const photo = await resizeCoverPhoto(file)
+      store.updateNovel(store.activeNovelId, { coverPhoto: photo })
+    } catch {
+      setCoverError('Could not use that image.')
+    }
   }
 
   const toggle = (id) => {
@@ -587,7 +624,7 @@ function ProjectSettings({ store, onClose }) {
                 </label>
               )}
 
-              <label style={{ display: 'grid', gap: 6 }}>
+              <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Current year</span>
                 <input
                   type="number"
@@ -597,6 +634,45 @@ function ProjectSettings({ store, onClose }) {
                   style={{ padding: '8px 10px', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}
                 />
               </label>
+
+              <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Progress (0–100%)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={details.progress}
+                  onChange={e => updateDetail('progress', e.target.value)}
+                  placeholder="—"
+                  className="field"
+                  style={{ padding: '8px 10px', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}
+                />
+              </label>
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Cover Photo</span>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  {novel?.coverPhoto && (
+                    <img src={novel.coverPhoto} alt="" style={{ width: 44, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', flexShrink: 0 }} />
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}>
+                      <input type="file" accept="image/*" onChange={handleCoverSelect} style={{ display: 'none' }} />
+                      {novel?.coverPhoto ? 'Change cover' : 'Add cover photo'}
+                    </label>
+                    {novel?.coverPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => store.updateNovel(store.activeNovelId, { coverPhoto: null })}
+                        style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                    {coverError && <p style={{ fontSize: 11, color: '#f87171', margin: 0 }}>{coverError}</p>}
+                  </div>
+                </div>
+              </div>
             </section>
 
             <section style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-main)', padding: 16 }}>
@@ -721,24 +797,8 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
 
   // Apply theme
   useEffect(() => {
-    const root = document.documentElement
-    if (theme === 'custom') {
-      const colors = { ...DEFAULT_CUSTOM_COLORS, ...customColors }
-      root.setAttribute('data-theme', 'custom')
-      root.style.setProperty('--bg-main', colors.bgMain)
-      root.style.setProperty('--bg-nav', colors.bgNav)
-      root.style.setProperty('--text-main', colors.textMain)
-      root.style.setProperty('--text-muted', colors.textMuted)
-      root.style.setProperty('--accent', colors.accent)
-      root.style.setProperty('--border', colors.border)
-      root.style.setProperty('--bg-hover', rgbaFromHex(colors.textMain, 0.06))
-      root.style.setProperty('--accent-fade', rgbaFromHex(colors.accent, 0.18))
-      root.style.setProperty('--logo-filter', logoFilterForBackground(colors.bgNav))
-    } else {
-      THEME_CSS_VARS.forEach(v => root.style.removeProperty(v))
-      root.setAttribute('data-theme', theme)
-    }
-    localStorage.setItem('nf-theme', theme)
+    const appliedTheme = applyDocumentTheme(theme, customColors)
+    localStorage.setItem('nf-theme', appliedTheme)
   }, [theme, customColors])
 
   // Save custom colors

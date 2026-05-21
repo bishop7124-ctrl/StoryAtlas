@@ -244,6 +244,36 @@ export function useStore(userId = null, options = {}) {
       ? arr.filter(item => seriesNovelIds.includes(item.novelId))
       : arr.filter(item => item.novelId === activeNovelId)
 
+  const getProjectContextData = (projectId = activeNovelId) => {
+    const project = novels.find(n => n.id === projectId) ?? null
+    const projectSeries = project?.seriesId ? series.find(s => s.id === project.seriesId) : null
+    const projectSyncCategories = projectSeries?.syncCategories ?? []
+    const projectSeriesIds = projectSeries
+      ? novels.filter(n => n.seriesId === projectSeries.id).map(n => n.id)
+      : []
+    const projectScope = (arr, category) =>
+      projectSyncCategories.includes(category)
+        ? arr.filter(item => projectSeriesIds.includes(item.novelId))
+        : arr.filter(item => item.novelId === projectId)
+
+    return {
+      activeNovelId: projectId,
+      activeNovel: project,
+      characters: projectScope(characters, 'characters'),
+      factions: projectScope(factions, 'factions'),
+      locations: projectScope(locations, 'locations'),
+      timeline: projectScope(timeline, 'timeline'),
+      worldHistory: projectScope(worldHistory, 'worldhistory'),
+      loreEntries: projectScope(loreEntries, 'lore'),
+      ideaEntries: projectScope(ideaEntries, 'ideas'),
+      acts: acts.filter(a => a.novelId === projectId).sort((a, b) => a.order - b.order),
+      chapters: chapters.filter(c => c.novelId === projectId).sort((a, b) => a.order - b.order),
+      scenes: scenes.filter(s => s.novelId === projectId).sort((a, b) => a.order - b.order),
+      maps: maps.filter(m => m.novelId === projectId),
+      storySchedule: storySchedule.filter(e => e.novelId === projectId),
+    }
+  }
+
   // Manuscripts (acts/chapters/scenes) are NEVER synced — always project-only
   const novelActs = acts.filter(a => a.novelId === activeNovelId).sort((a, b) => a.order - b.order)
   const novelChapters = chapters.filter(c => c.novelId === activeNovelId).sort((a, b) => a.order - b.order)
@@ -809,7 +839,7 @@ export function useStore(userId = null, options = {}) {
   const api = {
     readOnly,
     freeProjectId,
-    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData,
+    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData, getProjectContextData,
     series, addSeries, deleteSeries, updateSeries, reorderSeries, reorderNovels,
     allProjectStats, activeProjectStats,
     characters: seriesScope(characters, 'characters'),

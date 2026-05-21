@@ -109,13 +109,18 @@ export default async function handler(req, res) {
       case 'invoice.paid':
       case 'invoice.payment_failed': {
         const invoice = event.data.object
-        const sub    = invoice.parent?.subscription_details?.subscription
-        const subId  = typeof sub === 'string' ? sub : sub?.id
+        // invoice.subscription is the classic stable field; fall back to the newer parent shape
+        const subId = typeof invoice.subscription === 'string'
+          ? invoice.subscription
+          : invoice.subscription?.id
+            || (typeof invoice.parent?.subscription_details?.subscription === 'string'
+                ? invoice.parent.subscription_details.subscription
+                : invoice.parent?.subscription_details?.subscription?.id)
         if (!subId) break
         const latestSub = await stripe.subscriptions.retrieve(subId, { expand: ['latest_invoice'] })
         await updateMembership(
           supabaseAdmin, latestSub,
-          invoice.parent?.subscription_details?.metadata?.user_id || invoice.metadata?.user_id
+          invoice.metadata?.user_id || invoice.parent?.subscription_details?.metadata?.user_id
         )
         break
       }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { StudioBoard, StudioEmpty } from '../presentation/Studio'
-import { getProjectType } from '../../constants/projectTypes'
+import { getEnabledSections } from '../../constants/projectTypes'
 
 const formatNumber = (value) => new Intl.NumberFormat().format(value || 0)
 const READ_WPM = 220
@@ -333,7 +333,7 @@ export default function ProjectDashboard({ store }) {
   if (!stats) return null
 
   const project = stats.project
-  const availableSections = new Set(getProjectType(project?.type).defaultSections)
+  const availableSections = new Set(getEnabledSections(project))
   const visibleRooms = NAV_ROOMS.filter(room => room.requires.some(id => availableSections.has(id)))
 
   const recentScenes = [...stats.scenes]
