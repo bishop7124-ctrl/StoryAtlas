@@ -755,7 +755,7 @@ function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, 
   )
 }
 
-export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp }) {
+export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [showSeriesForm, setShowSeriesForm] = useState(false)
@@ -883,7 +883,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           <button className="library-chat-button" type="button" onClick={onOpenChat} title="Open AI chat" aria-label="Open AI chat">
             ✦
           </button>
-          <UserMenu onOpenAccount={onOpenAccount} onOpenHelp={onOpenHelp} />
+          <UserMenu onOpenAccount={onOpenAccount} onOpenHelp={onOpenHelp} onOpenLegal={onOpenLegal} onOpenAbout={onOpenAbout} />
         </div>
       </div>
 
