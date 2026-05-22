@@ -16,6 +16,30 @@ import FreeProjectSelector from './components/account/FreeProjectSelector'
 import { getMembership } from './utils/membership'
 import { applyThemeToDocument, loadThemeChoice, saveThemeChoice } from './utils/theme'
 
+const APP_FONT_OPTIONS = {
+  system: 'system-ui, sans-serif',
+  serif: 'Georgia, "Times New Roman", serif',
+  mono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
+  dyslexia: 'Dyslexie, "OpenDyslexic", "Atkinson Hyperlegible", Verdana, Arial, sans-serif',
+}
+
+function parseRoute() {
+  const path = window.location.pathname
+  const m = path.match(/^\/project\/([^/]+)(?:\/(.+))?$/)
+  if (!m) return { novelId: null, section: 'dashboard', layoutViewMode: 'planning' }
+  const novelId = decodeURIComponent(m[1])
+  const sub = m[2]
+  if (sub === 'writing') return { novelId, section: 'dashboard', layoutViewMode: 'writing' }
+  return { novelId, section: sub || 'dashboard', layoutViewMode: 'planning' }
+}
+
+function buildRoute(viewMode, novelId, section, layoutViewMode) {
+  if (viewMode !== 'editor' || !novelId) return '/'
+  if (layoutViewMode === 'writing') return `/project/${encodeURIComponent(novelId)}/writing`
+  if (!section || section === 'dashboard') return `/project/${encodeURIComponent(novelId)}`
+  return `/project/${encodeURIComponent(novelId)}/${section}`
+}
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
@@ -46,6 +70,14 @@ class ErrorBoundary extends Component {
   }
 }
 
+function BetaWatermark() {
+  return (
+    <div className="beta-watermark" aria-hidden="true">
+      Beta
+    </div>
+  )
+}
+
 function AppInner() {
   const { user, loading: authLoading, updateProfile } = useAuth()
   const userId = user?.uid || user?.id || null
@@ -53,8 +85,10 @@ function AppInner() {
   const store = useStore(userId, { readOnly: membership.isReadOnly, freeProjectId: membership.freeProjectId })
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
-  const [section, setSection] = useState('dashboard')
-  const [viewMode, setViewMode] = useState('manager')
+  const initialRoute = useRef(parseRoute())
+  const [section, setSection] = useState(() => initialRoute.current.section)
+  const [viewMode, setViewMode] = useState(() => initialRoute.current.novelId ? 'editor' : 'manager')
+  const [layoutViewMode, setLayoutViewMode] = useState(() => initialRoute.current.layoutViewMode)
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -62,19 +96,56 @@ function AppInner() {
   const [freeProjectBusy, setFreeProjectBusy] = useState(false)
   const [legalPage, setLegalPage] = useState(null)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const firstUrlSync = useRef(true)
   const loadedUid = useRef(null)
 
   useEffect(() => {
     applyThemeToDocument(loadThemeChoice())
+    const fontChoice = localStorage.getItem('nf-font') || 'system'
+    document.documentElement.style.setProperty('--font', APP_FONT_OPTIONS[fontChoice] || APP_FONT_OPTIONS.system)
+    localStorage.removeItem('nf-radius')
+    document.documentElement.removeAttribute('data-radius')
   }, [])
 
   useEffect(() => {
-    if (!store.activeNovelId) setViewMode('manager')
+    if (!store.activeNovelId) { setViewMode('manager'); setLayoutViewMode('planning') }
   }, [store.activeNovelId])
 
   useEffect(() => {
     setViewMode('manager')
+    setLayoutViewMode('planning')
   }, [userId])
+
+  // On mount: if URL points to a project, activate it
+  useEffect(() => {
+    const { novelId } = initialRoute.current
+    if (novelId && novelId !== store.activeNovelId) store.setActiveNovelId(novelId)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync browser URL with navigation state
+  useEffect(() => {
+    if (firstUrlSync.current) { firstUrlSync.current = false; return }
+    const url = buildRoute(viewMode, store.activeNovelId, section, layoutViewMode)
+    if (window.location.pathname !== url) history.pushState(null, '', url)
+  }, [viewMode, store.activeNovelId, section, layoutViewMode])
+
+  // Restore state from browser back/forward navigation
+  useEffect(() => {
+    const handlePop = () => {
+      const route = parseRoute()
+      setSection(route.section)
+      setLayoutViewMode(route.layoutViewMode)
+      if (route.novelId) {
+        store.setActiveNovelId(route.novelId)
+        setViewMode('editor')
+      } else {
+        store.setActiveNovelId(null)
+        setViewMode('manager')
+      }
+    }
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, [store]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleOpenAccount = () => setAccountOpen(true)
@@ -102,11 +173,14 @@ function AppInner() {
   // Apply profile-saved theme on login (overrides local if set)
   useEffect(() => {
     const profileTheme = user?.user_metadata?.theme
+    const profileCustomColors = user?.user_metadata?.custom_theme_colors || {}
     if (profileTheme) {
-      const appliedTheme = saveThemeChoice(profileTheme)
-      window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: appliedTheme } }))
+      const appliedTheme = saveThemeChoice(profileTheme, profileCustomColors)
+      if (appliedTheme === 'custom') {
+        localStorage.setItem('nf-custom-colors', JSON.stringify(profileCustomColors))
+      }
     }
-  }, [user?.id, user?.user_metadata?.theme])
+  }, [user?.id, user?.user_metadata?.theme, user?.user_metadata?.custom_theme_colors])
 
   useEffect(() => {
     if (!user) {
@@ -123,6 +197,9 @@ function AppInner() {
     loadUserData(userId)
       .then(data => {
         importData(data)
+        // URL takes priority over remote last-active project
+        const urlNovelId = initialRoute.current.novelId
+        if (urlNovelId) store.setActiveNovelId(urlNovelId)
       })
       .catch(error => {
         console.error(error)
@@ -167,7 +244,7 @@ function AppInner() {
       <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} />
       <HelpContact open={helpOpen} onClose={() => setHelpOpen(false)} />
       {readOnlyNotice && (
-        <div className="membership-toast">{readOnlyNotice}</div>
+        <div role="alert" className="membership-toast">{readOnlyNotice}</div>
       )}
       {showFreeSelector && (
         <FreeProjectSelector
@@ -183,6 +260,7 @@ function AppInner() {
     store.setActiveNovelId(id)
     setSection('dashboard')
     setViewMode('editor')
+    setLayoutViewMode('planning')
   }
 
   const globalOverlays = (
@@ -196,7 +274,7 @@ function AppInner() {
   return (viewMode === 'editor' && store.activeNovel)
     ? (
       <>
-        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} />
+        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} viewMode={layoutViewMode} setViewMode={setLayoutViewMode} />
         {accountPage}
         {globalOverlays}
       </>
@@ -219,10 +297,13 @@ function AppInner() {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <AppInner />
-      </AuthProvider>
-    </ErrorBoundary>
+    <>
+      <ErrorBoundary>
+        <AuthProvider>
+          <AppInner />
+        </AuthProvider>
+      </ErrorBoundary>
+      <BetaWatermark />
+    </>
   )
 }

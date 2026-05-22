@@ -118,9 +118,9 @@ function heightToColor(h) {
   if (h < 0.33) return blend([92,  155, 178], [199, 155,  93], (h - 0.22) / 0.11)       // shelf → beach
   if (h < 0.38) return blend([199, 155,  93], [224, 185, 118], (h - 0.33) / 0.05)       // beach → pale shoreline
   if (h < 0.50) return blend([224, 185, 118], [24,   62,  34], (h - 0.38) / 0.12)       // shoreline → dark green
-  if (h < 0.72) return blend([24,   62,  34], [132, 168,  89], (h - 0.50) / 0.22)       // dark green → light green (gradual)
-  if (h < 0.85) return blend([132, 168,  89], [120,  85,  48], (h - 0.72) / 0.13)       // light green → brown
-  return blend([120, 85, 48], [188, 188, 182], Math.min(1, (h - 0.85) / 0.15))          // brown → light grey (peak)
+  if (h < 0.80) return blend([24,   62,  34], [132, 168,  89], (h - 0.50) / 0.30)       // dark green → light green (gradual)
+  if (h < 0.90) return blend([132, 168,  89], [120,  85,  48], (h - 0.80) / 0.10)       // light green → brown
+  return blend([120, 85, 48], [188, 188, 182], Math.min(1, (h - 0.90) / 0.10))          // brown → light grey (peak)
 }
 
 function noise2d(x, y, seed) {
@@ -2709,9 +2709,9 @@ export default function MapBuilder({ store }) {
     <div style={{ flex:1, height:'100%', minHeight:0, overflow:'hidden', display:'flex', flexDirection:'column', ...(isFullscreen ? { position:'fixed', inset:12, zIndex:80, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:18, boxShadow:'var(--shadow-modal)' } : {}) }}>
 
       {/* Slim top bar */}
-      <div className="studio-topbar map-builder-topbar" style={{ padding:'6px 10px', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
-          <span style={{ fontFamily:'var(--font-serif)', fontSize:18, fontWeight:700 }}>Map Builder</span>
+      <div className={`studio-topbar map-builder-topbar${isFullscreen ? ' is-fullscreen' : ''}`} style={{ padding:'4px 8px', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0 }}>
+          <span style={{ fontFamily:'var(--font-serif)', fontSize:14, fontWeight:700 }}>Map Builder</span>
           {mapType && (
             <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:10, background:'var(--surface2)', border:'1px solid var(--border)', color:'var(--muted)' }}>
               {MAP_TYPE_LABELS[mapType] || mapType}

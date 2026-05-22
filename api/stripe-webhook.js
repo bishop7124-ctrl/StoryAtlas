@@ -1,20 +1,10 @@
 import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 
-// Vercel API route — replaces supabase/functions/stripe-webhook
-//
-// Stripe calls this URL directly whenever a subscription event occurs.
-// It writes the new subscription status into the user's Supabase app_metadata,
-// which is what membership.js reads to decide if the user has an active plan.
-//
-// IMPORTANT: bodyParser must be disabled so we receive the raw body for
-// Stripe's signature verification. Without this, constructEvent() will fail.
-
 export const config = {
   api: { bodyParser: false },
 }
 
-// Collect the raw request body as a Buffer
 function getRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -24,7 +14,6 @@ function getRawBody(req) {
   })
 }
 
-// Find the furthest-future period end across all subscription items
 function getCurrentPeriodEnd(subscription) {
   const ends = subscription.items.data
     .map(item => item.current_period_end)
@@ -33,8 +22,8 @@ function getCurrentPeriodEnd(subscription) {
   return subscription.cancel_at || subscription.trial_end || subscription.ended_at
 }
 
-// Write subscription fields into the user's app_metadata in Supabase Auth
-async function updateMembership(supabaseAdmin, subscription, fallbackUserId) {
+// Write subscription data to app_metadata for recurring plans
+async function updateSubscriptionMembership(supabaseAdmin, subscription, fallbackUserId) {
   const userId = subscription.metadata?.user_id
     || (typeof subscription.latest_invoice !== 'string'
           ? subscription.latest_invoice?.metadata?.user_id
@@ -50,6 +39,8 @@ async function updateMembership(supabaseAdmin, subscription, fallbackUserId) {
     ? subscription.customer
     : subscription.customer?.id
 
+  const plan = subscription.metadata?.plan || 'premium_monthly'
+
   const { data } = await supabaseAdmin.auth.admin.getUserById(userId)
   const existing = data?.user?.app_metadata || {}
 
@@ -59,8 +50,48 @@ async function updateMembership(supabaseAdmin, subscription, fallbackUserId) {
       stripe_customer_id:                customerId,
       stripe_subscription_id:            subscription.id,
       subscription_status:               subscription.status,
+      subscription_plan:                 plan,
       subscription_current_period_end:   getCurrentPeriodEnd(subscription),
       subscription_cancel_at_period_end: subscription.cancel_at_period_end,
+    },
+  })
+
+  // When a subscription is cancelled (status: cancelled), record was_monthly so the
+  // free tier knows to lock the active project selection
+  if (subscription.status === 'canceled') {
+    const userMeta = data?.user?.user_metadata || {}
+    await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...userMeta,
+        was_monthly: true,
+      },
+    })
+  }
+}
+
+// Write lifetime plan data to app_metadata after a one-time payment
+async function activateLifetimePlan(supabaseAdmin, session) {
+  const userId = session.metadata?.user_id || session.client_reference_id
+  const plan = session.metadata?.plan
+
+  if (!userId || !plan) {
+    console.warn('[stripe-webhook] Missing user_id or plan for lifetime activation', session.id)
+    return
+  }
+
+  const customerId = typeof session.customer === 'string'
+    ? session.customer
+    : session.customer?.id
+
+  const { data } = await supabaseAdmin.auth.admin.getUserById(userId)
+  const existing = data?.user?.app_metadata || {}
+
+  await supabaseAdmin.auth.admin.updateUserById(userId, {
+    app_metadata: {
+      ...existing,
+      stripe_customer_id:   customerId,
+      subscription_status:  'active',
+      subscription_plan:    plan,
     },
   })
 }
@@ -94,22 +125,31 @@ export default async function handler(req, res) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object
-        if (!session.subscription) break
-        const subId = typeof session.subscription === 'string'
-          ? session.subscription
-          : session.subscription.id
-        const sub = await stripe.subscriptions.retrieve(subId, { expand: ['latest_invoice'] })
-        await updateMembership(
-          supabaseAdmin, sub,
-          session.metadata?.user_id || session.client_reference_id
-        )
+
+        if (session.mode === 'payment') {
+          // One-time lifetime purchase — activate immediately
+          await activateLifetimePlan(supabaseAdmin, session)
+        } else if (session.subscription) {
+          // Recurring subscription — retrieve full subscription object to get status
+          const subId = typeof session.subscription === 'string'
+            ? session.subscription
+            : session.subscription.id
+          const sub = await stripe.subscriptions.retrieve(subId, { expand: ['latest_invoice'] })
+          // Carry the plan key from session metadata into subscription metadata if missing
+          if (!sub.metadata?.plan && session.metadata?.plan) {
+            sub.metadata = { ...sub.metadata, plan: session.metadata.plan }
+          }
+          await updateSubscriptionMembership(
+            supabaseAdmin, sub,
+            session.metadata?.user_id || session.client_reference_id
+          )
+        }
         break
       }
 
       case 'invoice.paid':
       case 'invoice.payment_failed': {
         const invoice = event.data.object
-        // invoice.subscription is the classic stable field; fall back to the newer parent shape
         const subId = typeof invoice.subscription === 'string'
           ? invoice.subscription
           : invoice.subscription?.id
@@ -118,7 +158,7 @@ export default async function handler(req, res) {
                 : invoice.parent?.subscription_details?.subscription?.id)
         if (!subId) break
         const latestSub = await stripe.subscriptions.retrieve(subId, { expand: ['latest_invoice'] })
-        await updateMembership(
+        await updateSubscriptionMembership(
           supabaseAdmin, latestSub,
           invoice.metadata?.user_id || invoice.parent?.subscription_details?.metadata?.user_id
         )
@@ -128,11 +168,11 @@ export default async function handler(req, res) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
-        await updateMembership(supabaseAdmin, event.data.object)
+        await updateSubscriptionMembership(supabaseAdmin, event.data.object)
         break
 
       default:
-        break // Ignore events we don't handle
+        break
     }
   } catch (err) {
     console.error('[stripe-webhook] Handler error for', event.type, err)

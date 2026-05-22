@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import UserMenu from './auth/UserMenu'
 import YOWLogo from './brand/YOWLogo'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
-import { createProjectZipBlob, getProjectExportFilename } from '../utils/projectExport'
+import {
+  createProjectZipBlob,
+  downloadProjectDocx,
+  downloadProjectPdf,
+  EXPORT_PDF_THEME_OPTIONS,
+  getProjectExportFilename,
+} from '../utils/projectExport'
 
 const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
 
@@ -161,7 +167,6 @@ const STATUS_DATA = {
   revision:    { label: 'Editing',      color: '#e3a84f', aliasFor: 'editing' },
 }
 const STATUS_PICKER = ['not_started', 'draft', 'in_progress', 'editing', 'complete', 'paused']
-const STATUS_CYCLE = [null, ...STATUS_PICKER]
 
 function StatusBadge({ status, onClick, small }) {
   const data = status ? STATUS_DATA[status] : null
@@ -179,29 +184,94 @@ function StatusBadge({ status, onClick, small }) {
   )
 }
 
-function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onToggleFocus, onEditProject }) {
+function ProjectExportMenu({ onExport, compact = false }) {
+  const [open, setOpen] = useState(false)
+  if (!onExport) return null
+
+  const options = [
+    ['docx', 'Word document'],
+    ['pdf', 'Visual PDF'],
+    ['zip', 'Backup zip'],
+  ]
+
+  return (
+    <div className="novel-export-control" onClick={e => e.stopPropagation()}>
+      <button
+        type="button"
+        className={compact ? 'project-export-inline-button' : 'novel-cover-button'}
+        onClick={() => setOpen(v => !v)}
+        title="Export project"
+        aria-label="Export project"
+        aria-expanded={open}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        {compact && <span>Export</span>}
+      </button>
+      {open && (
+        <div className="novel-export-menu">
+          {options.filter(([format]) => format !== 'pdf').map(([format, label]) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onExport(format)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          <div className="novel-export-theme-group" role="group" aria-label="Visual PDF themes">
+            <span>Visual PDF theme</span>
+            {EXPORT_PDF_THEME_OPTIONS.map(theme => (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => {
+                  setOpen(false)
+                  onExport('pdf', theme.id)
+                }}
+              >
+                <strong>{theme.name}</strong>
+                <small>{theme.tagline}</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActiveProjectHero({ stats, allStats, series, userName, onOpen, onSetStatus, onToggleFocus, onEditProject, onExportProject }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const novel = stats.project
+  const novel = stats?.project ?? null
   const totalWords = allStats.reduce((sum, item) => sum + item.manuscriptWords, 0)
   const totalScenes = allStats.reduce((sum, item) => sum + item.scenes.length, 0)
   const totalCharacters = allStats.reduce((sum, item) => sum + item.characters.length, 0)
-  const currentStatus = STATUS_DATA[novel.status]?.aliasFor ?? novel.status
-  const progress = Number.isFinite(Number(novel.progress)) ? Math.max(0, Math.min(100, Number(novel.progress))) : null
+  const currentStatus = STATUS_DATA[novel?.status]?.aliasFor ?? novel?.status
+  const progress = Number.isFinite(Number(novel?.progress)) ? Math.max(0, Math.min(100, Number(novel.progress))) : null
+  const hasActiveProject = !!novel
 
   return (
     <div
-      className="active-project-command"
+      className={`active-project-command${hasActiveProject ? '' : ' active-project-command--empty'}`}
       onMouseLeave={() => setSettingsOpen(false)}
-      onClick={() => { if (!settingsOpen) onOpen(novel.id) }}
+      onClick={() => { if (hasActiveProject && !settingsOpen) onOpen(novel.id) }}
     >
       <section className="active-project-command-main">
         <div className="active-project-command-copy">
           <div className="active-project-badge">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            Active Project
+            {hasActiveProject && <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
+            {hasActiveProject ? 'Active Project' : `Welcome, ${userName}`}
           </div>
-          <h2 className="active-project-command-title">{novel.title}</h2>
-          {novel.description && <p className="active-project-command-desc">{novel.description}</p>}
+          <h2 className="active-project-command-title">{hasActiveProject ? novel.title : 'What are we working on today?'}</h2>
+          {hasActiveProject && novel.description && <p className="active-project-command-desc">{novel.description}</p>}
+          {!hasActiveProject && <p className="active-project-command-desc">Choose a project below to make it active, or open one directly when you are ready to work.</p>}
           <div className="active-project-command-stats">
             {progress !== null && (
               <div className="active-project-command-stat">
@@ -210,28 +280,28 @@ function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onTog
               </div>
             )}
             <div className="active-project-command-stat">
-              <strong>{stats.manuscriptWords.toLocaleString()}</strong>
-              <span>Words</span>
+              <strong>{hasActiveProject ? stats.manuscriptWords.toLocaleString() : allStats.length}</strong>
+              <span>{hasActiveProject ? 'Words' : 'Projects'}</span>
             </div>
             <div className="active-project-command-stat">
-              <strong>{stats.scenes.length}</strong>
-              <span>Scenes</span>
+              <strong>{hasActiveProject ? stats.scenes.length : totalWords.toLocaleString()}</strong>
+              <span>{hasActiveProject ? 'Scenes' : 'Total words'}</span>
             </div>
-            <StatusBadge status={novel.status} />
+            {hasActiveProject && <StatusBadge status={novel.status} />}
           </div>
         </div>
       </section>
 
       <aside className="active-project-command-cover">
-        <div className="active-project-cover-card" style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title) }}>
+        <div className="active-project-cover-card" style={{ background: novel?.coverPhoto ? undefined : getCoverGradient(novel?.title || 'Your Own World') }}>
           <div className="active-project-cover-inner">
-            <div className="active-project-hero-bg" style={{ background: getCoverGradient(novel.title) }} />
-          {novel.coverPhoto
+            <div className="active-project-hero-bg" style={{ background: getCoverGradient(novel?.title || 'Your Own World') }} />
+          {novel?.coverPhoto
             ? <img src={novel.coverPhoto} alt="" />
-            : <span className="active-project-cover-letter">{novel.title[0]?.toUpperCase()}</span>
+            : <span className="active-project-cover-letter">{hasActiveProject ? novel.title[0]?.toUpperCase() : '?'}</span>
           }
           </div>
-          <button
+          {hasActiveProject && <button
             className="active-project-settings-btn"
             onClick={e => { e.stopPropagation(); setSettingsOpen(o => !o) }}
             title="Project settings"
@@ -240,10 +310,13 @@ function ActiveProjectHero({ stats, allStats, series, onOpen, onSetStatus, onTog
               <circle cx="12" cy="12" r="3"/>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
             </svg>
-          </button>
+          </button>}
+          {hasActiveProject && <div className="active-project-export-slot">
+            <ProjectExportMenu onExport={(format, themeId) => onExportProject?.(novel.id, format, themeId)} />
+          </div>}
 
           {/* Settings panel */}
-          {settingsOpen && (
+          {hasActiveProject && settingsOpen && (
             <div className="active-project-settings-panel" onClick={e => e.stopPropagation()}>
               <p className="active-project-settings-label">Status</p>
               <div className="active-project-status-row">
@@ -353,186 +426,6 @@ function StatusQueue({ stats, onOpenProject }) {
         })}
       </div>
     </section>
-  )
-}
-
-function NovelCard({ stats, onOpen, onDelete, onUpdateCover, onExport, isFocus, compact, onCycleStatus, isViewOnly, onEditProject }) {
-  const [hovered, setHovered] = useState(false)
-  const [coverError, setCoverError] = useState('')
-  const novel = stats.project
-  const cfg = getProjectType(novel.type)
-
-  const handleCoverSelect = async (e) => {
-    e.stopPropagation()
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) return
-
-    try {
-      setCoverError('')
-      const coverPhoto = await resizeCoverPhoto(file)
-      onUpdateCover(novel.id, coverPhoto)
-    } catch (error) {
-      setCoverError(error.message || 'Could not use that cover image.')
-    }
-  }
-
-  if (compact) {
-    return (
-      <div className="novel-card novel-card--compact" onClick={() => onOpen?.(novel.id)}>
-        <div className="novel-card-cover" style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title) }}>
-          {novel.coverPhoto ? <img src={novel.coverPhoto} alt="" /> : (
-            <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 36, fontWeight: 900, color: 'rgba(255,255,255,0.1)', userSelect: 'none' }}>{novel.title[0]?.toUpperCase()}</span>
-          )}
-          {isFocus && <span className="novel-focus-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>}
-          {isViewOnly && (
-            <span style={{ position: 'absolute', top: 6, left: 6, fontSize: 9, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', background: 'rgba(0,0,0,0.6)', color: 'rgba(255,255,255,0.7)', padding: '2px 6px', borderRadius: 4 }}>View only</span>
-          )}
-        </div>
-        <div className="novel-card-foot">
-          <p style={{ fontSize: 10, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{novel.title}</p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-            <StatusBadge status={novel.status} small onClick={e => { e.stopPropagation(); onCycleStatus?.() }} />
-            {onEditProject && (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); onEditProject() }}
-                title="Project settings"
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'inline-flex' }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div
-      className="novel-card"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Cover */}
-      <div
-        className="novel-card-cover"
-        onClick={() => onOpen?.(novel.id)}
-        style={{ background: novel.coverPhoto ? undefined : getCoverGradient(novel.title) }}
-      >
-        {novel.coverPhoto ? (
-          <img src={novel.coverPhoto} alt="" />
-        ) : (
-          <>
-            <span
-              style={{
-                position: 'absolute', bottom: 10, right: 12,
-                fontSize: 72, fontWeight: 900, lineHeight: 1,
-                color: 'rgba(255,255,255,0.07)', userSelect: 'none', pointerEvents: 'none',
-              }}
-            >
-              {novel.title[0]?.toUpperCase()}
-            </span>
-            <span className="project-type-badge" title={cfg.label}>
-              <ProjectTypeImage type={novel.type} label={cfg.label} />
-            </span>
-          </>
-        )}
-        {isFocus && (
-          <span className="novel-focus-badge" title="Active project">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-          </span>
-        )}
-        <div className="novel-card-cover-actions" onClick={e => e.stopPropagation()}>
-          {onEditProject && (
-            <button className="novel-cover-button" type="button" onClick={onEditProject} title="Project settings" aria-label="Project settings">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V22h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V2h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
-              </svg>
-            </button>
-          )}
-          <label className="novel-cover-button" title="Change cover photo">
-            <input type="file" accept="image/*" onChange={handleCoverSelect} />
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
-              <circle cx="12" cy="13" r="3" />
-            </svg>
-          </label>
-          {novel.coverPhoto && (
-            <button className="novel-cover-button" type="button" onClick={() => onUpdateCover(novel.id, null)} title="Remove cover photo">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" />
-                <path d="M8 6V4h8v2" />
-                <path d="M19 6l-1 14H6L5 6" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {coverError && <p className="novel-cover-error">{coverError}</p>}
-      </div>
-
-      {/* Title */}
-      <div className="novel-card-foot" onClick={() => onOpen?.(novel.id)}>
-        <p>{novel.title}</p>
-        <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', marginTop: 2 }}>
-          {cfg.label} · {stats.updatedLabel}
-        </p>
-        <StatusBadge status={novel.status} small onClick={e => { e.stopPropagation(); onCycleStatus?.() }} />
-      </div>
-
-      {/* Hover popup */}
-      {hovered && (
-        <div className="novel-card-popup">
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 8, minHeight: 32 }}>
-            {novel.description || 'No description yet.'}
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 10, fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-            <span>{stats.characters.length} chars</span>
-            <span>{stats.scenes.length} scenes</span>
-            <span>{stats.manuscriptWords.toLocaleString()} words</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <button
-              onClick={() => onOpen(novel.id)}
-              style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            >
-              Open →
-            </button>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); onExport(novel.id) }}
-                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                Export project
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onEditProject?.() }}
-                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                Settings
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(novel.id) }}
-                style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -960,7 +853,7 @@ function SeriesCard({ series, seriesStats, onClick }) {
   )
 }
 
-function ProjectCard({ stats, onClick, onEdit }) {
+function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
   const project = stats.project
   const cfg = getProjectType(project.type)
   return (
@@ -974,6 +867,7 @@ function ProjectCard({ stats, onClick, onEdit }) {
           : <span className="series-dash-card-letter">{project.title[0]?.toUpperCase()}</span>
         }
         <span className="series-dash-card-count">{cfg.label}</span>
+        {isFocus && <span className="novel-focus-badge" title="Active project"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>}
         <button
           className="dash-card-settings-button"
           type="button"
@@ -986,6 +880,9 @@ function ProjectCard({ stats, onClick, onEdit }) {
             <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V22h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V2h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
           </svg>
         </button>
+        <div className="dash-card-export-button">
+          <ProjectExportMenu onExport={(format, themeId) => onExport?.(project.id, format, themeId)} />
+        </div>
       </div>
       <div className="series-dash-card-foot">
         <p className="series-dash-card-name">{project.title}</p>
@@ -1003,134 +900,6 @@ function ProjectCard({ stats, onClick, onEdit }) {
   )
 }
 
-function SeriesDashboard({ series, seriesStats, onOpenProject, onEdit, onClose, onCycleStatus, onEditProject }) {
-  const totalWords = seriesStats.reduce((sum, s) => sum + s.manuscriptWords, 0)
-  const statusLabel = STATUS_OPTIONS.find(o => o.id === series.status)?.label
-
-  return (
-    <div className="series-dashboard">
-      <div
-        className="series-dashboard-banner"
-        style={{ background: series.coverPhoto ? undefined : getCoverGradient(series.name) }}
-      >
-        {series.coverPhoto && <img className="series-dashboard-banner-img" src={series.coverPhoto} alt="" />}
-        <div className="series-dashboard-banner-overlay">
-          <button className="series-dashboard-back-btn" onClick={onClose}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7"/>
-            </svg>
-            All projects
-          </button>
-          <div className="series-dashboard-banner-body">
-            <p className="series-dashboard-eyebrow">Series</p>
-            <h2 className="series-dashboard-name">{series.name}</h2>
-            {series.summary && <p className="series-dashboard-summary">{series.summary}</p>}
-            <div className="series-dashboard-stats-row">
-              <span>{seriesStats.length} {seriesStats.length === 1 ? 'book' : 'books'}</span>
-              {totalWords > 0 && <><span className="series-dashboard-dot">·</span><span>{totalWords.toLocaleString()} words</span></>}
-              {statusLabel && <><span className="series-dashboard-dot">·</span><span>{statusLabel}</span></>}
-            </div>
-            {series.tags?.length > 0 && (
-              <div className="series-dashboard-tags">
-                {series.tags.map(tag => <span key={tag} className="series-dashboard-tag">{tag}</span>)}
-              </div>
-            )}
-          </div>
-          <button className="series-dashboard-edit-btn" onClick={onEdit}>Edit</button>
-        </div>
-      </div>
-
-      <div className="series-dashboard-books">
-        <p className="series-dashboard-books-label">
-          {seriesStats.length === 0 ? 'No projects yet' : `${seriesStats.length} ${seriesStats.length === 1 ? 'Project' : 'Projects'}`}
-        </p>
-        {seriesStats.length > 0 ? (
-          <div className="novel-grid novel-grid--compact">
-            {seriesStats.map(stats => (
-              <NovelCard
-                key={stats.project.id}
-                compact
-                stats={stats}
-                onOpen={onOpenProject}
-                isFocus={!!stats.project.focus}
-                onCycleStatus={() => onCycleStatus(stats.project.id, stats.project.status)}
-                onEditProject={() => onEditProject(stats.project)}
-              />
-            ))}
-          </div>
-        ) : (
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No projects in this series yet.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ProjectDashboardPanel({ stats, series, onOpenProject, onEdit, onClose, onCycleStatus }) {
-  const project = stats.project
-  const cfg = getProjectType(project.type)
-  const projectSeries = series.find(s => s.id === project.seriesId)
-  const progress = Number.isFinite(Number(project.progress)) ? Math.max(0, Math.min(100, Number(project.progress))) : null
-
-  return (
-    <div className="series-dashboard project-dashboard-panel">
-      <div
-        className="series-dashboard-banner"
-        style={{ background: project.coverPhoto ? undefined : getCoverGradient(project.title) }}
-      >
-        {project.coverPhoto && <img className="series-dashboard-banner-img" src={project.coverPhoto} alt="" />}
-        <div className="series-dashboard-banner-overlay">
-          <button className="series-dashboard-back-btn" onClick={onClose}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 5l-7 7 7 7"/>
-            </svg>
-            All dashboards
-          </button>
-          <div className="series-dashboard-banner-body">
-            <p className="series-dashboard-eyebrow">{cfg.label}</p>
-            <h2 className="series-dashboard-name">{project.title}</h2>
-            {project.description && <p className="series-dashboard-summary">{project.description}</p>}
-            <div className="series-dashboard-stats-row">
-              <span>{stats.manuscriptWords.toLocaleString()} words</span>
-              <span className="series-dashboard-dot">·</span><span>{stats.scenes.length} scenes</span>
-              {projectSeries && <><span className="series-dashboard-dot">·</span><span>{projectSeries.name}</span></>}
-              {progress !== null && <><span className="series-dashboard-dot">·</span><span>{progress}%</span></>}
-            </div>
-            {project.tags?.length > 0 && (
-              <div className="series-dashboard-tags">
-                {project.tags.map(tag => <span key={tag} className="series-dashboard-tag">{tag}</span>)}
-              </div>
-            )}
-          </div>
-          <div className="project-dashboard-actions">
-            <button className="series-dashboard-edit-btn" onClick={onEdit}>Edit</button>
-            <button className="series-dashboard-edit-btn" onClick={() => onOpenProject(project.id)}>Open</button>
-          </div>
-        </div>
-      </div>
-
-      <div className="project-dashboard-summary-grid">
-        <div className="active-project-command-stat">
-          <strong>{stats.characters.length}</strong>
-          <span>Characters</span>
-        </div>
-        <div className="active-project-command-stat">
-          <strong>{stats.locations.length}</strong>
-          <span>Locations</span>
-        </div>
-        <div className="active-project-command-stat">
-          <strong>{stats.loreEntries.length}</strong>
-          <span>Lore</span>
-        </div>
-        <button className="project-dashboard-status-card" onClick={() => onCycleStatus(project.id, project.status)}>
-          <span>Status</span>
-          <StatusBadge status={project.status} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
@@ -1139,8 +908,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   const [editingSeries, setEditingSeries] = useState(null)
   const [editingProject, setEditingProject] = useState(null)
   const [seriesFilter, setSeriesFilter] = useState(null)
-  const [openSeriesId, setOpenSeriesId] = useState(null)
-  const [openProjectDashboardId, setOpenProjectDashboardId] = useState(null)
   const userProfile = user?.user_metadata || {}
   const userName = userProfile.full_name || userProfile.name || userProfile.alias || userProfile.writer_alias || user?.displayName || user?.email?.split('@')[0] || 'User'
 
@@ -1172,12 +939,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
     store.allProjectStats.forEach(s => { if (s.project.focus) store.updateNovel(s.project.id, { focus: false }) })
     if (!isAlready) store.updateNovel(id, { focus: true })
   }
-  const handleCycleStatus = (id, currentStatus) => {
-    const normalizedStatus = STATUS_DATA[currentStatus]?.aliasFor ?? currentStatus ?? null
-    const idx = STATUS_CYCLE.indexOf(normalizedStatus)
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
-    store.updateNovel(id, { status: next })
-  }
   const handleSetStatus = (id, status) => {
     store.updateNovel(id, { status })
   }
@@ -1202,17 +963,27 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
     if (confirm('Delete this project and all its content? This cannot be undone.')) {
       store.deleteNovel(id)
       setEditingProject(null)
-      setOpenProjectDashboardId(null)
     }
   }
 
-  const handleUpdateCover = (id, coverPhoto) => {
-    store.updateNovel(id, { coverPhoto })
-  }
-
-  const handleExportProject = (id) => {
+  const handleExportProject = async (id, format = 'zip', themeId) => {
     const projectData = store.getProjectExportData(id)
     if (!projectData) return
+
+    if (format === 'docx') {
+      try {
+        await downloadProjectDocx(projectData)
+      } catch (error) {
+        console.error('Word export failed:', error)
+        alert('Word export failed. Please try again.')
+      }
+      return
+    }
+
+    if (format === 'pdf') {
+      downloadProjectPdf(projectData, { themeId })
+      return
+    }
 
     const blob = createProjectZipBlob(projectData)
     const url = URL.createObjectURL(blob)
@@ -1232,24 +1003,10 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
     : store.allProjectStats
 
   const handleOpenLibraryChat = () => {
-    const projectId = openProjectDashboardId || focusStats?.project?.id || store.activeNovelId
+    const projectId = focusStats?.project?.id || store.activeNovelId
     if (projectId) store.setActiveNovelId(projectId)
     onOpenChat?.()
   }
-
-  const projectGroups = useMemo(() => {
-    const seriesById = new Map((store.series || []).map(s => [s.id, s]))
-    const groups = (store.series || []).map(s => ({
-      id: s.id,
-      title: s.name,
-      stats: visibleStats.filter(item => item.project.seriesId === s.id),
-    }))
-    const standalone = visibleStats.filter(item => !item.project.seriesId || !seriesById.has(item.project.seriesId))
-    return [
-      ...groups.filter(group => group.stats.length > 0),
-      ...(standalone.length ? [{ id: 'standalone', title: store.series.length ? 'Standalone Projects' : 'Projects', stats: standalone }] : []),
-    ]
-  }, [store.series, visibleStats])
 
   return (
     <div style={{ height: '100vh', overflowY: 'auto', background: 'var(--bg-main)', color: 'var(--text-main)', WebkitOverflowScrolling: 'touch' }}>
@@ -1277,33 +1034,21 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
         </div>
       </div>
 
-      {/* ── Full-height active project hero ── */}
-      {focusStats && (
-        <ActiveProjectHero
-          stats={focusStats}
-          allStats={store.allProjectStats}
-          series={store.series}
-          onOpen={onOpenProject}
-          onSetStatus={(status) => handleSetStatus(focusStats.project.id, status)}
-          onToggleFocus={() => handleSetFocus(focusStats.project.id)}
-          onEditProject={() => setEditingProject(focusStats.project)}
-        />
-      )}
+      <ActiveProjectHero
+        stats={focusStats}
+        allStats={store.allProjectStats}
+        series={store.series}
+        userName={userName}
+        onOpen={onOpenProject}
+        onSetStatus={(status) => focusStats && handleSetStatus(focusStats.project.id, status)}
+        onToggleFocus={() => focusStats && handleSetFocus(focusStats.project.id)}
+        onEditProject={() => focusStats && setEditingProject(focusStats.project)}
+        onExportProject={handleExportProject}
+      />
 
       {/* Content */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '36px 28px 56px' }}>
-        {!focusStats && (
-          <>
-            <p className="library-welcome">Welcome, {userName}!</p>
-            <div className="library-hero" style={{ justifyContent: 'center' }}>
-              <h1>What are we writing today?</h1>
-            </div>
-          </>
-        )}
-
-
-        {/* ── Series filter strip (full-view only) ── */}
-        {!focusStats && store.series.length > 0 && (
+        {store.series.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 28, alignItems: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>Series</span>
             <button
@@ -1328,119 +1073,51 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
           </div>
         )}
 
-        {!focusStats && projectGroups.map(group => {
-          const thisSeries = store.series.find(s => s.id === group.id)
-          return (
-            <section className="library-series-section" key={group.id}>
-              <div className="library-series-heading">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <h2>{group.title}</h2>
-                  {group.id !== 'standalone' && (
-                    <button type="button" onClick={() => setEditingSeries(thisSeries)} title="Edit series" className="series-edit-icon-button">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>
-                    </button>
-                  )}
-                </div>
-                <span>{group.stats.length} project{group.stats.length === 1 ? '' : 's'}</span>
-              </div>
-              <div className="novel-grid">
-                {group.stats.map((stats) => (
-                  <NovelCard
-                    key={stats.project.id}
-                    stats={stats}
-                    onOpen={onOpenProject}
-                    onDelete={handleDelete}
-                    onUpdateCover={handleUpdateCover}
-                    onExport={handleExportProject}
-                    isFocus={!!stats.project.focus}
-                    onCycleStatus={() => handleCycleStatus(stats.project.id, stats.project.status)}
-                    isViewOnly={membership?.freeProjectId !== null && membership?.freeProjectId !== undefined && membership?.freeProjectId !== stats.project.id}
-                    onEditProject={() => setEditingProject(stats.project)}
-                  />
-                ))}
-              </div>
-            </section>
-          )
-        })}
-
-        {/* ── Series + Standalone (active project set) ── */}
-        {focusStats && (() => {
+        {(() => {
           const seriesById = new Map((store.series || []).map(s => [s.id, s]))
-          const nonFocusStats = store.allProjectStats.filter(s => !s.project.focus)
-          const seriesWithProjects = (store.series || []).filter(s =>
-            store.allProjectStats.some(st => st.project.seriesId === s.id)
+          const dashboardStats = visibleStats
+          const seriesWithProjects = seriesFilter ? [] : (store.series || []).filter(s =>
+            dashboardStats.some(st => st.project.seriesId === s.id)
           )
-          const standaloneStats = nonFocusStats.filter(s =>
-            !s.project.seriesId || !seriesById.has(s.project.seriesId)
-          )
+          const projectCards = seriesFilter
+            ? dashboardStats
+            : dashboardStats.filter(s => !s.project.seriesId || !seriesById.has(s.project.seriesId))
 
-          if (openSeriesId) {
-            const series = store.series.find(s => s.id === openSeriesId)
-            if (series) {
-              const sStats = store.allProjectStats.filter(s => s.project.seriesId === openSeriesId)
-              return (
-                <SeriesDashboard
-                  series={series}
-                  seriesStats={sStats}
-                  onOpenProject={onOpenProject}
-                  onEdit={() => setEditingSeries(series)}
-                  onClose={() => setOpenSeriesId(null)}
-                  onCycleStatus={handleCycleStatus}
-                  onEditProject={setEditingProject}
-                />
-              )
-            }
-          }
-
-          if (openProjectDashboardId) {
-            const projectStats = store.allProjectStats.find(s => s.project.id === openProjectDashboardId)
-            if (projectStats) {
-              return (
-                <ProjectDashboardPanel
-                  stats={projectStats}
-                  series={store.series}
-                  onOpenProject={onOpenProject}
-                  onEdit={() => setEditingProject(projectStats.project)}
-                  onClose={() => setOpenProjectDashboardId(null)}
-                  onCycleStatus={handleCycleStatus}
-                />
-              )
-            }
-          }
-
-          if (seriesWithProjects.length === 0 && standaloneStats.length === 0) return null
+          if (seriesWithProjects.length === 0 && projectCards.length === 0) return null
 
           return (
             <section className="command-library-grid">
               <div>
                 <div className="dash-section-title">
-                  <h2>Dashboards</h2>
-                  <span>Open dashboards</span>
+                  <h2>Projects</h2>
+                  <span>Choose the active project</span>
                 </div>
-                {seriesWithProjects.length > 0 || standaloneStats.length > 0 ? (
+                {seriesWithProjects.length > 0 || projectCards.length > 0 ? (
                   <div className="dash-series-grid">
                     {seriesWithProjects.map(s => {
-                      const sStats = store.allProjectStats.filter(st => st.project.seriesId === s.id)
+                      const sStats = dashboardStats.filter(st => st.project.seriesId === s.id)
                       return (
                         <SeriesCard
                           key={s.id}
                           series={s}
                           seriesStats={sStats}
-                          onClick={() => { setOpenProjectDashboardId(null); setOpenSeriesId(s.id) }}
+                          onClick={() => setSeriesFilter(seriesFilter === s.id ? null : s.id)}
                         />
                       )
                     })}
-                    {standaloneStats.map(stats => (
+                    {projectCards.map(stats => (
                       <ProjectCard
                         key={stats.project.id}
                         stats={stats}
-                        onClick={() => { setOpenSeriesId(null); setOpenProjectDashboardId(stats.project.id) }}
+                        onClick={() => handleSetFocus(stats.project.id)}
                         onEdit={() => setEditingProject(stats.project)}
+                        onExport={handleExportProject}
+                        isFocus={!!stats.project.focus}
                       />
                     ))}
                   </div>
                 ) : (
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No dashboards yet.</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No projects yet.</p>
                 )}
               </div>
               <StatusQueue stats={store.allProjectStats} onOpenProject={onOpenProject} />

@@ -68,13 +68,13 @@ export default function UserMenu({ onOpenAccount, onOpenHelp, onOpenLegal, onOpe
               onClick={() => { setOpen(false); onOpenAbout() }}
               className="w-full text-left px-4 py-3 text-sm text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
             >
-              About &amp; Roadmap
+              About
             </button>
           )}
           {onOpenLegal && (
             <div className="border-t border-[var(--border)]">
               <div className="px-4 py-2 flex flex-wrap gap-x-3 gap-y-1">
-                {[['privacy','Privacy'],['terms','Terms'],['ethics','Ethics'],['cookies','Cookies']].map(([key, label]) => (
+                {[['privacy','Privacy'],['terms','Terms'],['ethics','Ethics'],['beta','Beta'],['cookies','Cookies']].map(([key, label]) => (
                   <button
                     key={key}
                     onClick={() => { setOpen(false); onOpenLegal(key) }}

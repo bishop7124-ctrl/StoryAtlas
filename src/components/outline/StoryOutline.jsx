@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { getProjectType } from '../../constants/projectTypes'
+import { getProjectType, getStoryEventIndicators } from '../../constants/projectTypes'
 
 const ChevronIcon = ({ open }) => (
   <svg
@@ -36,6 +36,36 @@ const DeleteBtn = ({ onClick, title = 'Delete' }) => (
     </svg>
   </button>
 )
+
+const StoryEventSelect = ({ value, indicators, onChange }) => {
+  const selected = indicators.find(indicator => indicator.id === value)
+  const hasUnknownValue = value && !selected
+  const color = selected?.color || '#94a3b8'
+
+  return (
+    <select
+      value={value || ''}
+      onChange={e => onChange(e.target.value || null)}
+      title={selected ? `Story event: ${selected.label}` : 'Add story event indicator'}
+      style={value ? {
+        borderColor: color,
+        color,
+        backgroundColor: `${color}1f`,
+      } : undefined}
+      className={`h-6 max-w-40 rounded border px-2 text-[10px] font-bold uppercase tracking-wider outline-none transition-colors ${
+        value
+          ? ''
+          : 'border-transparent bg-transparent text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:border-[var(--border)] hover:bg-[var(--bg-main)] focus:opacity-100 focus:border-[var(--accent)]'
+      }`}
+    >
+      <option value="">Story event</option>
+      {hasUnknownValue && <option value={value}>{value}</option>}
+      {indicators.map(indicator => (
+        <option key={indicator.id} value={indicator.id}>{indicator.label}</option>
+      ))}
+    </select>
+  )
+}
 
 const AutoTextarea = ({ value, onChange, placeholder, className }) => {
   const ref = useRef(null)
@@ -96,7 +126,7 @@ const InlineTitle = ({ value, onSave, className }) => {
   )
 }
 
-const SceneRow = ({ scene, sceneIdx, isFirst, isLast, updateScene, reorderScene, deleteScene, labels }) => {
+const SceneRow = ({ scene, sceneIdx, isFirst, isLast, updateScene, reorderScene, deleteScene, labels, indicators }) => {
   const wordCount = useMemo(() => {
     return scene.content?.trim().split(/\s+/).filter(Boolean).length || 0
   }, [scene.content])
@@ -117,6 +147,11 @@ const SceneRow = ({ scene, sceneIdx, isFirst, isLast, updateScene, reorderScene,
             value={scene.title === 'Scene' ? '' : scene.title}
             onSave={t => updateScene(scene.id, { title: t || labels.level3 })}
             className="text-sm text-[var(--text-muted)] italic flex-1"
+          />
+          <StoryEventSelect
+            value={scene.storyEvent}
+            indicators={indicators}
+            onChange={storyEvent => updateScene(scene.id, { storyEvent })}
           />
           {wordCount > 0 && (
             <span className="text-[10px] font-mono text-[var(--accent)] opacity-60 flex-shrink-0">{wordCount.toLocaleString()}w</span>
@@ -141,7 +176,7 @@ const SceneRow = ({ scene, sceneIdx, isFirst, isLast, updateScene, reorderScene,
   )
 }
 
-const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels }) => {
+const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels, indicators }) => {
   const [open, setOpen] = useState(true)
   const chapterScenes = useMemo(() => scenes.filter(s => s.chapterId === chapter.id), [scenes, chapter.id])
   const wordCount = useMemo(() => chapterScenes.reduce((n, s) => n + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0), [chapterScenes])
@@ -171,6 +206,11 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
               className="text-sm font-semibold text-[var(--text-main)]"
             />
             <span className="text-[10px] text-[var(--text-muted)] opacity-60">{chapterScenes.length} {labels.level3.toLowerCase()}{chapterScenes.length !== 1 ? 's' : ''}</span>
+            <StoryEventSelect
+              value={chapter.storyEvent}
+              indicators={indicators}
+              onChange={storyEvent => updateChapter(chapter.id, { storyEvent })}
+            />
             {wordCount > 0 && <span className="text-[10px] font-mono text-[var(--accent)] opacity-60">{wordCount.toLocaleString()}w</span>}
           </div>
           <AutoTextarea
@@ -205,6 +245,7 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
               reorderScene={reorderScene}
               deleteScene={deleteScene}
               labels={labels}
+              indicators={indicators}
             />
           ))}
           <button
@@ -219,7 +260,7 @@ const ChapterCard = ({ chapter, chapterNum, scenes, isFirst, isLast, updateChapt
   )
 }
 
-const ActCard = ({ act, chapterGlobalNums, chapters, scenes, isFirst, isLast, updateAct, reorderAct, deleteAct, addChapter, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels }) => {
+const ActCard = ({ act, chapterGlobalNums, chapters, scenes, isFirst, isLast, updateAct, reorderAct, deleteAct, addChapter, updateChapter, reorderChapter, deleteChapter, addScene, updateScene, reorderScene, deleteScene, labels, indicators }) => {
   const [open, setOpen] = useState(true)
   const actChapters = useMemo(() => chapters.filter(c => c.actId === act.id), [chapters, act.id])
   const wordCount = useMemo(() => {
@@ -247,6 +288,11 @@ const ActCard = ({ act, chapterGlobalNums, chapters, scenes, isFirst, isLast, up
               className="text-xs font-black text-[var(--text-main)] uppercase tracking-widest"
             />
             <span className="text-[10px] text-[var(--text-muted)] opacity-60">{actChapters.length} {labels.level2.toLowerCase().slice(0,3)}</span>
+            <StoryEventSelect
+              value={act.storyEvent}
+              indicators={indicators}
+              onChange={storyEvent => updateAct(act.id, { storyEvent })}
+            />
             {wordCount > 0 && <span className="text-[10px] font-mono text-[var(--accent)] opacity-60">{wordCount.toLocaleString()}w</span>}
           </div>
           <AutoTextarea
@@ -288,6 +334,7 @@ const ActCard = ({ act, chapterGlobalNums, chapters, scenes, isFirst, isLast, up
               reorderScene={reorderScene}
               deleteScene={deleteScene}
               labels={labels}
+              indicators={indicators}
             />
           ))}
           <button
@@ -311,6 +358,7 @@ export default function StoryOutline({ store }) {
   } = store
 
   const labels = getProjectType(activeNovel?.type).structure
+  const indicators = getStoryEventIndicators(activeNovel?.type)
 
   const totalWords = useMemo(() => scenes.reduce((n, s) => n + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0), [scenes])
   const totalScenes = scenes.length
@@ -385,6 +433,7 @@ export default function StoryOutline({ store }) {
                 reorderScene={reorderScene}
                 deleteScene={deleteScene}
                 labels={labels}
+                indicators={indicators}
               />
             ))}
           </div>

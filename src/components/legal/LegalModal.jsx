@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { getCookieConsent, setCookieConsent } from '../../utils/cookieConsent'
 
 // ─── Legal content ─────────────────────────────────────────────────────────────
@@ -116,6 +116,29 @@ const CONTENT = {
       </>
     ),
   },
+  beta: {
+    title: 'Beta Disclaimer',
+    sub: 'Beta service notice',
+    body: (
+      <>
+        <Section title="Beta status">
+          <P>Your Own World is currently provided as a <Accent>beta service</Accent>. Features, interface details, pricing, limits, and availability may change as we improve the platform.</P>
+        </Section>
+        <Section title="Service availability">
+          <P>During beta, some features may be incomplete, experimental, temporarily unavailable, or changed without prior notice. We work to keep the Service stable, but beta access is provided without a guarantee of uninterrupted operation.</P>
+        </Section>
+        <Section title="Your content">
+          <P>Your creative work remains yours. We take reasonable steps to protect and preserve project data, but you should keep your own backup exports of important writing while the platform is in beta.</P>
+        </Section>
+        <Section title="AI and experimental tools">
+          <P>AI-assisted and experimental features may produce inaccurate, incomplete, or unexpected results. You are responsible for reviewing, editing, and deciding how to use any generated or suggested content.</P>
+        </Section>
+        <Section title="Feedback">
+          <P>Beta feedback helps shape the product. By sending feedback, bug reports, or feature ideas, you allow us to use that feedback to improve Your Own World without creating any obligation to compensate you or implement a specific request.</P>
+        </Section>
+      </>
+    ),
+  },
   cookies: {
     title: 'Cookie Policy',
     sub: 'How we use browser storage',
@@ -153,6 +176,7 @@ export const LEGAL_LABELS = {
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
   ethics: 'Ethics Statement',
+  beta: 'Beta Disclaimer',
   cookies: 'Cookie Policy',
 }
 
@@ -242,6 +266,14 @@ function CookiePrefInline() {
 // ─── Modal ─────────────────────────────────────────────────────────────────────
 
 export default function LegalModal({ page, onClose, onNavigate }) {
+  const dialogRef = useRef(null)
+  useEffect(() => { dialogRef.current?.focus() }, [page])
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
   if (!page) return null
 
   const entry = CONTENT[page]
@@ -259,23 +291,29 @@ export default function LegalModal({ page, onClose, onNavigate }) {
         padding: 24,
       }}
     >
-      <div style={{
-        background: 'var(--bg-nav)',
-        border: '1px solid var(--border)',
-        borderRadius: 12,
-        width: 'min(680px, 100%)',
-        maxHeight: 'min(780px, calc(100vh - 48px))',
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.55)',
-        overflow: 'hidden',
-      }}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="legal-modal-title"
+        tabIndex={-1}
+        style={{
+          background: 'var(--bg-nav)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          width: 'min(680px, 100%)',
+          maxHeight: 'min(780px, calc(100vh - 48px))',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.55)',
+          overflow: 'hidden',
+        }}>
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 3 }}>{entry.sub}</p>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>{entry.title}</h2>
+            <h2 id="legal-modal-title" style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>{entry.title}</h2>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '2px 4px', marginLeft: 12, flexShrink: 0 }}>✕</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: '2px 4px', marginLeft: 12, flexShrink: 0 }}>✕</button>
         </div>
 
         {/* Body */}

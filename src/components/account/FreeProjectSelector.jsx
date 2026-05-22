@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export default function FreeProjectSelector({ novels, onConfirm, busy }) {
   const [selectedId, setSelectedId] = useState(novels[0]?.id ?? null)
+  const dialogRef = useRef(null)
+  useEffect(() => { dialogRef.current?.focus() }, [])
 
   const handleConfirm = () => {
     if (!selectedId) return
@@ -18,6 +20,11 @@ export default function FreeProjectSelector({ novels, onConfirm, busy }) {
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="free-selector-title"
+        tabIndex={-1}
         style={{
           background: 'var(--bg-nav)',
           border: '1px solid var(--border)',
@@ -30,7 +37,7 @@ export default function FreeProjectSelector({ novels, onConfirm, busy }) {
         <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 8 }}>
           Free plan
         </p>
-        <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-main)', marginBottom: 10, lineHeight: 1.2 }}>
+        <h2 id="free-selector-title" style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-main)', marginBottom: 10, lineHeight: 1.2 }}>
           Choose your active project
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 24 }}>
@@ -54,11 +61,13 @@ export default function FreeProjectSelector({ novels, onConfirm, busy }) {
           Choose carefully.
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28, maxHeight: 280, overflowY: 'auto' }}>
+        <div role="radiogroup" aria-labelledby="free-selector-title" style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28, maxHeight: 280, overflowY: 'auto' }}>
           {novels.map(novel => (
             <button
               key={novel.id}
               type="button"
+              role="radio"
+              aria-checked={selectedId === novel.id}
               onClick={() => setSelectedId(novel.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12,

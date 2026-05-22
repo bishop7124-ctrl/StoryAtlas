@@ -195,6 +195,7 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
                 <button type="button" onClick={() => onOpenLegal('privacy')}  className="yow-footer-link">Privacy</button>
                 <button type="button" onClick={() => onOpenLegal('terms')}    className="yow-footer-link">Terms</button>
                 <button type="button" onClick={() => onOpenLegal('ethics')}   className="yow-footer-link">Ethics</button>
+                <button type="button" onClick={() => onOpenLegal('beta')}     className="yow-footer-link">Beta</button>
                 <button type="button" onClick={() => onOpenLegal('cookies')}  className="yow-footer-link">Cookies</button>
               </>
             )}
@@ -358,6 +359,7 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
                     <button type="button" onClick={() => onOpenLegal('privacy')} className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Privacy</button>
                     <button type="button" onClick={() => onOpenLegal('terms')}   className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Terms</button>
                     <button type="button" onClick={() => onOpenLegal('ethics')}  className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Ethics</button>
+                    <button type="button" onClick={() => onOpenLegal('beta')}    className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Beta</button>
                     <button type="button" onClick={() => onOpenLegal('cookies')} className="text-xs text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Cookies</button>
                   </div>
                 )}

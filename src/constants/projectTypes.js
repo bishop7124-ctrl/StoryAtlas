@@ -8,6 +8,15 @@ export const PROJECT_TYPES = {
     icon: '📚',
     description: 'Full-length prose fiction with rich worldbuilding',
     structure: { level1: 'Act', level2: 'Chapter', level3: 'Scene' },
+    storyEventIndicators: [
+      { id: 'hook', label: 'Hook', color: '#38bdf8' },
+      { id: 'inciting_incident', label: 'Inciting incident', color: '#f97316' },
+      { id: 'first_plot_point', label: 'First plot point', color: '#a855f7' },
+      { id: 'midpoint', label: 'Midpoint', color: '#22c55e' },
+      { id: 'dark_night', label: 'Dark night', color: '#64748b' },
+      { id: 'climax', label: 'Climax', color: '#ef4444' },
+      { id: 'resolution', label: 'Resolution', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
     defaultSections: [
@@ -21,6 +30,14 @@ export const PROJECT_TYPES = {
     icon: '📖',
     description: 'Medium-length prose fiction — lighter than a novel',
     structure: { level1: 'Part', level2: 'Chapter', level3: 'Scene' },
+    storyEventIndicators: [
+      { id: 'opening_turn', label: 'Opening turn', color: '#38bdf8' },
+      { id: 'inciting_incident', label: 'Inciting incident', color: '#f97316' },
+      { id: 'point_of_no_return', label: 'Point of no return', color: '#a855f7' },
+      { id: 'reversal', label: 'Reversal', color: '#22c55e' },
+      { id: 'climax', label: 'Climax', color: '#ef4444' },
+      { id: 'fallout', label: 'Fallout', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
     defaultSections: [
@@ -33,6 +50,14 @@ export const PROJECT_TYPES = {
     icon: '📄',
     description: 'Brief prose fiction — focused and stripped-down',
     structure: { level1: 'Part', level2: 'Section', level3: 'Scene' },
+    storyEventIndicators: [
+      { id: 'opening_image', label: 'Opening image', color: '#38bdf8' },
+      { id: 'disruption', label: 'Disruption', color: '#f97316' },
+      { id: 'turn', label: 'Turn', color: '#a855f7' },
+      { id: 'reveal', label: 'Reveal', color: '#22c55e' },
+      { id: 'climax', label: 'Climax', color: '#ef4444' },
+      { id: 'final_image', label: 'Final image', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
     defaultSections: [
@@ -45,6 +70,15 @@ export const PROJECT_TYPES = {
     icon: '🎭',
     description: 'Stage play or theatrical script',
     structure: { level1: 'Act', level2: 'Scene', level3: 'Beat' },
+    storyEventIndicators: [
+      { id: 'opening_tableau', label: 'Opening tableau', color: '#38bdf8' },
+      { id: 'inciting_action', label: 'Inciting action', color: '#f97316' },
+      { id: 'entrance', label: 'Key entrance', color: '#a855f7' },
+      { id: 'reversal', label: 'Reversal', color: '#22c55e' },
+      { id: 'curtain', label: 'Curtain moment', color: '#eab308' },
+      { id: 'climax', label: 'Climax', color: '#ef4444' },
+      { id: 'denouement', label: 'Denouement', color: '#14b8a6' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'SCRIPT',
     defaultSections: [
@@ -57,6 +91,15 @@ export const PROJECT_TYPES = {
     icon: '🎬',
     description: 'Feature film or short film script',
     structure: { level1: 'Act', level2: 'Sequence', level3: 'Scene' },
+    storyEventIndicators: [
+      { id: 'opening_image', label: 'Opening image', color: '#38bdf8' },
+      { id: 'inciting_incident', label: 'Inciting incident', color: '#f97316' },
+      { id: 'break_into_two', label: 'Break into Act II', color: '#a855f7' },
+      { id: 'midpoint', label: 'Midpoint', color: '#22c55e' },
+      { id: 'all_is_lost', label: 'All is lost', color: '#64748b' },
+      { id: 'finale', label: 'Finale', color: '#ef4444' },
+      { id: 'final_image', label: 'Final image', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'SCRIPT',
     defaultSections: [
@@ -70,6 +113,15 @@ export const PROJECT_TYPES = {
     icon: '📺',
     description: 'Multi-episode television series',
     structure: { level1: 'Season', level2: 'Episode', level3: 'Act' },
+    storyEventIndicators: [
+      { id: 'pilot_hook', label: 'Pilot hook', color: '#38bdf8' },
+      { id: 'case_engine', label: 'Story engine', color: '#f97316' },
+      { id: 'episode_break', label: 'Episode break', color: '#a855f7' },
+      { id: 'midseason_turn', label: 'Midseason turn', color: '#22c55e' },
+      { id: 'bottle_episode', label: 'Bottle episode', color: '#14b8a6' },
+      { id: 'season_climax', label: 'Season climax', color: '#ef4444' },
+      { id: 'cliffhanger', label: 'Cliffhanger', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'EPISODES',
     defaultSections: [
@@ -84,6 +136,15 @@ export const PROJECT_TYPES = {
     description: 'Dungeons & Dragons fantasy tabletop adventure',
     hint: 'Designed for D&D — classes, gods, dungeons, monsters, and high-fantasy lore.',
     structure: { level1: 'Story Arc', level2: 'Session', level3: 'Encounter' },
+    storyEventIndicators: [
+      { id: 'quest_hook', label: 'Quest hook', color: '#38bdf8' },
+      { id: 'inciting_quest', label: 'Inciting quest', color: '#f97316' },
+      { id: 'dungeon_reveal', label: 'Dungeon reveal', color: '#a855f7' },
+      { id: 'boss_battle', label: 'Boss battle', color: '#ef4444' },
+      { id: 'party_setback', label: 'Party setback', color: '#64748b' },
+      { id: 'arc_climax', label: 'Arc climax', color: '#dc2626' },
+      { id: 'reward_fallout', label: 'Reward / fallout', color: '#eab308' },
+    ],
     planningTab: 'WORLDBUILDING',
     writingTab: 'SESSIONS',
     defaultSections: [
@@ -97,6 +158,15 @@ export const PROJECT_TYPES = {
     description: 'System-agnostic tabletop roleplaying campaign',
     hint: 'System-neutral — works for any ruleset: PF2e, Call of Cthulhu, Blades in the Dark, homebrew, and more.',
     structure: { level1: 'Story Arc', level2: 'Session', level3: 'Encounter' },
+    storyEventIndicators: [
+      { id: 'adventure_hook', label: 'Adventure hook', color: '#38bdf8' },
+      { id: 'mission_start', label: 'Mission start', color: '#f97316' },
+      { id: 'complication', label: 'Complication', color: '#a855f7' },
+      { id: 'player_choice', label: 'Major choice', color: '#22c55e' },
+      { id: 'showdown', label: 'Showdown', color: '#ef4444' },
+      { id: 'arc_climax', label: 'Arc climax', color: '#dc2626' },
+      { id: 'consequences', label: 'Consequences', color: '#eab308' },
+    ],
     planningTab: 'WORLDBUILDING',
     writingTab: 'SESSIONS',
     defaultSections: [
@@ -109,6 +179,14 @@ export const PROJECT_TYPES = {
     icon: '💬',
     description: 'Sequential art narrative',
     structure: { level1: 'Volume', level2: 'Issue', level3: 'Page' },
+    storyEventIndicators: [
+      { id: 'splash', label: 'Splash moment', color: '#38bdf8' },
+      { id: 'inciting_panel', label: 'Inciting panel', color: '#f97316' },
+      { id: 'page_turn', label: 'Page turn', color: '#a855f7' },
+      { id: 'reveal', label: 'Reveal', color: '#22c55e' },
+      { id: 'issue_climax', label: 'Issue climax', color: '#ef4444' },
+      { id: 'stinger', label: 'Stinger', color: '#eab308' },
+    ],
     planningTab: 'PLANNING',
     writingTab: 'PAGES',
     defaultSections: [
@@ -123,6 +201,15 @@ export const PROJECT_TYPES = {
     description: 'Interactive narrative or game world',
     // TODO: future structure options — quests, missions, dialogue trees, branching paths
     structure: { level1: 'Act', level2: 'Chapter', level3: 'Scene' },
+    storyEventIndicators: [
+      { id: 'tutorial_hook', label: 'Tutorial hook', color: '#38bdf8' },
+      { id: 'call_to_action', label: 'Call to action', color: '#f97316' },
+      { id: 'first_choice', label: 'First major choice', color: '#22c55e' },
+      { id: 'quest_turn', label: 'Quest turn', color: '#a855f7' },
+      { id: 'boss_encounter', label: 'Boss encounter', color: '#ef4444' },
+      { id: 'final_mission', label: 'Final mission', color: '#dc2626' },
+      { id: 'ending_state', label: 'Ending state', color: '#eab308' },
+    ],
     planningTab: 'WORLDBUILDING',
     writingTab: 'LEVELS',
     defaultSections: [
@@ -135,6 +222,9 @@ export const PROJECT_TYPES = {
 }
 
 export const getProjectType = (type) => PROJECT_TYPES[type] ?? PROJECT_TYPES.novel
+
+export const getStoryEventIndicators = (type) =>
+  getProjectType(type).storyEventIndicators ?? PROJECT_TYPES.novel.storyEventIndicators
 
 export const DEFAULT_TYPE = 'novel'
 

@@ -1,34 +1,52 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { MEMBERSHIP_PRICE_GBP, getMembership } from '../../utils/membership'
+import { PLANS, getMembership } from '../../utils/membership'
 import { getCookieConsent, setCookieConsent } from '../../utils/cookieConsent'
-import { ACCOUNT_THEME_OPTIONS, loadThemeChoice, saveThemeChoice } from '../../utils/theme'
+import {
+  BUILT_IN_THEMES,
+  DEFAULT_CUSTOM_COLORS,
+  QUICK_PALETTES,
+  applyThemeToDocument,
+  loadThemeChoice,
+  rgbaFromHex,
+  saveThemeChoice,
+} from '../../utils/theme'
 
-// ─── Theme presets (mirrors Layout.jsx) ──────────────────────────────────────
+const FONT_OPTIONS = [
+  { id: 'system', label: 'System UI', value: 'system-ui, sans-serif' },
+  { id: 'serif', label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
+  { id: 'mono', label: 'Mono', value: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' },
+  { id: 'dyslexia', label: 'Dyslexie', value: 'Dyslexie, "OpenDyslexic", "Atkinson Hyperlegible", Verdana, Arial, sans-serif' },
+]
 
-function PreferencesPanel({ user, updateProfile }) {
-  const [theme, setTheme] = useState(loadThemeChoice)
+const CUSTOM_COLOR_FIELDS = [
+  { key: 'bgMain', label: 'Background' },
+  { key: 'bgNav', label: 'Panels' },
+  { key: 'textMain', label: 'Main text' },
+  { key: 'textMuted', label: 'Muted text' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'border', label: 'Borders' },
+]
+
+const loadCustomColors = () => {
+  try { return JSON.parse(localStorage.getItem('nf-custom-colors') || '{}') }
+  catch { return {} }
+}
+
+const loadSavedPresets = () => {
+  try { return JSON.parse(localStorage.getItem('nf-saved-presets') || '[]') }
+  catch { return [] }
+}
+
+function applyFontChoice(fontChoice) {
+  const font = FONT_OPTIONS.find(option => option.id === fontChoice) || FONT_OPTIONS[0]
+  localStorage.setItem('nf-font', font.id)
+  document.documentElement.style.setProperty('--font', font.value)
+}
+
+function PreferencesPanel() {
   const [cookieLevel, setCookieLevel] = useState(() => getCookieConsent() || 'essential')
-  const [themeSaved, setThemeSaved] = useState(false)
   const [cookieSaved, setCookieSaved] = useState(false)
-
-  const persistTheme = async (id) => {
-    const appliedTheme = saveThemeChoice(id)
-    setTheme(appliedTheme)
-    window.dispatchEvent(new CustomEvent('profile-theme-apply', { detail: { theme: appliedTheme } }))
-
-    try {
-      await updateProfile({ ...(user.user_metadata || {}), theme: appliedTheme })
-      setThemeSaved(true)
-      setTimeout(() => setThemeSaved(false), 2200)
-    } catch {
-      // non-critical — local save already applied
-    }
-  }
-
-  const saveTheme = async () => {
-    await persistTheme(theme)
-  }
 
   const saveCookies = () => {
     setCookieConsent(cookieLevel)
@@ -36,11 +54,12 @@ function PreferencesPanel({ user, updateProfile }) {
     setTimeout(() => setCookieSaved(false), 2200)
   }
 
-  const Toggle = ({ checked, onChange }) => (
+  const Toggle = ({ checked, onChange, label }) => (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       onClick={onChange}
       style={{
         flexShrink: 0, width: 36, height: 20, borderRadius: 10,
@@ -65,43 +84,6 @@ function PreferencesPanel({ user, updateProfile }) {
         </div>
       </div>
 
-      {/* Theme */}
-      <div style={{ marginBottom: 28 }}>
-        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>Theme</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginBottom: 14 }}>
-          {ACCOUNT_THEME_OPTIONS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => persistTheme(p.id)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '8px 10px', borderRadius: 7, cursor: 'pointer',
-                border: `1px solid ${theme === p.id ? 'var(--accent)' : 'var(--border)'}`,
-                background: theme === p.id ? 'var(--accent-fade)' : 'transparent',
-                fontFamily: 'inherit',
-              }}
-            >
-              <span style={{ fontSize: 12, fontWeight: 700, color: theme === p.id ? 'var(--accent)' : 'var(--text-main)' }}>{p.label}</span>
-              <div style={{ display: 'flex', gap: 3 }}>
-                {p.swatches.map(c => (
-                  <span key={c} style={{ width: 12, height: 12, borderRadius: 2, background: c, border: '1px solid rgba(0,0,0,.25)', display: 'inline-block', flexShrink: 0 }} />
-                ))}
-              </div>
-            </button>
-          ))}
-        </div>
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: 10 }}>
-          Saves locally and to your profile. Your profile theme loads automatically when you sign in on a new device.
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={saveTheme} className="account-primary-button" style={{ width: 'auto', padding: '8px 16px' }}>
-            Save theme to profile
-          </button>
-          {themeSaved && <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>Saved</span>}
-        </div>
-      </div>
-
       {/* Cookie preferences */}
       <div>
         <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12 }}>Cookie preferences</p>
@@ -120,15 +102,17 @@ function PreferencesPanel({ user, updateProfile }) {
                 </div>
                 <div style={{ opacity: disabled ? 0.45 : 1, flexShrink: 0 }}>
                   {disabled ? (
-                    <Toggle checked={true} onChange={() => {}} />
+                    <Toggle checked={true} onChange={() => {}} label={`${label} cookies (always active)`} />
                   ) : key === 'all' ? (
                     <Toggle
                       checked={checked}
+                      label={`${label} cookies`}
                       onChange={() => setCookieLevel(p => p === 'all' ? 'preferences' : 'all')}
                     />
                   ) : (
                     <Toggle
                       checked={checked}
+                      label={`${label} cookies`}
                       onChange={() => setCookieLevel(p => p === 'essential' ? 'preferences' : 'essential')}
                     />
                   )}
@@ -142,6 +126,249 @@ function PreferencesPanel({ user, updateProfile }) {
             Save cookie preferences
           </button>
           {cookieSaved && <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>Saved</span>}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function AppearancePanel({ user, updateProfile }) {
+  const [theme, setTheme] = useState(loadThemeChoice)
+  const [fontChoice, setFontChoice] = useState(() => localStorage.getItem('nf-font') || 'system')
+  const [customColors, setCustomColors] = useState(loadCustomColors)
+  const [savedPresets, setSavedPresets] = useState(loadSavedPresets)
+  const [savePresetName, setSavePresetName] = useState('')
+  const [profileSaved, setProfileSaved] = useState(false)
+
+  const themeOptions = [...BUILT_IN_THEMES, ...QUICK_PALETTES]
+  const effectiveColors = theme === 'custom'
+    ? { ...DEFAULT_CUSTOM_COLORS, ...customColors }
+    : themeOptions.find(t => t.id === theme)?.swatches || DEFAULT_CUSTOM_COLORS
+
+  useEffect(() => {
+    localStorage.setItem('nf-saved-presets', JSON.stringify(savedPresets))
+  }, [savedPresets])
+
+  useEffect(() => {
+    const appliedTheme = applyThemeToDocument(theme, customColors)
+    localStorage.setItem('nf-theme', appliedTheme)
+  }, [theme, customColors])
+
+  useEffect(() => {
+    localStorage.setItem('nf-custom-colors', JSON.stringify(customColors))
+  }, [customColors])
+
+  useEffect(() => {
+    applyFontChoice(fontChoice)
+  }, [fontChoice])
+
+  const applyPalette = (swatches) => {
+    setCustomColors(swatches)
+    setTheme('custom')
+  }
+
+  const applyThemePreset = (id) => {
+    const appliedTheme = saveThemeChoice(id, customColors)
+    setTheme(appliedTheme)
+  }
+
+  const handleSavePreset = () => {
+    const name = savePresetName.trim()
+    if (!name) return
+    setSavedPresets(prev => [...prev, { id: `saved-${Date.now()}`, label: name, swatches: { ...effectiveColors } }])
+    setSavePresetName('')
+  }
+
+  const handleDeletePreset = (id) => {
+    setSavedPresets(prev => prev.filter(p => p.id !== id))
+  }
+
+  const handleMovePreset = (id, dir) => {
+    setSavedPresets(prev => {
+      const idx = prev.findIndex(p => p.id === id)
+      const newIdx = idx + dir
+      if (newIdx < 0 || newIdx >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+      return next
+    })
+  }
+
+  const saveAppearanceToProfile = async () => {
+    const appliedTheme = saveThemeChoice(theme, customColors)
+    setTheme(appliedTheme)
+
+    try {
+      await updateProfile({
+        ...(user.user_metadata || {}),
+        theme: appliedTheme,
+        custom_theme_colors: appliedTheme === 'custom' ? { ...customColors } : undefined,
+      })
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 2200)
+    } catch {
+      // Local appearance is already saved, so profile sync can fail quietly.
+    }
+  }
+
+  const btnStyle = (active) => ({
+    background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+    color: active ? 'var(--text-main)' : 'var(--text-muted)', fontSize: 11, lineHeight: 1,
+  })
+
+  return (
+    <section className="account-settings-panel account-appearance-panel">
+      <div className="account-panel-heading">
+        <div>
+          <p className="eyebrow">Appearance</p>
+          <h2>Themes &amp; display</h2>
+        </div>
+        <div className="account-actions account-heading-actions">
+          <button type="button" onClick={saveAppearanceToProfile} className="account-primary-button">
+            Save to profile
+          </button>
+          {profileSaved && <span className="account-inline-success">Saved</span>}
+        </div>
+      </div>
+
+      <div className="account-appearance-editor">
+        <div className="account-appearance-section account-theme-library">
+          <p className="eyebrow mb-3">Themes</p>
+          <div className="account-theme-list">
+            {themeOptions.map(p => (
+              <button key={p.id} onClick={() => applyThemePreset(p.id)}
+                className={`account-theme-option${theme === p.id ? ' is-active' : ''}`}>
+                <div className="account-theme-option-top">
+                  <span>{p.label}</span>
+                  {theme === p.id && <span>Active</span>}
+                </div>
+                <div className="account-theme-swatches">
+                  {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
+                    <span key={c} className="account-theme-swatch" style={{ background: c }} />
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <p className="eyebrow mb-2">My presets</p>
+          {savedPresets.length === 0 && (
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>No saved presets yet.</p>
+          )}
+          <div className="account-theme-list account-saved-preset-list">
+            {savedPresets.map((p, i) => (
+              <div key={p.id} className="account-saved-preset">
+                <button onClick={() => applyPalette(p.swatches)}
+                  className="account-saved-preset-main">
+                  <div className="flex items-center gap-2">
+                    <div className="account-theme-swatches">
+                      {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
+                        <span key={c} className="account-theme-swatch is-small" style={{ background: c }} />
+                      ))}
+                    </div>
+                    <span>{p.label}</span>
+                  </div>
+                </button>
+                <div className="flex items-center gap-0.5">
+                  <button onClick={() => handleMovePreset(p.id, -1)} disabled={i === 0}
+                    style={btnStyle(i > 0)} title="Move up">▲</button>
+                  <button onClick={() => handleMovePreset(p.id, 1)} disabled={i === savedPresets.length - 1}
+                    style={btnStyle(i < savedPresets.length - 1)} title="Move down">▼</button>
+                  <button onClick={() => handleDeletePreset(p.id)}
+                    style={{ ...btnStyle(true), color: 'var(--text-muted)', marginLeft: 2 }} title="Delete">×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="account-preset-save">
+            <input
+              value={savePresetName}
+              onChange={e => setSavePresetName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+              placeholder="Preset name..."
+              className="account-appearance-input"
+            />
+            <button onClick={handleSavePreset} disabled={!savePresetName.trim()}
+              className="account-mini-button">
+              Save
+            </button>
+          </div>
+        </div>
+
+        <div className="account-appearance-section account-color-section">
+          <p className="eyebrow mb-5">Custom colors</p>
+          <div className="account-color-grid">
+            {CUSTOM_COLOR_FIELDS.map(({ key, label }) => {
+              const val = effectiveColors[key] || '#888888'
+              return (
+                <div key={key} className="account-color-field">
+                  <p>{label}</p>
+                  <div className="account-color-control">
+                    <input type="color" value={val}
+                      onChange={e => { setCustomColors(p => ({ ...p, [key]: e.target.value })); setTheme('custom') }}
+                      className="account-color-picker"
+                    />
+                    <input value={val}
+                      onChange={e => { setCustomColors(p => ({ ...p, [key]: e.target.value })); setTheme('custom') }}
+                      className="account-appearance-input account-color-hex"
+                    />
+                    <div className="account-color-preview" style={{ background: val }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div style={{ marginTop: 32, maxWidth: 560 }}>
+            <p className="eyebrow mb-4">Atmosphere</p>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Accent glow</span>
+              </div>
+              <input type="range" min={0.08} max={0.4} step={0.01}
+                defaultValue={0.18}
+                onChange={e => {
+                  const alpha = Number(e.target.value)
+                  const hex = effectiveColors.accent || '#888'
+                  document.documentElement.style.setProperty('--accent-fade', rgbaFromHex(hex, alpha))
+                }}
+                style={{ width: '100%', accentColor: 'var(--accent)' }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="account-appearance-section account-display-section">
+          <p className="eyebrow mb-3">Font family</p>
+          <div className="account-choice-list">
+            {FONT_OPTIONS.map(opt => (
+              <button key={opt.id} onClick={() => setFontChoice(opt.id)}
+                className={`account-choice-button${fontChoice === opt.id ? ' is-active' : ''}`}
+                style={{
+                  fontFamily: opt.value,
+                }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
+                <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>The quick brown fox</div>
+              </button>
+            ))}
+          </div>
+
+          <p className="eyebrow mb-3">Preview</p>
+          <div className="account-theme-preview">
+            <div className="account-theme-preview-head" style={{ background: effectiveColors.bgNav || 'var(--bg-nav)' }}>
+              <span style={{ color: effectiveColors.accent }}>Your Own World</span>
+            </div>
+            <div className="account-theme-preview-body" style={{ background: effectiveColors.bgMain || 'var(--bg-main)' }}>
+              <div style={{ background: effectiveColors.bgNav, color: effectiveColors.textMain }}>
+                Panel surface
+              </div>
+              <div style={{ background: effectiveColors.accent, color: effectiveColors.bgMain, fontWeight: 700 }}>
+                Accent button
+              </div>
+              <span style={{ color: effectiveColors.textMuted }}>Muted text sample</span>
+              <span style={{ color: effectiveColors.textMain }}>Primary text sample</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -172,11 +399,86 @@ async function requestBillingUrl(endpoint, accessToken, body) {
 }
 
 function PlanBadge({ membership }) {
-  const label = membership.isPaid ? 'Paid' : membership.isTrialActive ? 'Free trial' : 'Free'
+  let label = 'Free'
+  if (membership.isTrialActive) label = 'Free trial'
+  else if (membership.isPaid) label = membership.activePlanDef?.label || 'Premium'
   return (
     <span className={`account-plan-badge account-plan-${membership.plan}`}>
       {label}
     </span>
+  )
+}
+
+function PlanCard({ plan, membership, onSelect, busy, anyBusy }) {
+  // Trial highlights premium_monthly (what it auto-renews to)
+  const displayKey = membership.isTrialActive ? 'premium_monthly' : membership.activePlanKey
+  const isCurrent = displayKey === plan.key
+
+  let ctaLabel = 'Upgrade'
+  if (isCurrent && membership.isTrialActive) ctaLabel = 'Trial — auto-renews'
+  else if (isCurrent) ctaLabel = 'Current plan'
+  else if (busy) ctaLabel = 'Opening...'
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+      borderRadius: 8, border: `1px solid ${isCurrent ? 'var(--accent)' : 'var(--border)'}`,
+      background: isCurrent ? 'var(--accent-fade)' : 'var(--bg-main)',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+          <span style={{ fontWeight: 900, fontSize: 14, color: 'var(--text-main)' }}>{plan.label}</span>
+          {plan.badge && (
+            <span style={{
+              fontSize: 10, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase',
+              color: 'var(--accent)', background: 'var(--accent-fade)', borderRadius: 4, padding: '2px 6px',
+            }}>{plan.badge}</span>
+          )}
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{plan.description}</p>
+      </div>
+      <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 72 }}>
+        <span style={{ fontWeight: 900, fontSize: 17, color: 'var(--text-main)' }}>{plan.priceLabel}</span>
+        {plan.priceSuffix && (
+          <span style={{ fontWeight: 700, fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{plan.priceSuffix}</span>
+        )}
+      </div>
+      <div style={{ flexShrink: 0, minWidth: 120, textAlign: 'right' }}>
+        {isCurrent ? (
+          <span style={{
+            fontSize: 12, fontWeight: 800,
+            color: membership.isTrialActive ? '#fbbf24' : 'var(--accent)',
+          }}>{ctaLabel}</span>
+        ) : plan.key === 'free' ? (
+          // Downgrade path: trial users stay free by not upgrading; monthly paid can cancel via portal
+          membership.isTrialActive ? (
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+              Default after trial
+            </span>
+          ) : membership.isPaid && !membership.isLifetime ? (
+            <button
+              type="button"
+              className="account-secondary-button"
+              style={{ fontSize: 12, padding: '0 12px', minHeight: 32 }}
+              onClick={() => onSelect(null)}
+              disabled={anyBusy}
+            >
+              {anyBusy ? 'Opening...' : 'Downgrade'}
+            </button>
+          ) : null
+        ) : (
+          <button
+            type="button"
+            className="account-secondary-button"
+            style={{ fontSize: 12, padding: '0 12px', minHeight: 32 }}
+            onClick={() => onSelect(plan.key)}
+            disabled={anyBusy}
+          >
+            {busy ? 'Opening...' : 'Upgrade'}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -300,6 +602,7 @@ export default function AccountSettings({ open, onClose }) {
   const [billingBusy, setBillingBusy] = useState('')
   const [billingError, setBillingError] = useState('')
   const [billingMessage, setBillingMessage] = useState('')
+  const [activeTab, setActiveTab] = useState('profile')
 
   useEffect(() => {
     if (!open) return
@@ -307,6 +610,7 @@ export default function AccountSettings({ open, onClose }) {
     const billingResult = new URLSearchParams(window.location.search).get('billing')
     if (!billingResult) return
 
+    setActiveTab('membership')
     const nextUrl = new URL(window.location.href)
     nextUrl.searchParams.delete('billing')
     window.history.replaceState({}, '', nextUrl)
@@ -324,24 +628,24 @@ export default function AccountSettings({ open, onClose }) {
 
   if (!open || !user) return null
 
-  const openBilling = async (type) => {
-    const endpoint = billingEndpoints[type]
+  const openBilling = async (planKey) => {
+    // planKey = null → open customer portal; otherwise open checkout for that plan
+    const endpoint = planKey ? billingEndpoints.checkout : billingEndpoints.portal
     if (!endpoint) {
       setBillingError('Billing is not configured for this build yet.')
       return
     }
 
     try {
-      setBillingBusy(type)
+      setBillingBusy(planKey || 'portal')
       setBillingError('')
       setBillingMessage('')
       const accessToken = await getAccessToken()
       const url = await requestBillingUrl(endpoint, accessToken, {
         userId: user.id,
         email: user.email,
-        price: MEMBERSHIP_PRICE_GBP,
+        plan: planKey,
         currency: 'gbp',
-        interval: 'month',
       })
       window.location.assign(url)
     } catch (error) {
@@ -364,11 +668,40 @@ export default function AccountSettings({ open, onClose }) {
           </button>
         </header>
 
-        <main className="account-settings-grid">
-          <ProfileDetails key={user.id} user={user} updateProfile={updateProfile} />
-          <PreferencesPanel user={user} updateProfile={updateProfile} />
+        <nav className="account-settings-tabs" aria-label="Account settings sections">
+          {[
+            { id: 'profile', label: 'Profile' },
+            { id: 'appearance', label: 'Appearance' },
+            { id: 'preferences', label: 'Preferences' },
+            { id: 'membership', label: 'Membership' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`account-settings-tab${activeTab === tab.id ? ' is-active' : ''}`}
+              aria-current={activeTab === tab.id ? true : undefined}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
-          <section className="account-settings-panel">
+        <main className="account-settings-grid account-settings-tab-panel">
+          {activeTab === 'profile' && (
+            <ProfileDetails key={user.id} user={user} updateProfile={updateProfile} />
+          )}
+
+          {activeTab === 'appearance' && (
+            <AppearancePanel user={user} updateProfile={updateProfile} />
+          )}
+
+          {activeTab === 'preferences' && (
+            <PreferencesPanel />
+          )}
+
+          {activeTab === 'membership' && (
+          <section className="account-settings-panel account-membership-panel">
             <div className="account-panel-heading">
               <div>
                 <p className="eyebrow">Membership</p>
@@ -377,15 +710,8 @@ export default function AccountSettings({ open, onClose }) {
               <PlanBadge membership={membership} />
             </div>
 
-            <div className="account-plan-card">
-              <div>
-                <p className="account-plan-name">Paid membership</p>
-                <p className="account-plan-price">£{MEMBERSHIP_PRICE_GBP}<span>/pm</span></p>
-              </div>
-              <p>Full editing access beyond the free trial period.</p>
-            </div>
-
-            <div className="account-status-list">
+            {/* Status strip */}
+            <div className="account-status-list" style={{ marginBottom: 18 }}>
               {membership.isTrialActive && (
                 <>
                   <div>
@@ -393,59 +719,92 @@ export default function AccountSettings({ open, onClose }) {
                     <strong>{formatter.format(membership.trialEndsAt)}</strong>
                   </div>
                   <div>
-                    <span>Trial time left</span>
+                    <span>Time remaining</span>
                     <strong>{`${membership.daysRemaining} day${membership.daysRemaining === 1 ? '' : 's'}`}</strong>
+                  </div>
+                  <div>
+                    <span>After trial</span>
+                    <strong>Auto-renews to Premium monthly</strong>
                   </div>
                 </>
               )}
-              {membership.isPaid && (
+              {membership.isPaid && !membership.isLifetime && (
                 <div>
-                  <span>Trial</span>
-                  <strong>Covered by membership</strong>
+                  <span>Billing</span>
+                  <strong>Monthly subscription</strong>
+                </div>
+              )}
+              {membership.isPaid && membership.isLifetime && (
+                <div>
+                  <span>Billing</span>
+                  <strong>Lifetime — no renewal</strong>
                 </div>
               )}
               {membership.isFree && (
-                <div>
-                  <span>Active project</span>
-                  <strong>{membership.freeProjectId ? 'Set' : 'Not yet chosen'}</strong>
-                </div>
+                <>
+                  <div>
+                    <span>Active project</span>
+                    <strong>{membership.freeProjectId ? 'Set' : 'Not yet chosen'}</strong>
+                  </div>
+                  {membership.wasMonthly && (
+                    <div>
+                      <span>Project lock</span>
+                      <strong>Locked — subscribe to change</strong>
+                    </div>
+                  )}
+                </>
               )}
               <div>
                 <span>Current access</span>
-                <strong>{membership.isPaid ? 'Full access' : membership.isTrialActive ? 'Full access (trial)' : 'Free plan'}</strong>
+                <strong>
+                  {membership.isPaid
+                    ? 'Full access'
+                    : membership.isTrialActive
+                      ? 'Full access (trial)'
+                      : 'Free plan'}
+                </strong>
               </div>
+            </div>
+
+            {/* Plan cards */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {PLANS.map(plan => (
+                <PlanCard
+                  key={plan.key}
+                  plan={plan}
+                  membership={membership}
+                  onSelect={openBilling}
+                  busy={billingBusy === plan.key}
+                  anyBusy={!!billingBusy}
+                />
+              ))}
             </div>
 
             {membership.isFree && (
-              <div className="account-readonly-note">
-                You are on the free plan. One project is fully editable — all others are view-only. Upgrade for unlimited projects and AI access.
+              <div className="account-readonly-note" style={{ marginTop: 14 }}>
+                Free plan includes one active project — all others are view-only. No AI integration.
+                {membership.wasMonthly && ' Your active project is locked because you previously held a monthly subscription.'}
               </div>
             )}
 
-            <div className="account-actions">
-              <button
-                type="button"
-                className="account-primary-button"
-                onClick={() => openBilling(membership.isPaid ? 'portal' : 'checkout')}
-                disabled={billingBusy === 'checkout' || billingBusy === 'portal'}
-              >
-                {billingBusy ? 'Opening...' : membership.isPaid ? 'Manage membership' : 'Upgrade to paid'}
-              </button>
-              {membership.isPaid && (
+            {/* Portal access for active subscribers */}
+            {(membership.isPaid && !membership.isLifetime) && (
+              <div className="account-actions">
                 <button
                   type="button"
                   className="account-secondary-button"
-                  onClick={() => openBilling('portal')}
-                  disabled={billingBusy === 'portal'}
+                  onClick={() => openBilling(null)}
+                  disabled={!!billingBusy}
                 >
-                  {billingBusy === 'portal' ? 'Opening…' : 'Manage payment'}
+                  {billingBusy === 'portal' ? 'Opening...' : 'Manage subscription & billing'}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {billingMessage && <p className="account-success">{billingMessage}</p>}
             {billingError && <p className="account-error">{billingError}</p>}
           </section>
+          )}
 
         </main>
       </div>

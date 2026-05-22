@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import YOWLogo from '../brand/YOWLogo'
 
 const cx = (...classes) => classes.filter(Boolean).join(' ')
@@ -44,6 +45,7 @@ export function StudioFrame({
               type="button"
               onClick={() => onOpenRoom(room)}
               className={cx('studio-room', activeRoomId === room.id && 'is-current')}
+              aria-current={activeRoomId === room.id ? true : undefined}
             >
               <span className="studio-room-tab">{room.icon}</span>
               <span className="studio-room-copy">
@@ -115,7 +117,7 @@ export function StudioWorkspace({
 
 export function StudioTab({ active, children, ...props }) {
   return (
-    <button type="button" className={cx('studio-tab', active && 'is-current')} {...props}>
+    <button type="button" className={cx('studio-tab', active && 'is-current')} aria-current={active ? true : undefined} {...props}>
       {children}
     </button>
   )
@@ -154,7 +156,7 @@ export function StudioIndex({ eyebrow, title, tools, children, variant = 'index'
 
 export function StudioRecord({ active, children, className = '', ...props }) {
   return (
-    <button type="button" className={cx('studio-record', active && 'is-current', className)} {...props}>
+    <button type="button" className={cx('studio-record', active && 'is-current', className)} aria-current={active ? true : undefined} {...props}>
       {children}
     </button>
   )
@@ -186,15 +188,26 @@ export function StudioEmpty({ title, body, action, variant = 'page' }) {
 }
 
 export function StudioSheet({ title, eyebrow = 'Editor', onClose, children, narrow = false, centered = false }) {
+  const dialogRef = useRef(null)
+  useEffect(() => { dialogRef.current?.focus() }, [])
+
   return (
     <div className={cx('studio-sheet-backdrop', centered && 'is-centered')} onClick={onClose}>
-      <section className={cx('studio-sheet', narrow && 'is-narrow', centered && 'is-centered')} onClick={e => e.stopPropagation()}>
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="studio-sheet-heading"
+        tabIndex={-1}
+        className={cx('studio-sheet', narrow && 'is-narrow', centered && 'is-centered')}
+        onClick={e => e.stopPropagation()}
+      >
         <header>
           <div>
             <p className="studio-kicker">{eyebrow}</p>
-            <h2>{title}</h2>
+            <h2 id="studio-sheet-heading">{title}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close">x</button>
+          <button type="button" onClick={onClose} aria-label="Close">×</button>
         </header>
         <div className="studio-sheet-body">{children}</div>
       </section>

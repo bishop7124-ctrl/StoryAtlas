@@ -5,6 +5,7 @@ export const BUILT_IN_THEMES = [
 ]
 
 export const QUICK_PALETTES = [
+  { id: 'highcontrast', label: 'High Contrast', swatches: { bgMain: '#000000', bgNav: '#101010', textMain: '#ffffff', textMuted: '#d7d7d7', accent: '#ffdd33', border: '#7a7a7a' } },
   { id: 'nord',      label: 'Nord',      swatches: { bgMain: '#2e3440', bgNav: '#3b4252', textMain: '#eceff4', textMuted: '#d8dee9', accent: '#88c0d0', border: '#4c566a' } },
   { id: 'rosepine',  label: 'Rose Pine', swatches: { bgMain: '#191724', bgNav: '#1f1d2e', textMain: '#e0def4', textMuted: '#908caa', accent: '#ebbcba', border: '#403d52' } },
   { id: 'gruvbox',   label: 'Gruvbox',   swatches: { bgMain: '#282828', bgNav: '#1d2021', textMain: '#ebdbb2', textMuted: '#bdae93', accent: '#fabd2f', border: '#504945' } },
@@ -16,12 +17,6 @@ export const DEFAULT_CUSTOM_COLORS = BUILT_IN_THEMES[0].swatches
 const THEME_CSS_VARS = ['--bg-main', '--bg-nav', '--text-main', '--text-muted', '--accent', '--border', '--bg-hover', '--accent-fade', '--logo-filter']
 const THEME_OPTIONS = [...BUILT_IN_THEMES, ...QUICK_PALETTES]
 const THEME_IDS = new Set(THEME_OPTIONS.map(theme => theme.id))
-
-export const ACCOUNT_THEME_OPTIONS = THEME_OPTIONS.map(theme => ({
-  id: theme.id,
-  label: theme.label,
-  swatches: [theme.swatches.bgMain, theme.swatches.bgNav, theme.swatches.accent, theme.swatches.textMain],
-}))
 
 export const normalizeThemeChoice = (theme) => (
   THEME_IDS.has(theme) || theme === 'custom' ? theme : DEFAULT_THEME

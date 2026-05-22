@@ -71,6 +71,20 @@ function getCharacterAge(character, currentYear) {
   return `${endYear - birthYear}${character?.deathDate ? ' at death' : ''}`
 }
 
+function getAgeInputValue(character, currentYear) {
+  const birthYear = extractYear(character?.birthDate)
+  const year = extractYear(currentYear)
+  if (birthYear === null || year === null || birthYear > year) return ''
+  return String(year - birthYear)
+}
+
+function getBirthDateFromAge(age, currentYear) {
+  const parsedAge = Number(age)
+  const year = extractYear(currentYear)
+  if (!Number.isFinite(parsedAge) || parsedAge < 0 || year === null) return ''
+  return `Year ${year - Math.floor(parsedAge)}`
+}
+
 function getChildIds(character, characters) {
   const explicit = character?.childIds || []
   const derived = characters.filter(c => (c.parentIds || []).includes(character?.id)).map(c => c.id)
@@ -182,7 +196,7 @@ function ComboSelect({ value, onChange, options, placeholder, allowCustom = fals
   )
 }
 
-function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
+function CharacterForm({ initial, onSave, onCancel, factions, characters, currentYear }) {
   const initialChildIds = getChildIds(initial, characters)
   const [form, setForm] = useState({
     name: initial?.name || '',
@@ -192,7 +206,7 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
     species: initial?.species || '',
     titleJob: initial?.titleJob || initial?.title || '',
     bio: initial?.bio || '',
-    birthDate: initial?.birthDate || '',
+    age: getAgeInputValue(initial, currentYear),
     deathDate: initial?.deathDate || '',
     parentIds: initial?.parentIds || [],
     childIds: initialChildIds,
@@ -313,9 +327,14 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
   const validAbilities = form.extraAbilities
     .map(ability => ({ name: ability.name?.trim() || '', description: ability.description?.trim() || '' }))
     .filter(ability => ability.name || ability.description)
+  const saveForm = () => {
+    const birthDate = form.age === '' ? '' : getBirthDateFromAge(form.age, currentYear)
+    const { age, ...rest } = form
+    onSave({ ...rest, birthDate, relationships: validRelationships, extraAbilities: validAbilities })
+  }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSave({ ...form, relationships: validRelationships, extraAbilities: validAbilities }); }} className="space-y-4 text-left">
+    <form onSubmit={(e) => { e.preventDefault(); saveForm(); }} className="space-y-4 text-left">
       <TabStrip tabs={CHARACTER_TABS} activeTab={editorTab} onChange={setEditorTab} />
 
       {editorTab === 'overview' && (
@@ -388,8 +407,8 @@ function CharacterForm({ initial, onSave, onCancel, factions, characters }) {
         </div>
 
         <div>
-          <label className={LABEL}>Birth Date</label>
-          <input className={INPUT} value={form.birthDate} onChange={handleChange('birthDate')} placeholder="Year 42" />
+          <label className={LABEL}>Age</label>
+          <input className={INPUT} type="number" min="0" step="1" value={form.age} onChange={handleChange('age')} placeholder="32" />
         </div>
         <div>
           <label className={LABEL}>Death Date (Optional)</label>
@@ -795,7 +814,7 @@ export default function Characters({ store }) {
                       <DetailLine label="Role" value={selected.role} />
                       <DetailLine label="Species" value={selected.species} />
                       <DetailLine label="Title / Job" value={selected.titleJob} />
-                      <DetailLine label="Birth Date" value={selected.birthDate} />
+                      <DetailLine label="Birth Year" value={selected.birthDate} />
                       <DetailLine label="Death Date" value={selected.deathDate} />
                       <DetailLine label="Age" value={selectedAge} />
                     </div>
@@ -877,6 +896,7 @@ export default function Characters({ store }) {
             onCancel={() => setShowForm(false)}
             factions={factions}
             characters={characters}
+            currentYear={currentYear}
           />
         </Modal>
       )}
