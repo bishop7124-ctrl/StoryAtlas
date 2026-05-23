@@ -72,7 +72,7 @@ function ManageModal({ onSave, onClose }) {
   )
 
   return (
-    <div onClick={e => e.target === e.currentTarget && onClose()} style={s.overlay}>
+    <div style={s.overlay}>
       <div style={s.card}>
         <div style={s.modalHeader}>
           <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main, #e4dfd2)' }}>Cookie Preferences</p>

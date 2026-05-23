@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { StudioBoard, StudioEmpty } from '../presentation/Studio'
+import { StudioBoard, StudioButton, StudioEmpty } from '../presentation/Studio'
 import { getEnabledSections } from '../../constants/projectTypes'
 
 const formatNumber = (value) => new Intl.NumberFormat().format(value || 0)
@@ -270,6 +270,9 @@ const NAV_ROOMS = [
 const teleport = (section) =>
   window.dispatchEvent(new CustomEvent('switch-section', { detail: { section } }))
 
+const openProjectSettings = () =>
+  window.dispatchEvent(new CustomEvent('open-project-settings'))
+
 const NavCard = ({ room, stats }) => (
   <button
     className="overview-nav-card"
@@ -277,7 +280,10 @@ const NavCard = ({ room, stats }) => (
     aria-label={`Open ${room.label}`}
   >
     <span className="overview-nav-card-icon">{room.icon}</span>
-    <span className="overview-nav-card-label">{room.label}</span>
+    <span className="overview-nav-card-label">
+      <span>{room.label}</span>
+      <small>Open</small>
+    </span>
     <span className="overview-nav-card-summary">{room.getSummary(stats)}</span>
   </button>
 )
@@ -330,11 +336,28 @@ export default function ProjectDashboard({ store }) {
   const analytics = useMemo(() => stats ? buildWritingAnalytics(stats, dailyGoal) : null, [stats, dailyGoal])
   const readability = useMemo(() => stats ? buildReadability(stats.scenes) : null, [stats])
   const characterFocus = useMemo(() => stats ? buildCharacterFocus(stats) : [], [stats])
-  if (!stats) return null
+  if (!stats) {
+    return (
+      <StudioBoard className="overview-board">
+        <div className="overview-layout overview-no-project">
+          <StudioEmpty
+            title="No active project"
+            body="Choose a project from the library to see its dashboard, writing progress, and worldbuilding shortcuts."
+            action={(
+              <StudioButton tone="primary" onClick={() => store.setActiveNovelId?.(null)}>
+                Back to projects
+              </StudioButton>
+            )}
+          />
+        </div>
+      </StudioBoard>
+    )
+  }
 
   const project = stats.project
   const availableSections = new Set(getEnabledSections(project))
   const visibleRooms = NAV_ROOMS.filter(room => room.requires.some(id => availableSections.has(id)))
+  const primaryActionSection = availableSections.has('outline') ? 'outline' : visibleRooms[0]?.primarySection || 'dashboard'
 
   const recentScenes = [...stats.scenes]
     .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
@@ -356,6 +379,10 @@ export default function ProjectDashboard({ store }) {
             <p className="studio-kicker">{stats.projectType.label}</p>
             <h1>{project.title}</h1>
             <p>{project.description || 'No project description yet.'}</p>
+            <div className="overview-hero-actions">
+              <button type="button" onClick={() => teleport(primaryActionSection)}>Open workspace</button>
+              <button type="button" onClick={openProjectSettings}>Project settings</button>
+            </div>
           </div>
           <div className="overview-status">
             <span>{formatNumber(stats.manuscriptWords)} words</span>

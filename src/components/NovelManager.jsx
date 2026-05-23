@@ -493,7 +493,6 @@ function EditSeriesModal({ series, allStats, onSave, onDelete, onClose }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
     >
       <form
         onSubmit={handleSave}
@@ -676,7 +675,6 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
     >
       <form
         onSubmit={handleSave}
@@ -880,9 +878,9 @@ function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
             <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V22h-4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H2v-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 0 1 6.1 3.3l.1.1a1.7 1.7 0 0 0 1.8.3 1.7 1.7 0 0 0 1-1.5V2h4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2v4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
           </svg>
         </button>
-        <div className="dash-card-export-button">
-          <ProjectExportMenu onExport={(format, themeId) => onExport?.(project.id, format, themeId)} />
-        </div>
+      </div>
+      <div className="dash-card-export-button">
+        <ProjectExportMenu onExport={(format, themeId) => onExport?.(project.id, format, themeId)} />
       </div>
       <div className="series-dash-card-foot">
         <p className="series-dash-card-name">{project.title}</p>
@@ -981,7 +979,12 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
     }
 
     if (format === 'pdf') {
-      downloadProjectPdf(projectData, { themeId })
+      try {
+        await downloadProjectPdf(projectData, { themeId })
+      } catch (error) {
+        console.error('PDF export failed:', error)
+        alert('PDF export failed. Please try again.')
+      }
       return
     }
 
@@ -1159,7 +1162,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       {showSeriesForm && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={e => e.target === e.currentTarget && setShowSeriesForm(false)}
         >
           <form
             onSubmit={handleCreateSeries}
@@ -1201,7 +1203,6 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       {showForm && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={e => e.target === e.currentTarget && setShowForm(false)}
         >
           <form
             onSubmit={handleCreate}

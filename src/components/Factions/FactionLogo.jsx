@@ -42,6 +42,22 @@ export function getShapeElement(shape, extraProps = {}) {
       return <polygon points={pts} {...base} />
     }
 
+    case 'pentagon': {
+      const pts = Array.from({ length: 5 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2
+        return `${cx + size * Math.cos(angle)},${cy + size * Math.sin(angle)}`
+      }).join(' ')
+      return <polygon points={pts} {...base} />
+    }
+
+    case 'octagon': {
+      const pts = Array.from({ length: 8 }, (_, i) => {
+        const angle = (i * 2 * Math.PI) / 8 - Math.PI / 8
+        return `${cx + size * Math.cos(angle)},${cy + size * Math.sin(angle)}`
+      }).join(' ')
+      return <polygon points={pts} {...base} />
+    }
+
     case 'cross': {
       const t = size * 0.35
       const d = `M ${cx - t},${cy - size} H ${cx + t} V ${cy - t} H ${cx + size} V ${cy + t} H ${cx + t} V ${cy + size} H ${cx - t} V ${cy + t} H ${cx - size} V ${cy - t} H ${cx - t} Z`
@@ -63,10 +79,31 @@ export function getShapeElement(shape, extraProps = {}) {
       return <path d={path} {...base} />
     }
 
+    case 'ring': {
+      const ro = size, ri = size * 0.55
+      const d = `M ${cx + ro},${cy} A ${ro},${ro} 0 1,0 ${cx - ro},${cy} A ${ro},${ro} 0 1,0 ${cx + ro},${cy} Z M ${cx + ri},${cy} A ${ri},${ri} 0 1,1 ${cx - ri},${cy} A ${ri},${ri} 0 1,1 ${cx + ri},${cy} Z`
+      return <path d={d} fillRule="evenodd" {...base} />
+    }
+
     case 'arrow': {
       const hw = size * 0.35, aw = size * 0.9
       const pts = `${cx},${cy - size} ${cx + aw},${cy + size * 0.1} ${cx + hw},${cy + size * 0.1} ${cx + hw},${cy + size} ${cx - hw},${cy + size} ${cx - hw},${cy + size * 0.1} ${cx - aw},${cy + size * 0.1}`
       return <polygon points={pts} {...base} />
+    }
+
+    case 'lightning': {
+      const pts = `${cx + size * 0.1},${cy - size} ${cx - size * 0.4},${cy - size * 0.08} ${cx + size * 0.08},${cy - size * 0.08} ${cx - size * 0.1},${cy + size} ${cx + size * 0.4},${cy + size * 0.08} ${cx - size * 0.08},${cy + size * 0.08}`
+      return <polygon points={pts} {...base} />
+    }
+
+    case 'flame': {
+      const d = `M ${cx},${cy + size} C ${cx - size * 0.65},${cy + size * 0.2} ${cx - size * 0.65},${cy - size * 0.4} ${cx},${cy - size} C ${cx + size * 0.65},${cy - size * 0.4} ${cx + size * 0.65},${cy + size * 0.2} ${cx},${cy + size} Z`
+      return <path d={d} {...base} />
+    }
+
+    case 'teardrop': {
+      const d = `M ${cx},${cy + size} C ${cx - size * 0.65},${cy + size * 0.2} ${cx - size * 0.65},${cy - size * 0.35} ${cx},${cy - size * 0.45} C ${cx + size * 0.65},${cy - size * 0.35} ${cx + size * 0.65},${cy + size * 0.2} ${cx},${cy + size} Z`
+      return <path d={d} {...base} />
     }
 
     default:

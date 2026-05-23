@@ -1,4 +1,4 @@
-import { Component, useState, useEffect, useRef } from 'react'
+import { Component, useMemo, useState, useEffect, useRef } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { useStore } from './store/useStore'
 import { loadUserData } from './utils/firestoreSync'
@@ -13,7 +13,9 @@ import LegalModal from './components/legal/LegalModal'
 import AboutPage from './components/about/AboutPage'
 import YOWLogo from './components/brand/YOWLogo'
 import FreeProjectSelector from './components/account/FreeProjectSelector'
+import PricingPage from './components/pricing/PricingPage'
 import { getMembership } from './utils/membership'
+import { estimateStoreSize } from './utils/storageQuota'
 import { applyThemeToDocument, loadThemeChoice, saveThemeChoice } from './utils/theme'
 
 const APP_FONT_OPTIONS = {
@@ -21,6 +23,10 @@ const APP_FONT_OPTIONS = {
   serif: 'Georgia, "Times New Roman", serif',
   mono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace',
   dyslexia: 'Dyslexie, "OpenDyslexic", "Atkinson Hyperlegible", Verdana, Arial, sans-serif',
+}
+
+function isPricingPath(path) {
+  return path === '/pricing' || path === '/pricing/'
 }
 
 function parseRoute() {
@@ -89,6 +95,7 @@ function AppInner() {
   const [section, setSection] = useState(() => initialRoute.current.section)
   const [viewMode, setViewMode] = useState(() => initialRoute.current.novelId ? 'editor' : 'manager')
   const [layoutViewMode, setLayoutViewMode] = useState(() => initialRoute.current.layoutViewMode)
+  const [showPricing, setShowPricing] = useState(() => isPricingPath(window.location.pathname))
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -98,6 +105,12 @@ function AppInner() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const firstUrlSync = useRef(true)
   const loadedUid = useRef(null)
+
+  // Estimate store size for storage quota display (recalculated when account opens).
+  const storageUsedBytes = useMemo(() => {
+    if (!accountOpen) return 0
+    return estimateStoreSize(store)
+  }, [accountOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     applyThemeToDocument(loadThemeChoice())
@@ -129,9 +142,15 @@ function AppInner() {
     if (window.location.pathname !== url) history.pushState(null, '', url)
   }, [viewMode, store.activeNovelId, section, layoutViewMode])
 
-  // Restore state from browser back/forward navigation
+  // Restore state from browser back/forward navigation (including /pricing)
   useEffect(() => {
     const handlePop = () => {
+      const path = window.location.pathname
+      if (isPricingPath(path)) {
+        setShowPricing(true)
+        return
+      }
+      setShowPricing(false)
       const route = parseRoute()
       setSection(route.section)
       setLayoutViewMode(route.layoutViewMode)
@@ -208,6 +227,27 @@ function AppInner() {
       .finally(() => setDataLoading(false))
   }, [user, userId, importData, finishRemoteLoad])
 
+  // Pricing page is accessible regardless of auth state
+  if (showPricing) {
+    return (
+      <>
+        <PricingPage
+          user={user}
+          onGetStarted={() => {
+            window.history.pushState(null, '', '/')
+            setShowPricing(false)
+          }}
+          onSignIn={() => {
+            window.history.pushState(null, '', '/')
+            setShowPricing(false)
+          }}
+        />
+        <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
+        <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
+      </>
+    )
+  }
+
   if (authLoading || dataLoading) {
     return (
       <div className="min-h-screen bg-[var(--bg-main)] flex flex-col items-center justify-center gap-4">
@@ -241,7 +281,7 @@ function AppInner() {
 
   const accountPage = (
     <>
-      <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} storageUsedBytes={storageUsedBytes} />
       <HelpContact open={helpOpen} onClose={() => setHelpOpen(false)} />
       {readOnlyNotice && (
         <div role="alert" className="membership-toast">{readOnlyNotice}</div>

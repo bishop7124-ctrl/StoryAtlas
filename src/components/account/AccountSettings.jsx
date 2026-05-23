@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { PLANS, getMembership } from '../../utils/membership'
+import { getStorageQuota } from '../../utils/storageQuota'
+import StorageCard from './StorageCard'
 import { getCookieConsent, setCookieConsent } from '../../utils/cookieConsent'
 import {
   BUILT_IN_THEMES,
@@ -400,29 +402,41 @@ async function requestBillingUrl(endpoint, accessToken, body) {
 
 function PlanBadge({ membership }) {
   let label = 'Free'
-  if (membership.isTrialActive) label = 'Free trial'
+  if (membership.isTrialActive) label = 'Trial'
   else if (membership.isPaid) label = membership.activePlanDef?.label || 'Premium'
   return (
-    <span className={`account-plan-badge account-plan-${membership.plan}`}>
-      {label}
-    </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span className={`account-plan-badge account-plan-${membership.plan}`}>
+        {label}
+      </span>
+      {membership.isFounder && (
+        <span style={{
+          fontSize: 10, fontWeight: 900, letterSpacing: '.08em',
+          textTransform: 'uppercase',
+          color: '#f59e0b',
+          background: 'rgba(245,158,11,.12)',
+          border: '1px solid rgba(245,158,11,.35)',
+          borderRadius: 4, padding: '2px 8px',
+        }}>
+          Founder
+        </span>
+      )}
+    </div>
   )
 }
 
 function PlanCard({ plan, membership, onSelect, busy, anyBusy }) {
-  // Trial highlights premium_monthly (what it auto-renews to)
-  const displayKey = membership.isTrialActive ? 'premium_monthly' : membership.activePlanKey
-  const isCurrent = displayKey === plan.key
+  const isCurrent = membership.activePlanKey === plan.key
+    || (membership.isTrialActive && plan.key === 'free') // treat "free" as base during trial
 
-  let ctaLabel = 'Upgrade'
-  if (isCurrent && membership.isTrialActive) ctaLabel = 'Trial — auto-renews'
-  else if (isCurrent) ctaLabel = 'Current plan'
-  else if (busy) ctaLabel = 'Opening...'
+  // Lifetime holders can't downgrade to a lower lifetime tier — they already own it.
+  const isDowngrade = membership.isLifetime && plan.price < (membership.activePlanDef?.price || 0)
 
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
-      borderRadius: 8, border: `1px solid ${isCurrent ? 'var(--accent)' : 'var(--border)'}`,
+      borderRadius: 8,
+      border: `1px solid ${isCurrent ? 'var(--accent)' : plan.highlight ? 'color-mix(in srgb, var(--accent) 40%, var(--border))' : 'var(--border)'}`,
       background: isCurrent ? 'var(--accent-fade)' : 'var(--bg-main)',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -434,49 +448,58 @@ function PlanCard({ plan, membership, onSelect, busy, anyBusy }) {
               color: 'var(--accent)', background: 'var(--accent-fade)', borderRadius: 4, padding: '2px 6px',
             }}>{plan.badge}</span>
           )}
+          {isCurrent && (
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase',
+              color: membership.isTrialActive ? '#fbbf24' : 'var(--accent)',
+            }}>
+              {membership.isTrialActive ? 'Trial' : 'Active'}
+            </span>
+          )}
         </div>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{plan.description}</p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          {plan.description}
+        </p>
       </div>
-      <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 72 }}>
-        <span style={{ fontWeight: 900, fontSize: 17, color: 'var(--text-main)' }}>{plan.priceLabel}</span>
+      <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 60 }}>
+        <span style={{ fontWeight: 900, fontSize: 16, color: 'var(--text-main)' }}>{plan.priceLabel}</span>
         {plan.priceSuffix && (
           <span style={{ fontWeight: 700, fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{plan.priceSuffix}</span>
         )}
       </div>
-      <div style={{ flexShrink: 0, minWidth: 120, textAlign: 'right' }}>
+      <div style={{ flexShrink: 0, minWidth: 110, textAlign: 'right' }}>
         {isCurrent ? (
-          <span style={{
-            fontSize: 12, fontWeight: 800,
-            color: membership.isTrialActive ? '#fbbf24' : 'var(--accent)',
-          }}>{ctaLabel}</span>
-        ) : plan.key === 'free' ? (
-          // Downgrade path: trial users stay free by not upgrading; monthly paid can cancel via portal
-          membership.isTrialActive ? (
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
-              Default after trial
-            </span>
-          ) : membership.isPaid && !membership.isLifetime ? (
+          <span style={{ fontSize: 12, fontWeight: 800, color: membership.isTrialActive ? '#fbbf24' : 'var(--accent)' }}>
+            {membership.isTrialActive ? 'Your trial' : 'Current plan'}
+          </span>
+        ) : isDowngrade ? null
+          : plan.key === 'free' ? (
+            membership.isPaid && !membership.isLifetime ? (
+              <button
+                type="button"
+                className="account-secondary-button"
+                style={{ fontSize: 12, padding: '0 12px', minHeight: 32 }}
+                onClick={() => onSelect(null)}
+                disabled={anyBusy}
+              >
+                {anyBusy ? 'Opening...' : 'Cancel plan'}
+              </button>
+            ) : membership.isTrialActive ? (
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                Default after trial
+              </span>
+            ) : null
+          ) : (
             <button
               type="button"
               className="account-secondary-button"
               style={{ fontSize: 12, padding: '0 12px', minHeight: 32 }}
-              onClick={() => onSelect(null)}
+              onClick={() => onSelect(plan.key)}
               disabled={anyBusy}
             >
-              {anyBusy ? 'Opening...' : 'Downgrade'}
+              {busy ? 'Opening...' : plan.key === membership.activePlanKey ? 'Renew' : 'Upgrade'}
             </button>
-          ) : null
-        ) : (
-          <button
-            type="button"
-            className="account-secondary-button"
-            style={{ fontSize: 12, padding: '0 12px', minHeight: 32 }}
-            onClick={() => onSelect(plan.key)}
-            disabled={anyBusy}
-          >
-            {busy ? 'Opening...' : 'Upgrade'}
-          </button>
-        )}
+          )}
       </div>
     </div>
   )
@@ -596,7 +619,7 @@ function ProfileDetails({ user, updateProfile }) {
   )
 }
 
-export default function AccountSettings({ open, onClose }) {
+export default function AccountSettings({ open, onClose, storageUsedBytes = 0 }) {
   const { user, getAccessToken, updateProfile, refreshUser } = useAuth()
   const membership = useMemo(() => getMembership(user), [user])
   const [billingBusy, setBillingBusy] = useState('')
@@ -719,26 +742,34 @@ export default function AccountSettings({ open, onClose }) {
                     <strong>{formatter.format(membership.trialEndsAt)}</strong>
                   </div>
                   <div>
-                    <span>Time remaining</span>
+                    <span>Days remaining</span>
                     <strong>{`${membership.daysRemaining} day${membership.daysRemaining === 1 ? '' : 's'}`}</strong>
                   </div>
                   <div>
                     <span>After trial</span>
-                    <strong>Auto-renews to Premium monthly</strong>
+                    <strong>Free plan (upgrade to keep access)</strong>
                   </div>
                 </>
               )}
               {membership.isPaid && !membership.isLifetime && (
                 <div>
                   <span>Billing</span>
-                  <strong>Monthly subscription</strong>
+                  <strong>Monthly — cancel any time</strong>
                 </div>
               )}
               {membership.isPaid && membership.isLifetime && (
-                <div>
-                  <span>Billing</span>
-                  <strong>Lifetime — no renewal</strong>
-                </div>
+                <>
+                  <div>
+                    <span>Billing</span>
+                    <strong>Lifetime — no renewal</strong>
+                  </div>
+                  {membership.isFounder && (
+                    <div>
+                      <span>Status</span>
+                      <strong style={{ color: '#f59e0b' }}>Founder ✦</strong>
+                    </div>
+                  )}
+                </>
               )}
               {membership.isFree && (
                 <>
@@ -749,13 +780,13 @@ export default function AccountSettings({ open, onClose }) {
                   {membership.wasMonthly && (
                     <div>
                       <span>Project lock</span>
-                      <strong>Locked — subscribe to change</strong>
+                      <strong>Locked — upgrade to change</strong>
                     </div>
                   )}
                 </>
               )}
               <div>
-                <span>Current access</span>
+                <span>Access level</span>
                 <strong>
                   {membership.isPaid
                     ? 'Full access'
@@ -766,7 +797,26 @@ export default function AccountSettings({ open, onClose }) {
               </div>
             </div>
 
+            {/* Storage card */}
+            <div style={{ marginBottom: 18 }}>
+              <StorageCard
+                usedBytes={storageUsedBytes}
+                quotaBytes={getStorageQuota(membership)}
+                planLabel={membership.activePlanDef?.label}
+                onUpgrade={membership.isFree || membership.isTrialActive
+                  ? () => { /* scroll to plans */ }
+                  : undefined}
+              />
+            </div>
+
             {/* Plan cards */}
+            <p style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
+              textTransform: 'uppercase', color: 'var(--text-muted)',
+              marginBottom: 10,
+            }}>
+              Available plans
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {PLANS.map(plan => (
                 <PlanCard
@@ -782,8 +832,24 @@ export default function AccountSettings({ open, onClose }) {
 
             {membership.isFree && (
               <div className="account-readonly-note" style={{ marginTop: 14 }}>
-                Free plan includes one active project — all others are view-only. No AI integration.
+                Free plan includes one active project — all others are view-only. No AI integration on the free plan.
                 {membership.wasMonthly && ' Your active project is locked because you previously held a monthly subscription.'}
+              </div>
+            )}
+
+            {membership.isFounder && (
+              <div style={{
+                marginTop: 16, padding: '14px 16px',
+                borderRadius: 8,
+                background: 'rgba(245,158,11,.08)',
+                border: '1px solid rgba(245,158,11,.3)',
+              }}>
+                <p style={{ margin: 0, fontSize: 13, color: '#f59e0b', fontWeight: 700, lineHeight: 1.5 }}>
+                  ✦ You are a Founder of Your Own World.
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  Your name will appear in the Founder recognition section of the YOW website. Thank you for believing in this from the start.
+                </p>
               </div>
             )}
 
@@ -800,6 +866,16 @@ export default function AccountSettings({ open, onClose }) {
                 </button>
               </div>
             )}
+
+            <div style={{ marginTop: 14 }}>
+              <a
+                href="/pricing"
+                onClick={e => { e.preventDefault(); window.history.pushState(null, '', '/pricing'); window.dispatchEvent(new PopStateEvent('popstate')) }}
+                style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', fontWeight: 700 }}
+              >
+                View full pricing page →
+              </a>
+            </div>
 
             {billingMessage && <p className="account-success">{billingMessage}</p>}
             {billingError && <p className="account-error">{billingError}</p>}

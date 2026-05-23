@@ -302,7 +302,6 @@ export default function HelpContact({ open, onClose }) {
 
   return (
     <div
-      onClick={(e) => e.target === e.currentTarget && handleClose()}
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
         background: 'rgba(0,0,0,0.6)',

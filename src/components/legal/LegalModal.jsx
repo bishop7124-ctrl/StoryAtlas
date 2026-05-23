@@ -283,7 +283,6 @@ export default function LegalModal({ page, onClose, onNavigate }) {
 
   return (
     <div
-      onClick={e => e.target === e.currentTarget && onClose()}
       style={{
         position: 'fixed', inset: 0, zIndex: 8000,
         background: 'rgba(0,0,0,0.6)',

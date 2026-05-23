@@ -17,6 +17,13 @@ import ProjectDashboard from './dashboard/ProjectDashboard'
 import ScheduleCalendar from './schedule/ScheduleCalendar'
 import { PROJECT_TYPES, getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
 import { StudioFrame, StudioWorkspace, StudioTab, StudioButton } from './presentation/Studio'
+import {
+  EXPORT_PDF_THEME_OPTIONS,
+  createProjectZipBlob,
+  downloadProjectDocx,
+  downloadProjectPdf,
+  getProjectExportFilename,
+} from '../utils/projectExport'
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
@@ -123,6 +130,61 @@ const SETTINGS_GROUPS = [
   { label: 'Lore',       sections: ['lore', 'timeline', 'worldhistory'] },
 ]
 
+const BACKUP_DEFAULTS = {
+  frequency: 'manual',
+  retention: 5,
+  includeMedia: true,
+  includeCustomerData: true,
+}
+
+const DEFAULT_CATEGORY_OPTIONS = {
+  lore: ['Magic System', 'Religion', 'History', 'Politics', 'Geography', 'Culture', 'Technology', 'Prophecy', 'Mythology', 'Other'],
+  schedule: ['Scene', 'Battle', 'Travel', 'Meeting', 'Festival', 'Other'],
+}
+
+const backupKey = projectId => `nf_project_backups_${projectId}`
+
+const safeSlug = value => String(value || 'project')
+  .trim()
+  .replace(/[^a-z0-9._ -]/gi, '_')
+  .replace(/\s+/g, '-')
+  .replace(/-+/g, '-')
+  .replace(/^[-_.]+|[-_.]+$/g, '') || 'project'
+
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+const stripMediaFromBackup = data => ({
+  ...data,
+  project: data.project ? { ...data.project, coverPhoto: null } : data.project,
+  series: data.series ? { ...data.series, coverPhoto: null } : data.series,
+  characters: (data.characters || []).map(item => ({ ...item, image: null, portrait: null, photo: null })),
+  locations: (data.locations || []).map(item => ({ ...item, image: null, photo: null })),
+  loreEntries: (data.loreEntries || []).map(item => ({ ...item, image: null, photo: null })),
+  maps: (data.maps || []).map(item => ({ ...item, image: null, backgroundImage: null, mapImage: null })),
+})
+
+const normalizeList = value => String(value || '')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean)
+
+const shouldCreateAutoBackup = (config, lastBackupAt) => {
+  if (!config || config.frequency === 'manual') return false
+  if (!lastBackupAt) return true
+  const elapsed = Date.now() - Date.parse(lastBackupAt)
+  const interval = config.frequency === 'weekly' ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+  return elapsed >= interval
+}
+
 // ─── Project Settings ─────────────────────────────────────────────────────────
 
 function ProjectSettings({ store, onClose }) {
@@ -145,6 +207,20 @@ function ProjectSettings({ store, onClose }) {
     progress: novel?.progress ?? '',
   }))
   const [coverError, setCoverError] = useState('')
+  const [exporting, setExporting] = useState('')
+  const [backupMessage, setBackupMessage] = useState('')
+  const [categoryDraft, setCategoryDraft] = useState(() => ({
+    lore: (novel?.categoryOptions?.lore || DEFAULT_CATEGORY_OPTIONS.lore).join(', '),
+    schedule: (novel?.categoryOptions?.schedule || DEFAULT_CATEGORY_OPTIONS.schedule).join(', '),
+  }))
+  const [backupConfig, setBackupConfig] = useState(() => ({
+    ...BACKUP_DEFAULTS,
+    ...(novel?.backupConfig || {}),
+  }))
+  const [localBackups, setLocalBackups] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(backupKey(novel?.id)) || '[]') }
+    catch { return [] }
+  })
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -157,6 +233,13 @@ function ProjectSettings({ store, onClose }) {
       seriesId: novel?.seriesId || '',
       progress: novel?.progress ?? '',
     })
+    setBackupConfig({ ...BACKUP_DEFAULTS, ...(novel?.backupConfig || {}) })
+    setCategoryDraft({
+      lore: (novel?.categoryOptions?.lore || DEFAULT_CATEGORY_OPTIONS.lore).join(', '),
+      schedule: (novel?.categoryOptions?.schedule || DEFAULT_CATEGORY_OPTIONS.schedule).join(', '),
+    })
+    try { setLocalBackups(JSON.parse(localStorage.getItem(backupKey(novel?.id)) || '[]')) }
+    catch { setLocalBackups([]) }
   }, [novel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const patchProject = (patch) => {
@@ -174,6 +257,87 @@ function ProjectSettings({ store, onClose }) {
     }
     patchProject({ [field]: field === 'seriesId' ? value || null : value })
   }
+
+  const getBackupData = () => {
+    const data = store.getProjectExportData?.(store.activeNovelId)
+    if (!data) return null
+    const prepared = backupConfig.includeMedia ? data : stripMediaFromBackup(data)
+    return {
+      ...prepared,
+      backup: {
+        createdAt: new Date().toISOString(),
+        includeCustomerData: backupConfig.includeCustomerData,
+        source: 'project-settings',
+        config: backupConfig,
+      },
+    }
+  }
+
+  const saveBackupConfig = patch => {
+    const next = { ...backupConfig, ...patch }
+    const normalized = { ...next, retention: Math.max(1, Math.min(20, Number(next.retention) || BACKUP_DEFAULTS.retention)) }
+    setBackupConfig(normalized)
+    patchProject({ backupConfig: normalized })
+  }
+
+  const createLocalBackup = (kind = 'manual') => {
+    const data = getBackupData()
+    if (!data || !store.activeNovelId) return null
+    const entry = {
+      id: `${kind}-${Date.now()}`,
+      kind,
+      createdAt: new Date().toISOString(),
+      title: data.project?.title || 'Untitled project',
+      data,
+    }
+    const nextBackups = [entry, ...localBackups].slice(0, backupConfig.retention)
+    try {
+      localStorage.setItem(backupKey(store.activeNovelId), JSON.stringify(nextBackups))
+      setLocalBackups(nextBackups)
+      patchProject({ backupConfig: { ...backupConfig, lastBackupAt: entry.createdAt } })
+      setBackupMessage(kind === 'auto' ? 'Automatic backup refreshed.' : 'Backup created.')
+    } catch {
+      setBackupMessage('Backup failed. Try reducing retained backups or excluding media.')
+      return null
+    }
+    return entry
+  }
+
+  const exportBackup = entry => {
+    const blob = createProjectZipBlob(entry.data)
+    downloadBlob(blob, `${safeSlug(entry.title)}-${entry.createdAt.slice(0, 10)}-backup.zip`)
+  }
+
+  const handleExport = async (format, themeId) => {
+    const projectData = store.getProjectExportData?.(store.activeNovelId)
+    if (!projectData) return
+    try {
+      setExporting(format)
+      if (format === 'docx') await downloadProjectDocx(projectData)
+      else if (format === 'pdf') await downloadProjectPdf(projectData, { themeId })
+      else downloadBlob(createProjectZipBlob(projectData), getProjectExportFilename(projectData.project))
+    } catch (error) {
+      console.error('Project export failed:', error)
+      setBackupMessage('Export failed. Please try again.')
+    } finally {
+      setExporting('')
+    }
+  }
+
+  const saveCategoryOptions = (field, value) => {
+    const nextDraft = { ...categoryDraft, [field]: value }
+    const nextOptions = {
+      ...(novel?.categoryOptions || {}),
+      [field]: normalizeList(value),
+    }
+    setCategoryDraft(nextDraft)
+    patchProject({ categoryOptions: nextOptions })
+  }
+
+  useEffect(() => {
+    if (!store.activeNovelId || !shouldCreateAutoBackup(backupConfig, novel?.backupConfig?.lastBackupAt)) return
+    createLocalBackup('auto')
+  }, [store.activeNovelId, backupConfig.frequency]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCoverSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -211,6 +375,7 @@ function ProjectSettings({ store, onClose }) {
 
   return (
     <div
+      className="project-settings-overlay"
       onClick={e => e.target === e.currentTarget && onClose()}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
@@ -224,19 +389,20 @@ function ProjectSettings({ store, onClose }) {
         aria-modal="true"
         aria-labelledby="project-settings-title"
         tabIndex={-1}
+        className="project-settings-dialog"
         style={{
           background: 'var(--bg-nav)',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          width: 'min(940px, 100%)', height: 'min(760px, calc(100vh - 48px))',
+          border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
+          borderRadius: 18,
+          width: 'min(1080px, 100%)', height: 'min(820px, calc(100vh - 48px))',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+          boxShadow: '0 16px 56px rgba(0,0,0,0.32)',
         }}>
         {/* Header */}
         <div style={{
-          padding: '14px 20px',
-          borderBottom: '1px solid var(--border)',
+          padding: '14px 22px',
+          borderBottom: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexShrink: 0,
         }}>
@@ -248,7 +414,7 @@ function ProjectSettings({ store, onClose }) {
             <button
               onClick={onClose}
               style={{
-                height: 28, padding: '0 12px', border: '1px solid var(--border)', borderRadius: 4,
+                height: 28, padding: '0 14px', border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)', borderRadius: 8,
                 background: 'var(--accent)', color: 'var(--bg-main)',
                 fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', cursor: 'pointer',
               }}
@@ -262,9 +428,9 @@ function ProjectSettings({ store, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 18 }}>
-            <section style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-main)', padding: 16 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
+          <div className="project-settings-sections" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+            <section style={{ border: '1px solid color-mix(in srgb, var(--border) 55%, transparent)', borderRadius: 14, background: 'color-mix(in srgb, var(--bg-main) 80%, transparent)', padding: 18 }}>
               <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Project Details</p>
 
               <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
@@ -351,7 +517,7 @@ function ProjectSettings({ store, onClose }) {
                     <img src={novel.coverPhoto} alt="" style={{ width: 44, height: 58, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border)', flexShrink: 0 }} />
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}>
+                    <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', lineHeight: 1 }}>
                       <input type="file" accept="image/*" onChange={handleCoverSelect} style={{ display: 'none' }} />
                       {novel?.coverPhoto ? 'Change cover' : 'Add cover photo'}
                     </label>
@@ -359,7 +525,7 @@ function ProjectSettings({ store, onClose }) {
                       <button
                         type="button"
                         onClick={() => store.updateNovel(store.activeNovelId, { coverPhoto: null })}
-                        style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)', background: 'transparent', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', cursor: 'pointer', lineHeight: 1 }}
                       >
                         Remove
                       </button>
@@ -370,7 +536,7 @@ function ProjectSettings({ store, onClose }) {
               </div>
             </section>
 
-            <section style={{ border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-main)', padding: 16 }}>
+            <section style={{ border: '1px solid color-mix(in srgb, var(--border) 55%, transparent)', borderRadius: 14, background: 'color-mix(in srgb, var(--bg-main) 80%, transparent)', padding: 18 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
                 <div>
                   <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Sections</p>
@@ -401,9 +567,9 @@ function ProjectSettings({ store, onClose }) {
                             onClick={() => toggle(id)}
                             style={{
                               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              minHeight: 40, padding: '8px 10px', borderRadius: 6,
-                              border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
-                              background: on ? 'var(--accent-fade)' : 'transparent',
+                              minHeight: 40, padding: '8px 10px', borderRadius: 10,
+                              border: `1px solid ${on ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--border) 55%, transparent)'}`,
+                              background: on ? 'var(--accent-fade)' : 'color-mix(in srgb, var(--bg-nav) 40%, transparent)',
                               cursor: 'pointer', textAlign: 'left',
                             }}
                           >
@@ -435,13 +601,102 @@ function ProjectSettings({ store, onClose }) {
                 ))}
               </div>
             </section>
+
+            <section style={{ border: '1px solid color-mix(in srgb, var(--border) 55%, transparent)', borderRadius: 14, background: 'color-mix(in srgb, var(--bg-main) 80%, transparent)', padding: 18 }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Export</p>
+              <div className="project-settings-action-grid">
+                <button type="button" onClick={() => handleExport('docx')} className="project-settings-action-card" disabled={!!exporting}>
+                  <strong>Word document</strong>
+                  <span>Editable reference export</span>
+                </button>
+                <button type="button" onClick={() => handleExport('zip')} className="project-settings-action-card" disabled={!!exporting}>
+                  <strong>Backup zip</strong>
+                  <span>Complete raw project data</span>
+                </button>
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>Visual PDF theme</p>
+                <div className="project-settings-theme-grid">
+                  {EXPORT_PDF_THEME_OPTIONS.map(theme => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => handleExport('pdf', theme.id)}
+                      className="project-settings-theme-button"
+                      disabled={!!exporting}
+                    >
+                      <strong>{theme.name}</strong>
+                      <span>{theme.tagline}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {exporting && <p style={{ fontSize: 11, color: 'var(--accent)', marginTop: 10 }}>Preparing export...</p>}
+            </section>
+
+            <section style={{ border: '1px solid color-mix(in srgb, var(--border) 55%, transparent)', borderRadius: 14, background: 'color-mix(in srgb, var(--bg-main) 80%, transparent)', padding: 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>Backups</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>Configure local customer/project data snapshots and export them as zip files.</p>
+                </div>
+                <button type="button" onClick={() => createLocalBackup('manual')} className="project-settings-small-button">Create backup</button>
+              </div>
+
+              <div className="project-settings-form-grid">
+                <label>
+                  <span>Frequency</span>
+                  <select value={backupConfig.frequency} onChange={e => saveBackupConfig({ frequency: e.target.value })} className="field">
+                    <option value="manual">Manual</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Retained backups</span>
+                  <input type="number" min={1} max={20} value={backupConfig.retention} onChange={e => saveBackupConfig({ retention: e.target.value })} className="field" />
+                </label>
+              </div>
+
+              <div className="project-settings-checks">
+                <label><input type="checkbox" checked={backupConfig.includeMedia} onChange={e => saveBackupConfig({ includeMedia: e.target.checked })} /> Include cover and media fields</label>
+                <label><input type="checkbox" checked={backupConfig.includeCustomerData} onChange={e => saveBackupConfig({ includeCustomerData: e.target.checked })} /> Include project settings metadata</label>
+              </div>
+
+              <div className="project-settings-backup-list">
+                {localBackups.length ? localBackups.slice(0, 4).map(entry => (
+                  <button key={entry.id} type="button" onClick={() => exportBackup(entry)}>
+                    <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                    <strong>{entry.kind === 'auto' ? 'Auto backup' : 'Manual backup'}</strong>
+                  </button>
+                )) : (
+                  <p>No local backups yet.</p>
+                )}
+              </div>
+              {backupMessage && <p style={{ fontSize: 11, color: backupMessage.includes('failed') ? '#f87171' : 'var(--accent)', marginTop: 10 }}>{backupMessage}</p>}
+            </section>
+
+            <section style={{ border: '1px solid color-mix(in srgb, var(--border) 55%, transparent)', borderRadius: 14, background: 'color-mix(in srgb, var(--bg-main) 80%, transparent)', padding: 18 }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Categories</p>
+              <div className="project-settings-category-editor">
+                <label>
+                  <span>Lore categories</span>
+                  <textarea value={categoryDraft.lore} onChange={e => saveCategoryOptions('lore', e.target.value)} rows={3} className="field" />
+                </label>
+                <label>
+                  <span>Schedule categories</span>
+                  <textarea value={categoryDraft.schedule} onChange={e => saveCategoryOptions('schedule', e.target.value)} rows={3} className="field" />
+                </label>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 10 }}>Separate options with commas. Existing entries keep their current category labels.</p>
+            </section>
           </div>
         </div>
 
         {/* Footer */}
         <div style={{
-          padding: '12px 20px',
-          borderTop: '1px solid var(--border)',
+          padding: '12px 22px',
+          borderTop: '1px solid color-mix(in srgb, var(--border) 60%, transparent)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexShrink: 0,
         }}>
@@ -449,7 +704,7 @@ function ProjectSettings({ store, onClose }) {
             <button
               onClick={resetToDefaults}
               style={{
-                height: 28, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 4,
+                height: 28, padding: '0 12px', border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)', borderRadius: 8,
                 background: 'transparent', color: 'var(--text-muted)',
                 fontSize: 11, fontWeight: 700, cursor: 'pointer',
               }}
@@ -457,7 +712,7 @@ function ProjectSettings({ store, onClose }) {
             <button
               onClick={enableAll}
               style={{
-                height: 28, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 4,
+                height: 28, padding: '0 12px', border: '1px solid color-mix(in srgb, var(--border) 60%, transparent)', borderRadius: 8,
                 background: 'transparent', color: 'var(--text-muted)',
                 fontSize: 11, fontWeight: 700, cursor: 'pointer',
               }}
@@ -497,8 +752,13 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
         if (ALL_SECTIONS.find(s => s.id === e.detail.section)) setViewMode('planning')
       }
     }
+    const handleOpenProjectSettings = () => setShowSettings(true)
     window.addEventListener('switch-section', handleTeleport)
-    return () => window.removeEventListener('switch-section', handleTeleport)
+    window.addEventListener('open-project-settings', handleOpenProjectSettings)
+    return () => {
+      window.removeEventListener('switch-section', handleTeleport)
+      window.removeEventListener('open-project-settings', handleOpenProjectSettings)
+    }
   }, [setSection])
 
   // iOS Safari requires a passive touchstart listener on scroll containers

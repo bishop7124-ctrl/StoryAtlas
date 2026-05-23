@@ -14,7 +14,7 @@ const sanitizeFilename = (value, fallback = 'project') => {
   return name || fallback
 }
 
-const downloadBlob = (blob, filename) => {
+export const downloadBlob = (blob, filename) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -57,6 +57,15 @@ const sortByTitle = (items = [], key = 'title') =>
   [...items].sort((a, b) => String(a[key] || '').localeCompare(String(b[key] || '')))
 
 const valueList = (...values) => values.filter(value => value !== null && value !== undefined && String(value).trim() !== '')
+
+const asArray = (value) => {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === 'object') return Object.values(value)
+  return []
+}
+
+const getRelationshipLinks = (character) =>
+  asArray(character?.relationships).filter(rel => rel && typeof rel === 'object')
 
 const getEnabled = (projectData) => {
   const enabled = projectData.project?.enabledSections
@@ -464,6 +473,94 @@ const shareAny = (a = [], b = []) => {
 
 const getImage = (item) => item?.image || item?.coverPhoto || item?.photo || item?.avatar || ''
 
+const parseDataUrl = (value = '') => {
+  const match = String(value).match(/^data:([^;,]+)(;base64)?,(.*)$/)
+  if (!match) return null
+  return {
+    mimeType: match[1].toLowerCase(),
+    isBase64: Boolean(match[2]),
+    payload: match[3],
+  }
+}
+
+const bytesFromBase64 = (value) => {
+  if (typeof atob === 'function') {
+    const binary = atob(value)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    return bytes
+  }
+  return Uint8Array.from(globalThis.Buffer.from(value, 'base64'))
+}
+
+const parseJpegSize = (bytes) => {
+  if (!bytes || bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null
+  let offset = 2
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1
+      continue
+    }
+    const marker = bytes[offset + 1]
+    const length = (bytes[offset + 2] << 8) + bytes[offset + 3]
+    if (length < 2) return null
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+      return {
+        height: (bytes[offset + 5] << 8) + bytes[offset + 6],
+        width: (bytes[offset + 7] << 8) + bytes[offset + 8],
+      }
+    }
+    offset += 2 + length
+  }
+  return null
+}
+
+const jpegResourceFromDataUrl = (value) => {
+  const parsed = parseDataUrl(value)
+  if (!parsed?.isBase64 || !['image/jpeg', 'image/jpg'].includes(parsed.mimeType)) return null
+  const bytes = bytesFromBase64(parsed.payload)
+  const size = parseJpegSize(bytes)
+  return size ? { bytes, ...size } : null
+}
+
+const convertImageToJpegResource = (src, options = {}) => new Promise(resolve => {
+  if (!src || typeof Image === 'undefined' || typeof document === 'undefined') {
+    resolve(jpegResourceFromDataUrl(src))
+    return
+  }
+  const image = new Image()
+  image.onload = () => {
+    try {
+      const maxSize = options.maxSize || 900
+      const scale = Math.min(1, maxSize / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height))
+      const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale))
+      const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale))
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      canvas.width = width
+      canvas.height = height
+      ctx.fillStyle = '#111814'
+      ctx.fillRect(0, 0, width, height)
+      ctx.drawImage(image, 0, 0, width, height)
+      resolve(jpegResourceFromDataUrl(canvas.toDataURL('image/jpeg', options.quality || 0.82)))
+    } catch {
+      resolve(jpegResourceFromDataUrl(src))
+    }
+  }
+  image.onerror = () => resolve(jpegResourceFromDataUrl(src))
+  image.src = src
+})
+
+const prepareProjectPdfData = async (projectData) => {
+  const characters = await Promise.all((projectData.characters ?? []).map(async character => {
+    const image = getImage(character)
+    if (!image) return character
+    const pdfImage = await convertImageToJpegResource(image)
+    return pdfImage ? { ...character, _pdfImage: pdfImage } : character
+  }))
+  return { ...projectData, characters }
+}
+
 const relatedEntries = (source, projectData, sourceType) => {
   const tags = getTags(source)
   const related = []
@@ -533,7 +630,7 @@ const articleCard = (title, meta, content, related = [], image = '') => `
 `
 
 const characterDossier = (character, projectData) => {
-  const relationships = (character.relationships ?? [])
+  const relationships = getRelationshipLinks(character)
     .map(rel => {
       const target = (projectData.characters ?? []).find(item => item.id === rel.targetId)
       return target ? { ...rel, targetName: target.name } : null
@@ -575,7 +672,7 @@ const relationshipSection = (characters = []) => {
     groups.get(key).push(character)
   })
   const relationshipRows = characters.flatMap(character =>
-    (character.relationships ?? []).map(rel => {
+    getRelationshipLinks(character).map(rel => {
       const target = characters.find(item => item.id === rel.targetId)
       return target ? { source: character.name, target: target.name, type: rel.type } : null
     }).filter(Boolean)
@@ -694,14 +791,17 @@ const pdfText = (value = '') =>
     })
     .replace(/[\\()]/g, '\\$&')
 
-const measureText = (text, size) => String(text || '').length * size * 0.48
-
-const fitPdfText = (text, maxWidth, size) => {
+const measureText = (text, size, tracking = 0) => {
   const value = String(text || '')
-  if (!maxWidth || measureText(value, size) <= maxWidth) return value
+  return value.length * size * 0.6 + Math.max(0, value.length - 1) * tracking
+}
+
+const fitPdfText = (text, maxWidth, size, tracking = 0) => {
+  const value = String(text || '')
+  if (!maxWidth || measureText(value, size, tracking) <= maxWidth) return value
   const ellipsis = '...'
   let output = value
-  while (output.length > 0 && measureText(`${output}${ellipsis}`, size) > maxWidth) {
+  while (output.length > 0 && measureText(`${output}${ellipsis}`, size, tracking) > maxWidth) {
     output = output.slice(0, -1)
   }
   return `${output.trimEnd()}${ellipsis}`
@@ -714,12 +814,13 @@ const wrapPdfText = (text, maxWidth, size, maxLines = 99) => {
     const words = paragraph.split(/\s+/).filter(Boolean)
     let line = ''
     words.forEach(word => {
-      const next = line ? `${line} ${word}` : word
-      if (measureText(next, size) <= maxWidth || !line) {
-        line = next
+      const safeWord = measureText(word, size) > maxWidth ? fitPdfText(word, maxWidth, size) : word
+      const safeNext = line ? `${line} ${safeWord}` : safeWord
+      if (measureText(safeNext, size) <= maxWidth || !line) {
+        line = safeNext
       } else {
         lines.push(line)
-        line = word
+        line = safeWord
       }
     })
     if (line) lines.push(line)
@@ -733,6 +834,7 @@ const wrapPdfText = (text, maxWidth, size, maxLines = 99) => {
 
 const makePdfCanvas = (theme) => {
   const commands = []
+  const images = []
   const draw = (cmd) => commands.push(cmd)
   const rect = (x, y, w, h, fill, stroke = null, lineWidth = 1) => {
     draw('q')
@@ -753,7 +855,8 @@ const makePdfCanvas = (theme) => {
   }
   const text = (value, x, y, size = 12, options = {}) => {
     const font = options.bold ? 'F2' : options.italic ? 'F3' : 'F1'
-    const displayValue = fitPdfText(value, options.maxWidth, size)
+    const maxWidth = options.maxWidth ?? Math.max(20, A4_LANDSCAPE.width - x - PDF_MARGIN)
+    const displayValue = fitPdfText(value, maxWidth, size, options.tracking || 0)
     draw('BT')
     draw(`/${font} ${size} Tf`)
     draw(pdfColor(options.color || theme.palette.text, 'rg'))
@@ -766,9 +869,29 @@ const makePdfCanvas = (theme) => {
     const lineHeight = options.lineHeight || size * 1.35
     const lines = wrapPdfText(value, width, size, options.maxLines)
     lines.forEach((lineText, index) => {
-      if (lineText) text(lineText, x, y - (index * lineHeight), size, options)
+      if (lineText) text(lineText, x, y - (index * lineHeight), size, { ...options, maxWidth: width })
     })
     return y - (lines.length * lineHeight)
+  }
+  const imageCover = (image, x, topY, w, h, options = {}) => {
+    if (!image?.bytes || !image.width || !image.height) return false
+    const name = `Im${images.length + 1}`
+    images.push({ name, ...image })
+    const scale = Math.max(w / image.width, h / image.height)
+    const drawW = image.width * scale
+    const drawH = image.height * scale
+    const [posX = '50%', posY = '50%'] = String(options.position || '50% 50%').split(/\s+/)
+    const px = Math.max(0, Math.min(1, parseFloat(posX) / 100 || 0.5))
+    const py = Math.max(0, Math.min(1, parseFloat(posY) / 100 || 0.5))
+    const bottomY = topY - h
+    const drawX = x - Math.max(0, drawW - w) * px
+    const drawY = bottomY - Math.max(0, drawH - h) * (1 - py)
+    draw('q')
+    draw(`${x.toFixed(2)} ${bottomY.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re W n`)
+    draw(`${drawW.toFixed(2)} 0 0 ${drawH.toFixed(2)} ${drawX.toFixed(2)} ${drawY.toFixed(2)} cm`)
+    draw(`/${name} Do`)
+    draw('Q')
+    return true
   }
   const pageBase = (eyebrow, title, subtitle) => {
     rect(0, 0, A4_LANDSCAPE.width, A4_LANDSCAPE.height, theme.palette.page)
@@ -784,8 +907,10 @@ const makePdfCanvas = (theme) => {
     if (subtitle) textBox(subtitle, PDF_MARGIN, subtitleY, 700, 10, { color: theme.palette.muted, lineHeight: 14, maxLines: 2 })
     return Math.min(452, subtitle ? subtitleY - 34 : 470)
   }
-  return { draw, rect, line, text, textBox, pageBase, content: () => commands.join('\n') }
+  return { draw, rect, line, text, textBox, imageCover, pageBase, content: () => commands.join('\n'), images: () => images }
 }
+
+const pdfContent = (pdf) => ({ content: pdf.content(), images: pdf.images() })
 
 const drawMetricGrid = (pdf, stats, x, y, cols = 2, cellW = 142, cellH = 64) => {
   stats.forEach(([label, value], index) => {
@@ -795,15 +920,98 @@ const drawMetricGrid = (pdf, stats, x, y, cols = 2, cellW = 142, cellH = 64) => 
     const py = y - row * (cellH + 12)
     pdf.rect(px, py - cellH, cellW, cellH, '#1f1d18', null)
     pdf.rect(px, py - cellH, cellW, cellH, null, '#6e5a34', 0.8)
-    pdf.text(String(value), px + 14, py - 24, 22, { bold: true, color: '#d6ad54' })
-    pdf.text(String(label).toUpperCase(), px + 14, py - 43, 7, { bold: true, color: '#c4b692', tracking: 0.7 })
+    pdf.text(String(value), px + 14, py - 24, 22, { bold: true, color: '#d6ad54', maxWidth: cellW - 28 })
+    pdf.text(String(label).toUpperCase(), px + 14, py - 43, 7, { bold: true, color: '#c4b692', tracking: 0.7, maxWidth: cellW - 28 })
   })
 }
 
 const drawArtFrame = (pdf, label, x, y, w, h, theme, initial = '') => {
+  const mark = fitPdfText(initial || label, w - 28, 18)
   pdf.rect(x, y - h, w, h, theme.palette.panelSoft, theme.palette.border, 1)
-  pdf.text(initial || label, x + w / 2 - measureText(initial || label, 18) / 2, y - h / 2, 18, { bold: true, color: theme.palette.accent })
-  pdf.text(label.toUpperCase(), x + 16, y - h + 22, 8, { bold: true, color: theme.palette.muted, tracking: 1 })
+  pdf.text(mark, x + w / 2 - measureText(mark, 18) / 2, y - h / 2, 18, { bold: true, color: theme.palette.accent, maxWidth: w - 28 })
+  pdf.text(label.toUpperCase(), x + 16, y - h + 22, 8, { bold: true, color: theme.palette.muted, tracking: 1, maxWidth: w - 32 })
+}
+
+const drawImageFrame = (pdf, label, image, x, y, w, h, theme, initial = '', position = '50% 50%') => {
+  pdf.rect(x, y - h, w, h, theme.palette.panelSoft, theme.palette.border, 1)
+  const hasImage = pdf.imageCover(image, x, y, w, h, { position })
+  if (!hasImage) {
+    const mark = fitPdfText(initial || label, w - 28, 18)
+    pdf.text(mark, x + w / 2 - measureText(mark, 18) / 2, y - h / 2, 18, { bold: true, color: theme.palette.accent, maxWidth: w - 28 })
+  }
+  pdf.rect(x, y - h, w, h, null, theme.palette.border, 1)
+  pdf.text(label.toUpperCase(), x + 12, y - h + 18, 7, { bold: true, color: theme.palette.muted, tracking: 0.7, maxWidth: w - 24 })
+}
+
+const characterFieldValue = (character, key) =>
+  character?.[key] || character?.traits?.[key] || ''
+
+const characterTextBlocks = (character, relationships) => [
+  ['Overview', character.bio || character.description || character.notes || 'No dossier notes recorded.'],
+  ['Role', character.role],
+  ['Family', character.familyGroup],
+  ['Species', character.species],
+  ['Title / Job', character.titleJob || character.title],
+  ['External Goal', characterFieldValue(character, 'externalGoal')],
+  ['Internal Goal', characterFieldValue(character, 'internalGoal')],
+  ['Arc', character.arc || character.characterArc],
+  ['Strengths', character.traits?.strengths],
+  ['Weaknesses', character.traits?.weaknesses],
+  ['Fears', character.traits?.fears],
+  ['Passions', character.traits?.passions],
+  ['Languages', character.traits?.languages || character.background?.language],
+  ['Hometown', character.background?.hometown],
+  ['Religion', character.background?.religion],
+  ['Life Events', character.background?.lifeEvents],
+  ['History Witnessed', character.background?.historicEventsWitnessed],
+  ['Known Links', relationships.join('\n')],
+].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+
+const makeCharacterLineItems = (character, relationships, width) =>
+  characterTextBlocks(character, relationships).flatMap(([label, value]) => [
+    { text: String(label).toUpperCase(), size: 8, lineHeight: 12, bold: true, colorRole: 'accent', tracking: 0.7, gapBefore: 5 },
+    ...wrapPdfText(value, width, 9.2).map(line => ({ text: line, size: 9.2, lineHeight: 12.6, colorRole: 'text' })),
+    { spacer: 4 },
+  ])
+
+const renderLineItems = (pdf, items, startIndex, x, y, width, bottomY, theme) => {
+  let cursor = y
+  let index = startIndex
+  while (index < items.length) {
+    const item = items[index]
+    if (item.spacer) {
+      if (cursor - item.spacer < bottomY) break
+      cursor -= item.spacer
+      index += 1
+      continue
+    }
+    const lineHeight = item.lineHeight || item.size * 1.35
+    const gapBefore = item.gapBefore || 0
+    if (cursor - gapBefore - lineHeight < bottomY) break
+    cursor -= gapBefore
+    pdf.text(item.text, x, cursor, item.size, {
+      bold: item.bold,
+      color: item.colorRole === 'accent' ? theme.palette.accent : theme.palette.text,
+      tracking: item.tracking,
+      maxWidth: width,
+    })
+    cursor -= lineHeight
+    index += 1
+  }
+  return index
+}
+
+const makeArticleLineItems = (body, related = [], width) => {
+  const items = [
+    ...wrapPdfText(body || 'No notes recorded.', width, 9.8).map(line => ({ text: line, size: 9.8, lineHeight: 13.4, colorRole: 'text' })),
+  ]
+  if (related?.length) {
+    items.push({ spacer: 8 }, { text: 'RELATED ENTRIES', size: 8, lineHeight: 12, bold: true, colorRole: 'accent', tracking: 0.7 })
+    related.forEach(item => {
+      items.push(...wrapPdfText(`- ${item.type}: ${item.title}`, width, 9.2).map(line => ({ text: line, size: 9.2, lineHeight: 12.6, colorRole: 'text' })))
+    })
+  }
+  return items
 }
 
 const createCoverPage = (projectData, theme) => {
@@ -812,18 +1020,22 @@ const createCoverPage = (projectData, theme) => {
   pdf.rect(0, 0, A4_LANDSCAPE.width, A4_LANDSCAPE.height, theme.palette.page)
   pdf.line(25, 570, 817, 570, theme.palette.accent, 2)
   pdf.line(25, 25, 817, 25, theme.palette.accent, 2)
-  pdf.text(`${theme.cover.marker} / WORLD BIBLE`, 76, 457, 10, { bold: true, color: theme.palette.accent, tracking: 2 })
+  pdf.text(`${theme.cover.marker} / WORLD BIBLE`, 76, 457, 10, { bold: true, color: theme.palette.accent, tracking: 2, maxWidth: 500 })
   pdf.textBox(project.title || 'Untitled Project', 76, 420, 500, 42, { bold: true, color: theme.palette.text, lineHeight: 45, maxLines: 2 })
   pdf.textBox(project.description || 'A complete project export from Your Own World.', 76, 305, 500, 14, { italic: true, color: theme.palette.muted, lineHeight: 22, maxLines: 4 })
   if (projectData.series?.name) {
     pdf.rect(76, 185, 230, 34, theme.palette.panel, theme.palette.border, 0.8)
-    pdf.text(projectData.series.name.toUpperCase(), 92, 197, 9, { bold: true, color: theme.palette.accent, tracking: 1.2 })
+    pdf.text(projectData.series.name.toUpperCase(), 92, 197, 9, { bold: true, color: theme.palette.accent, tracking: 1.2, maxWidth: 198 })
   }
   drawMetricGrid(pdf, buildSummaryStats(projectData), 76, 160, 5, 130, 68)
-  return pdf.content()
+  return pdfContent(pdf)
 }
 
-const pdfPage = (section, title, content, extra = {}) => ({ section, title, content, ...extra })
+const pdfPage = (section, title, content, extra = {}) => (
+  content && typeof content === 'object' && 'content' in content
+    ? { section, title, ...content, ...extra }
+    : { section, title, content, ...extra }
+)
 
 const createTocPages = (records, theme, tocPageCount) => {
   const lines = []
@@ -864,85 +1076,114 @@ const createTocPages = (records, theme, tocPageCount) => {
       const w = lineItem.kind === 'section' ? 720 : 665
       if (lineItem.kind === 'section') {
         pdf.rect(50, y - 7, 740, 19, lineIndex % 2 ? theme.palette.panelSoft : theme.palette.panel, theme.palette.border, 0.35)
-        pdf.text(lineItem.number, 62, y, 9, { bold: true, color: theme.palette.accent })
+        pdf.text(lineItem.number, 62, y, 9, { bold: true, color: theme.palette.accent, maxWidth: 24 })
         pdf.text(lineItem.title, 98, y, 11, { bold: true, color: theme.palette.text, maxWidth: 560 })
-        pdf.text(`${lineItem.count} ${lineItem.count === 1 ? 'entry' : 'entries'}`, 710, y, 8, { bold: true, color: theme.palette.muted })
+        pdf.text(`${lineItem.count} ${lineItem.count === 1 ? 'entry' : 'entries'}`, 710, y, 8, { bold: true, color: theme.palette.muted, maxWidth: 70 })
       } else {
         pdf.text(lineItem.title, x, y, 9, { color: theme.palette.muted, maxWidth: 630 })
         pdf.line(78, y + 4, 78, y - 7, theme.palette.border, 0.6)
       }
       links.push({ rect: [x - 4, y - 6, x + w, y + 12], pageIndex: lineItem.pageIndex })
     })
-    pages.push({ content: pdf.content(), links, section: 'Table of Contents', title: pageIndex === 0 ? 'Table of Contents' : 'Table of Contents Continued' })
+    pages.push({ ...pdfContent(pdf), links, section: 'Table of Contents', title: pageIndex === 0 ? 'Table of Contents' : 'Table of Contents Continued' })
   }
   return pages
 }
 
-const createCharacterPage = (character, projectData, theme, index) => {
+const createCharacterPages = (character, projectData, theme, index) => {
+  const title = character.name || `Character ${index + 1}`
   const pdf = makePdfCanvas(theme)
-  const relationships = (character.relationships ?? []).map(rel => {
+  const relationships = getRelationshipLinks(character).map(rel => {
     const target = (projectData.characters ?? []).find(item => item.id === rel.targetId)
     return target ? `${rel.type || 'linked'}: ${target.name}` : ''
   }).filter(Boolean)
-  const contentStartY = pdf.pageBase('Character Dossier', character.name || `Character ${index + 1}`, valueList(character.role, character.familyGroup, character.keywords?.join(', ')).join(' - '))
+  const lineWidth = 500
+  const items = makeCharacterLineItems(character, relationships, lineWidth)
+  const pages = []
+  const contentStartY = pdf.pageBase('Character Dossier', title, valueList(character.role, character.familyGroup, character.keywords?.join(', ')).join(' - '))
   const panelTop = Math.min(488, contentStartY - 18)
-  const panelBottom = 76
+  const panelBottom = 58
   const panelHeight = panelTop - panelBottom
-  const artTop = panelTop - 24
-  const artHeight = Math.min(300, panelHeight - 48)
   pdf.rect(56, panelBottom, 730, panelHeight, theme.palette.panel, theme.palette.accent, 1)
-  drawArtFrame(pdf, 'Character Art', 74, artTop, 260, artHeight, theme, firstLetter(character.name).replace(/&.*;/, ''))
-  let y = panelTop - 36
-  pdf.text('OVERVIEW', 374, y, 11, { bold: true, color: theme.palette.text })
-  y = pdf.textBox(character.bio || character.description || character.notes || 'No dossier notes recorded.', 374, y - 28, 360, 11, { color: theme.palette.text, lineHeight: 16, maxLines: 6 })
-  const fields = [
-    ['ROLE', character.role],
-    ['FAMILY', character.familyGroup],
-    ['EXTERNAL GOAL', character.externalGoal],
-    ['INTERNAL GOAL', character.internalGoal],
-    ['ARC', character.arc || character.characterArc],
-  ].filter(([, value]) => value)
-  y -= 12
-  fields.slice(0, 5).forEach(([label, value]) => {
-    if (y < panelBottom + 58) return
-    pdf.text(label, 374, y, 9, { bold: true, color: theme.palette.accent, tracking: 0.8 })
-    y = pdf.textBox(value, 374, y - 15, 360, 10, { color: theme.palette.muted, lineHeight: 13, maxLines: 2 }) - 7
-  })
-  if (relationships.length && y > panelBottom + 42) {
-    pdf.text('KNOWN LINKS', 374, y, 9, { bold: true, color: theme.palette.accent, tracking: 0.8 })
-    const maxLinks = Math.max(1, Math.floor((y - panelBottom - 22) / 14))
-    relationships.slice(0, maxLinks).forEach((rel, relIndex) => pdf.text(`- ${rel}`, 374, y - 17 - relIndex * 14, 10, { color: theme.palette.text, maxWidth: 360 }))
+  drawImageFrame(
+    pdf,
+    'Character Photo',
+    character._pdfImage,
+    612,
+    panelTop - 24,
+    142,
+    Math.min(190, panelHeight - 48),
+    theme,
+    firstLetter(character.name).replace(/&.*;/, ''),
+    character.imagePosition,
+  )
+  let nextIndex = renderLineItems(pdf, items, 0, 82, panelTop - 34, lineWidth, panelBottom + 22, theme)
+  pages.push(pdfPage('Characters', title, pdfContent(pdf)))
+
+  let continuation = 2
+  while (nextIndex < items.length) {
+    const nextPdf = makePdfCanvas(theme)
+    const nextStart = nextPdf.pageBase('Character Dossier', `${title} continued`, `Continuation ${continuation}`)
+    const nextPanelTop = Math.min(488, nextStart - 18)
+    nextPdf.rect(56, panelBottom, 730, nextPanelTop - panelBottom, theme.palette.panel, theme.palette.accent, 1)
+    nextIndex = renderLineItems(nextPdf, items, nextIndex, 82, nextPanelTop - 34, 670, panelBottom + 22, theme)
+    pages.push(pdfPage('Characters', `${title} continued ${continuation}`, pdfContent(nextPdf)))
+    continuation += 1
   }
-  return pdf.content()
+  return pages
 }
 
-const createArticlePage = ({ eyebrow, title, subtitle, body, related, artLabel, initial }, theme) => {
+const createArticlePages = ({ section, eyebrow, title, subtitle, body, related, artLabel, initial }, theme) => {
+  const lineWidth = 500
+  const items = makeArticleLineItems(body, related, lineWidth)
+  const pages = []
   const pdf = makePdfCanvas(theme)
   const contentStartY = pdf.pageBase(eyebrow, title, subtitle)
-  pdf.textBox(body || 'No notes recorded.', 30, contentStartY, 760, 12, { color: theme.palette.text, lineHeight: 18, maxLines: 7 })
-  pdf.rect(61, 75, 720, 292, theme.palette.panel, theme.palette.accent, 1)
-  drawArtFrame(pdf, artLabel, 77, 331, 350, 220, theme, initial)
-  pdf.text('RELATED ENTRIES', 457, 331, 11, { bold: true, color: theme.palette.text })
-  const entries = related?.length ? related.map(item => `${item.type}: ${item.title}`) : ['No linked records found.']
-  entries.slice(0, 8).forEach((item, index) => {
-    pdf.text(`- ${item}`, 457, 301 - index * 18, 11, { color: theme.palette.text })
-  })
-  return pdf.content()
+  const panelTop = Math.min(410, contentStartY - 18)
+  const panelBottom = 58
+  pdf.rect(56, panelBottom, 730, panelTop - panelBottom, theme.palette.panel, theme.palette.accent, 1)
+  drawArtFrame(pdf, artLabel, 616, panelTop - 24, 138, Math.min(176, panelTop - panelBottom - 48), theme, initial)
+  let nextIndex = renderLineItems(pdf, items, 0, 82, panelTop - 34, lineWidth, panelBottom + 22, theme)
+  pages.push(pdfPage(section, title, pdfContent(pdf)))
+
+  let continuation = 2
+  while (nextIndex < items.length) {
+    const nextPdf = makePdfCanvas(theme)
+    const nextStart = nextPdf.pageBase(eyebrow, `${title} continued`, `Continuation ${continuation}`)
+    const nextPanelTop = Math.min(488, nextStart - 18)
+    nextPdf.rect(56, panelBottom, 730, nextPanelTop - panelBottom, theme.palette.panel, theme.palette.accent, 1)
+    nextIndex = renderLineItems(nextPdf, items, nextIndex, 82, nextPanelTop - 34, 670, panelBottom + 22, theme)
+    pages.push(pdfPage(section, `${title} continued ${continuation}`, pdfContent(nextPdf)))
+    continuation += 1
+  }
+  return pages
 }
 
-const createTimelinePage = (event, projectData, theme, index, eyebrow = 'Timeline & History') => {
-  const pdf = makePdfCanvas(theme)
-  pdf.pageBase(eyebrow, event.title || `Event ${index + 1}`, valueList(event.era, event.date, event.year, event.tags?.join(', ')).join(' - '))
-  pdf.rect(70, 120, 700, 330, theme.palette.panel, theme.palette.accent, 1)
-  pdf.text(String(index + 1).padStart(2, '0'), 100, 392, 40, { bold: true, color: theme.palette.accent })
-  pdf.text(valueList(event.era, event.date, event.year).join(' / ') || 'Undated', 100, 362, 12, { bold: true, color: theme.palette.muted, tracking: 1 })
-  pdf.textBox(event.description || event.content || event.notes || 'No chronicle text recorded.', 100, 320, 600, 14, { color: theme.palette.text, lineHeight: 22, maxLines: 7 })
+const createTimelinePages = (event, projectData, theme, index, eyebrow = 'Timeline & History', section = 'Timeline') => {
+  const title = event.title || `Event ${index + 1}`
   const related = relatedEntries(event, projectData, 'timeline')
-  if (related.length) {
-    pdf.text('LINKED RECORDS', 100, 154, 9, { bold: true, color: theme.palette.accent, tracking: 1 })
-    pdf.textBox(joinNames(related, 'title', 6), 100, 134, 600, 10, { color: theme.palette.muted, lineHeight: 14, maxLines: 2 })
+  const items = makeArticleLineItems(event.description || event.content || event.notes || 'No chronicle text recorded.', related, 600)
+  const pages = []
+  const pdf = makePdfCanvas(theme)
+  pdf.pageBase(eyebrow, title, valueList(event.era, event.date, event.year, event.tags?.join(', ')).join(' - '))
+  const panelBottom = 58
+  pdf.rect(70, panelBottom, 700, 360, theme.palette.panel, theme.palette.accent, 1)
+  pdf.text(String(index + 1).padStart(2, '0'), 100, 372, 34, { bold: true, color: theme.palette.accent, maxWidth: 95 })
+  pdf.text(valueList(event.era, event.date, event.year).join(' / ') || 'Undated', 100, 342, 11, { bold: true, color: theme.palette.muted, tracking: 1, maxWidth: 600 })
+  let nextIndex = renderLineItems(pdf, items, 0, 100, 305, 600, panelBottom + 22, theme)
+  pages.push(pdfPage(section, title, pdfContent(pdf)))
+
+  let continuation = 2
+  while (nextIndex < items.length) {
+    const nextPdf = makePdfCanvas(theme)
+    const nextStart = nextPdf.pageBase(eyebrow, `${title} continued`, `Continuation ${continuation}`)
+    const nextPanelTop = Math.min(488, nextStart - 18)
+    nextPdf.rect(56, panelBottom, 730, nextPanelTop - panelBottom, theme.palette.panel, theme.palette.accent, 1)
+    nextIndex = renderLineItems(nextPdf, items, nextIndex, 82, nextPanelTop - 34, 670, panelBottom + 22, theme)
+    pages.push(pdfPage(section, `${title} continued ${continuation}`, pdfContent(nextPdf)))
+    continuation += 1
   }
-  return pdf.content()
+  return pages
 }
 
 const createRelationshipsPage = (characters, theme) => {
@@ -960,22 +1201,22 @@ const createRelationshipsPage = (characters, theme) => {
     const x = 55 + col * 245
     const y = 420 - row * 115
     pdf.rect(x, y - 84, 210, 84, theme.palette.panel, theme.palette.border, 0.8)
-    pdf.text(name, x + 14, y - 24, 15, { bold: true, color: theme.palette.text })
-    pdf.text(`${members.length} ${members.length === 1 ? 'member' : 'members'}`.toUpperCase(), x + 14, y - 43, 7, { bold: true, color: theme.palette.accent, tracking: 0.8 })
+    pdf.text(name, x + 14, y - 24, 15, { bold: true, color: theme.palette.text, maxWidth: 180 })
+    pdf.text(`${members.length} ${members.length === 1 ? 'member' : 'members'}`.toUpperCase(), x + 14, y - 43, 7, { bold: true, color: theme.palette.accent, tracking: 0.8, maxWidth: 180 })
     pdf.textBox(members.map(member => member.name).filter(Boolean).join(', '), x + 14, y - 59, 180, 9, { color: theme.palette.muted, lineHeight: 12, maxLines: 2 })
   })
-  const links = characters.flatMap(character => (character.relationships ?? []).map(rel => {
+  const links = characters.flatMap(character => getRelationshipLinks(character).map(rel => {
     const target = characters.find(item => item.id === rel.targetId)
     return target ? `${character.name} - ${rel.type || 'linked'} - ${target.name}` : ''
   })).filter(Boolean)
-  pdf.rect(55, 76, 730, 150, theme.palette.panel, theme.palette.accent, 1)
-  pdf.text('RELATIONSHIP INDEX', 72, 198, 11, { bold: true, color: theme.palette.text })
-  links.slice(0, 14).forEach((link, index) => {
-    const col = index < 7 ? 0 : 1
-    const row = index % 7
-    pdf.text(link, 72 + col * 355, 174 - row * 17, 9, { color: theme.palette.muted })
+  pdf.rect(55, 58, 730, 130, theme.palette.panel, theme.palette.accent, 1)
+  pdf.text('RELATIONSHIP INDEX', 72, 164, 11, { bold: true, color: theme.palette.text, maxWidth: 690 })
+  links.slice(0, 12).forEach((link, index) => {
+    const col = index < 6 ? 0 : 1
+    const row = index % 6
+    pdf.text(link, 72 + col * 355, 141 - row * 15, 8.5, { color: theme.palette.muted, maxWidth: 320 })
   })
-  return pdf.content()
+  return pdfContent(pdf)
 }
 
 const createOutlinePages = (projectData, theme) => {
@@ -989,11 +1230,11 @@ const createOutlinePages = (projectData, theme) => {
       const x = 60 + col * 365
       const y = Math.min(420, contentStartY - 24) - row * 80
       pdf.rect(x, y - 58, 320, 58, theme.palette.panel, theme.palette.border, 0.8)
-      pdf.text(chapter.title || `Chapter ${index + 1}`, x + 14, y - 20, 13, { bold: true, color: theme.palette.text })
+      pdf.text(chapter.title || `Chapter ${index + 1}`, x + 14, y - 20, 13, { bold: true, color: theme.palette.text, maxWidth: 220 })
       pdf.textBox(chapter.synopsis || `${scenes.length} scenes`, x + 14, y - 38, 290, 9, { color: theme.palette.muted, lineHeight: 12, maxLines: 2 })
-      pdf.text(`${scenes.reduce((sum, scene) => sum + wordCount(scene.content), 0).toLocaleString()} words`, x + 246, y - 20, 8, { bold: true, color: theme.palette.accent })
+      pdf.text(`${scenes.reduce((sum, scene) => sum + wordCount(scene.content), 0).toLocaleString()} words`, x + 246, y - 20, 8, { bold: true, color: theme.palette.accent, maxWidth: 60 })
     })
-    pages.push(pdfPage('Notes and Chapters', act.title || `Act ${actIndex + 1}`, pdf.content()))
+    pages.push(pdfPage('Notes and Chapters', act.title || `Act ${actIndex + 1}`, pdfContent(pdf)))
   })
   return pages
 }
@@ -1019,11 +1260,13 @@ const createPdfBytes = (pageContents, title) => {
   const plannedPages = []
   let nextId = 5
   pageDescriptors.forEach(page => {
+    const pageImages = page.images ?? []
     plannedPages.push({
       ...page,
       contentId: nextId++,
       pageId: nextId++,
       annotIds: (page.links ?? []).map(() => nextId++),
+      images: pageImages.map(image => ({ ...image, objectId: nextId++ })),
     })
   })
   const pageIds = plannedPages.map(page => page.pageId)
@@ -1041,6 +1284,15 @@ const createPdfBytes = (pageContents, title) => {
   outlineSections.forEach(section => {
     section.id = nextId++
     section.children.forEach(child => { child.id = nextId++ })
+  })
+
+  plannedPages.forEach(page => {
+    ;(page.images ?? []).forEach(image => {
+      offsets[image.objectId] = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+      write(`${image.objectId} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`)
+      write(image.bytes)
+      write('\nendstream\nendobj\n')
+    })
   })
 
   plannedPages.forEach(page => {
@@ -1063,7 +1315,10 @@ const createPdfBytes = (pageContents, title) => {
   plannedPages.forEach(page => {
     const validAnnots = page.annotIds.filter(Boolean)
     const annots = validAnnots.length ? ` /Annots [${validAnnots.map(id => `${id} 0 R`).join(' ')}]` : ''
-    addObject(page.pageId, `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${A4_LANDSCAPE.width} ${A4_LANDSCAPE.height}] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >> >> /Contents ${page.contentId} 0 R${annots} >>`)
+    const xObjects = (page.images ?? []).length
+      ? ` /XObject << ${page.images.map(image => `/${image.name} ${image.objectId} 0 R`).join(' ')} >>`
+      : ''
+    addObject(page.pageId, `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${A4_LANDSCAPE.width} ${A4_LANDSCAPE.height}] /Resources << /Font << /F1 1 0 R /F2 2 0 R /F3 3 0 R >>${xObjects} >> /Contents ${page.contentId} 0 R${annots} >>`)
   })
   addObject(pagesId, `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`)
 
@@ -1104,7 +1359,7 @@ const createProjectPdfPages = (projectData, theme) => {
   const records = []
   if (enabled.has('characters')) {
     sortByTitle(projectData.characters, 'name').forEach((character, index) => {
-      records.push(pdfPage('Characters', character.name || `Character ${index + 1}`, createCharacterPage(character, projectData, theme, index)))
+      records.push(...createCharacterPages(character, projectData, theme, index))
     })
   }
   if (enabled.has('familytree') && (projectData.characters ?? []).length) {
@@ -1112,7 +1367,8 @@ const createProjectPdfPages = (projectData, theme) => {
   }
   if (enabled.has('locations')) {
     sortByTitle(projectData.locations, 'name').forEach(location => {
-      records.push(pdfPage('Locations', location.name || 'Unnamed Location', createArticlePage({
+      records.push(...createArticlePages({
+        section: 'Locations',
         eyebrow: 'Encyclopedia Article',
         title: location.name || 'Unnamed Location',
         subtitle: valueList(location.type, location.region, location.tags?.join(', ')).join(' - '),
@@ -1120,12 +1376,13 @@ const createProjectPdfPages = (projectData, theme) => {
         related: relatedEntries(location, projectData, 'location'),
         artLabel: 'Location Art',
         initial: firstLetter(location.name).replace(/&.*;/, ''),
-      }, theme)))
+      }, theme))
     })
   }
   if (enabled.has('factions')) {
     sortByTitle(projectData.factions, 'name').forEach(faction => {
-      records.push(pdfPage('Factions', faction.name || 'Unnamed Faction', createArticlePage({
+      records.push(...createArticlePages({
+        section: 'Factions',
         eyebrow: 'Faction Dossier',
         title: faction.name || 'Unnamed Faction',
         subtitle: valueList(faction.type, faction.leader && `Led by ${faction.leader}`, faction.status).join(' - '),
@@ -1133,12 +1390,13 @@ const createProjectPdfPages = (projectData, theme) => {
         related: relatedEntries(faction, projectData, 'faction'),
         artLabel: 'Faction Seal',
         initial: firstLetter(faction.name).replace(/&.*;/, ''),
-      }, theme)))
+      }, theme))
     })
   }
   if (enabled.has('lore')) {
     sortByTitle(projectData.loreEntries).forEach(entry => {
-      records.push(pdfPage('Lore', entry.title || 'Untitled Lore Entry', createArticlePage({
+      records.push(...createArticlePages({
+        section: 'Lore',
         eyebrow: 'Lore Encyclopedia',
         title: entry.title || 'Untitled Lore Entry',
         subtitle: valueList(entry.category || 'Uncategorized', entry.tags?.join(', ')).join(' - '),
@@ -1146,22 +1404,23 @@ const createProjectPdfPages = (projectData, theme) => {
         related: relatedEntries(entry, projectData, 'lore'),
         artLabel: 'Lore Plate',
         initial: firstLetter(entry.title).replace(/&.*;/, ''),
-      }, theme)))
+      }, theme))
     })
   }
   if (enabled.has('timeline')) {
     sortByOrder(projectData.timeline).forEach((event, index) => {
-      records.push(pdfPage('Timeline', event.title || `Event ${index + 1}`, createTimelinePage(event, projectData, theme, index, 'Timeline & History')))
+      records.push(...createTimelinePages(event, projectData, theme, index, 'Timeline & History', 'Timeline'))
     })
   }
   if (enabled.has('worldhistory')) {
     sortByOrder(projectData.worldHistory).forEach((event, index) => {
-      records.push(pdfPage('World History', event.title || `History ${index + 1}`, createTimelinePage(event, projectData, theme, index, 'World History')))
+      records.push(...createTimelinePages(event, projectData, theme, index, 'World History', 'World History'))
     })
   }
   if (enabled.has('map')) {
     ;(projectData.maps ?? []).forEach(map => {
-      records.push(pdfPage('Maps', map.name || 'Untitled Map', createArticlePage({
+      records.push(...createArticlePages({
+        section: 'Maps',
         eyebrow: 'Cartography',
         title: map.name || 'Untitled Map',
         subtitle: valueList(map.mapType, map.mapLabels?.length && `${map.mapLabels.length} labels`, map.mapRegions?.length && `${map.mapRegions.length} regions`).join(' - '),
@@ -1169,13 +1428,14 @@ const createProjectPdfPages = (projectData, theme) => {
         related: [],
         artLabel: 'Map Plate',
         initial: firstLetter(map.name || 'Map').replace(/&.*;/, ''),
-      }, theme)))
+      }, theme))
     })
   }
   if (enabled.has('outline')) records.push(...createOutlinePages(projectData, theme))
   if (enabled.has('ideas')) {
     sortByTitle(projectData.ideaEntries).forEach(entry => {
-      records.push(pdfPage('Notes and Chapters', entry.title || 'Untitled Note', createArticlePage({
+      records.push(...createArticlePages({
+        section: 'Notes and Chapters',
         eyebrow: 'Field Notes',
         title: entry.title || 'Untitled Note',
         subtitle: valueList(entry.tags?.join(', ')).join(' - '),
@@ -1183,7 +1443,7 @@ const createProjectPdfPages = (projectData, theme) => {
         related: [],
         artLabel: 'Notes',
         initial: firstLetter(entry.title || 'N').replace(/&.*;/, ''),
-      }, theme)))
+      }, theme))
     })
   }
   const tocLineCount = [...new Set(records.map(record => record.section))].length + records.length
@@ -1195,15 +1455,16 @@ const createProjectPdfPages = (projectData, theme) => {
   ]
 }
 
-export const createProjectPdfBlob = (projectData, options = {}) => {
+export const createProjectPdfBlob = async (projectData, options = {}) => {
   const theme = getExportPdfTheme(options.themeId)
-  const pages = createProjectPdfPages(projectData, theme)
-  const bytes = createPdfBytes(pages, projectData.project?.title || 'Project Encyclopaedia')
+  const preparedData = await prepareProjectPdfData(projectData)
+  const pages = createProjectPdfPages(preparedData, theme)
+  const bytes = createPdfBytes(pages, preparedData.project?.title || 'Project Encyclopaedia')
   return new Blob([bytes], { type: 'application/pdf' })
 }
 
-export const downloadProjectPdf = (projectData, options = {}) => {
-  const blob = createProjectPdfBlob(projectData, options)
+export const downloadProjectPdf = async (projectData, options = {}) => {
+  const blob = await createProjectPdfBlob(projectData, options)
   downloadBlob(blob, getProjectPdfFilename(projectData.project))
 }
 
@@ -1240,7 +1501,7 @@ const makeProjectPages = (projectData, theme) => {
     <div class="toc-grid">
       ${[
         ['Characters', projectData.characters?.length ?? 0, enabled.has('characters')],
-        ['Relationships', projectData.characters?.filter(c => c.familyGroup || c.relationships?.length)?.length ?? 0, enabled.has('familytree')],
+        ['Relationships', projectData.characters?.filter(c => c.familyGroup || getRelationshipLinks(c).length)?.length ?? 0, enabled.has('familytree')],
         ['Factions', projectData.factions?.length ?? 0, enabled.has('factions')],
         ['Locations', projectData.locations?.length ?? 0, enabled.has('locations')],
         ['Lore', projectData.loreEntries?.length ?? 0, enabled.has('lore')],
@@ -1487,11 +1748,26 @@ export const createProjectVisualPdfHtml = (projectData, options = {}) => {
 </head>
 <body>
   ${makeProjectPages(projectData, theme).join('')}
-  <script>document.title = ${JSON.stringify(filename)};</script>
+  <script>
+    document.title = ${JSON.stringify(filename)};
+    window.addEventListener('load', () => setTimeout(() => window.print(), 400));
+  </script>
 </body>
 </html>`
 }
 
 export const openProjectVisualPdf = (projectData, options = {}) => {
-  downloadProjectPdf(projectData, options)
+  const html = createProjectVisualPdfHtml(projectData, options)
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const win = window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+  if (!win) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = getProjectPdfFilename(projectData.project).replace('.pdf', '.html')
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
 }

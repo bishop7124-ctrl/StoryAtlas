@@ -18,6 +18,16 @@ const CATEGORIES = [
 ]
 
 const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.id, c]))
+const CATEGORY_COLORS = ['#8b8fff', '#ef4444', '#f59e0b', '#22c55e', '#f97316', '#94a3b8', '#14b8a6', '#ec4899']
+const slugCategory = value => String(value || 'other').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'other'
+const getScheduleCategories = project => {
+  const configured = project?.categoryOptions?.schedule
+  const labels = Array.isArray(configured) && configured.length ? configured : CATEGORIES.map(cat => cat.label)
+  return labels.map((label, index) => {
+    const builtIn = CATEGORIES.find(cat => cat.label.toLowerCase() === String(label).toLowerCase())
+    return builtIn || { id: slugCategory(label), label, color: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }
+  })
+}
 
 const INPUT_STYLE = {
   width: '100%', background: 'var(--bg-main)', border: '1px solid var(--border)',
@@ -29,7 +39,7 @@ const LABEL_STYLE = { display: 'block', color: 'var(--text-muted)', fontSize: 12
 
 // ─── Event modal ─────────────────────────────────────────────────────────────
 
-function EventModal({ event, prefillDay, prefillMonth, prefillYear, store, onClose }) {
+function EventModal({ event, prefillDay, prefillMonth, prefillYear, store, categories, onClose }) {
   const isEdit = Boolean(event)
   const [form, setForm] = useState({
     title: event?.title ?? '',
@@ -124,7 +134,7 @@ function EventModal({ event, prefillDay, prefillMonth, prefillYear, store, onClo
           <div>
             <label style={{ ...LABEL_STYLE, marginBottom: 6 }}>Category</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {CATEGORIES.map(cat => (
+              {categories.map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => setForm(prev => ({ ...prev, category: cat.id }))}
@@ -208,8 +218,8 @@ function EventModal({ event, prefillDay, prefillMonth, prefillYear, store, onClo
 
 // ─── Event detail popover ─────────────────────────────────────────────────────
 
-function EventPopover({ event, store, onEdit, onClose }) {
-  const cat = CAT_MAP[event.category] || CAT_MAP.other
+function EventPopover({ event, store, categoriesById, onEdit, onClose }) {
+  const cat = categoriesById[event.category] || CAT_MAP[event.category] || CAT_MAP.other
   const chars = (event.linkedCharacters ?? [])
     .map(id => store.characters?.find(c => c.id === id)?.name).filter(Boolean)
   const locs = (event.linkedLocations ?? [])
@@ -278,6 +288,8 @@ export default function ScheduleCalendar({ store }) {
   const [modal, setModal] = useState(null)
 
   const events = store.storySchedule ?? []
+  const categories = useMemo(() => getScheduleCategories(store.activeNovel), [store.activeNovel?.categoryOptions?.schedule])
+  const categoriesById = useMemo(() => Object.fromEntries(categories.map(cat => [cat.id, cat])), [categories])
 
   const prevMonth = () => {
     if (viewMonth === 1) { setViewMonth(12); setViewYear(y => y - 1) }
@@ -411,7 +423,7 @@ export default function ScheduleCalendar({ store }) {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           {dayEvs.slice(0, 3).map(ev => {
-                            const cat = CAT_MAP[ev.category] || CAT_MAP.other
+                            const cat = categoriesById[ev.category] || CAT_MAP[ev.category] || CAT_MAP.other
                             const isStartDay = ev.day === day && ev.month === viewMonth
                             return (
                               <div
@@ -451,7 +463,7 @@ export default function ScheduleCalendar({ store }) {
 
             {/* Legend */}
             <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap', paddingLeft: 2 }}>
-              {CATEGORIES.map(cat => (
+              {categories.map(cat => (
                 <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <div style={{ width: 9, height: 9, borderRadius: 3, background: cat.color }} />
                   <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{cat.label}</span>
@@ -479,7 +491,7 @@ export default function ScheduleCalendar({ store }) {
                 {[...monthEvents]
                   .sort((a, b) => (a.year - b.year) || (a.month - b.month) || (a.day - b.day))
                   .map(ev => {
-                    const cat = CAT_MAP[ev.category] || CAT_MAP.other
+                    const cat = categoriesById[ev.category] || CAT_MAP[ev.category] || CAT_MAP.other
                     const chars = (ev.linkedCharacters ?? [])
                       .map(id => store.characters?.find(c => c.id === id)?.name).filter(Boolean)
                     return (
@@ -542,6 +554,7 @@ export default function ScheduleCalendar({ store }) {
           prefillMonth={viewMonth}
           prefillYear={viewYear}
           store={store}
+          categories={categories}
           onClose={closeModal}
         />
       )}
@@ -552,6 +565,7 @@ export default function ScheduleCalendar({ store }) {
           prefillMonth={modal.event.month}
           prefillYear={modal.event.year}
           store={store}
+          categories={categories}
           onClose={closeModal}
         />
       )}
@@ -559,6 +573,7 @@ export default function ScheduleCalendar({ store }) {
         <EventPopover
           event={modal.event}
           store={store}
+          categoriesById={categoriesById}
           onEdit={() => setModal({ type: 'edit', event: modal.event })}
           onClose={closeModal}
         />

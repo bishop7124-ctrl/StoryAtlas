@@ -145,7 +145,7 @@ body {
   position: fixed;
   right: max(14px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
-  z-index: 7900;
+  z-index: 35;
   pointer-events: none;
   user-select: none;
   padding: 6px 10px;
@@ -1334,6 +1334,7 @@ textarea:focus {
 .studio-sheet-backdrop.is-centered {
   justify-content: center;
   align-items: center;
+  padding: clamp(10px, 3vw, 24px);
 }
 
 .studio-sheet.is-centered {
@@ -1343,6 +1344,7 @@ textarea:focus {
 
 .studio-sheet,
 .modal {
+  position: relative;
   width: min(780px, calc(100vw - 26px));
   max-height: calc(100vh - 26px);
   margin: 13px;
@@ -1356,6 +1358,10 @@ textarea:focus {
     linear-gradient(180deg, color-mix(in srgb, var(--studio-paper) 84%, var(--bg-nav)), color-mix(in srgb, var(--bg-nav) 84%, var(--bg-main)));
   background-size: 100% 30px, auto;
   box-shadow: -28px 0 70px rgba(0,0,0,.36);
+}
+
+.studio-sheet.is-centered:not(.is-narrow) {
+  width: min(860px, calc(100vw - 32px));
 }
 
 .studio-sheet.is-narrow { width: min(560px, calc(100vw - 26px)); }
@@ -1384,6 +1390,73 @@ textarea:focus {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+}
+
+.save-changes-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, #000 54%, transparent);
+  backdrop-filter: blur(4px);
+}
+
+.save-changes-card {
+  width: min(360px, 100%);
+  border: 1px solid color-mix(in srgb, var(--border) 74%, var(--accent) 26%);
+  border-radius: 10px;
+  padding: 18px;
+  background: var(--bg-nav);
+  box-shadow: 0 24px 70px rgba(0,0,0,.42);
+}
+
+.save-changes-card h3 {
+  margin: 4px 0 8px;
+  color: var(--text-main);
+  font-size: 18px;
+}
+
+.save-changes-card p:not(.studio-kicker) {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.save-changes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .studio-sheet {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    margin: 10px;
+  }
+
+  .studio-sheet header,
+  .studio-sheet-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .studio-sheet .grid.grid-cols-2,
+  .studio-sheet .grid.md\:grid-cols-2,
+  .studio-sheet .grid.md\:grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-sheet .col-span-1,
+  .studio-sheet .col-span-2,
+  .studio-sheet .md\:col-span-2 {
+    grid-column: 1 / -1;
+  }
 }
 
 .studio-topbar {
@@ -4466,9 +4539,25 @@ textarea:focus {
 }
 
 .overview-nav-card-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: .04em;
+}
+
+.overview-nav-card-label small {
+  flex-shrink: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .overview-nav-card-summary {
@@ -5192,6 +5281,13 @@ body {
 
 .overview-layout {
   width: min(100%, 1240px);
+  margin-inline: auto;
+}
+
+.overview-no-project {
+  min-height: min(560px, calc(100vh - 180px));
+  display: grid;
+  place-items: center;
 }
 
 .overview-hero {
@@ -5220,6 +5316,36 @@ body {
   line-height: 1.6;
 }
 
+.overview-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.overview-hero-actions button {
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-nav) 64%, transparent);
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  padding: 0 12px;
+}
+
+.overview-hero-actions button:first-child {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
+  background: var(--accent);
+  color: color-mix(in srgb, var(--bg-main) 88%, #000);
+}
+
+.overview-hero-actions button:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
 .overview-status {
   display: flex;
   flex-wrap: wrap;
@@ -5244,6 +5370,7 @@ body {
   gap: 10px;
   margin-top: 16px;
   border-bottom: 0;
+  width: 100%;
 }
 
 .overview-stat {
@@ -5270,15 +5397,19 @@ body {
 .overview-nav {
   gap: 10px;
   padding: 32px 0 20px;
+  width: 100%;
 }
 
 .overview-columns {
   gap: 14px;
   padding: 14px 0 70px;
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
 }
 
 .overview-section {
   padding: 16px;
+  min-width: 0;
 }
 
 .overview-section-head {
@@ -5345,8 +5476,14 @@ body {
 
 .analytics-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .analytics-card {
@@ -5564,6 +5701,10 @@ body {
   .analytics-card-wide {
     grid-template-columns: 1fr;
     grid-column: auto;
+  }
+
+  .overview-nav {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
   }
 
   .manuscript-focus-controls {
@@ -8734,6 +8875,210 @@ body {
   padding: 0 10px;
 }
 
+.project-settings-overlay {
+  backdrop-filter: blur(10px);
+}
+
+.project-settings-dialog {
+  max-width: calc(100vw - 28px);
+}
+
+.project-settings-sections {
+  align-items: start;
+  min-width: 0;
+}
+
+.project-settings-sections > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.project-settings-action-grid,
+.project-settings-theme-grid,
+.project-settings-form-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.project-settings-action-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-settings-theme-grid,
+.project-settings-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.project-settings-action-card,
+.project-settings-theme-button,
+.project-settings-small-button,
+.project-settings-backup-list button {
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--bg-nav) 55%, transparent);
+  color: var(--text-main);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+}
+
+.project-settings-action-card,
+.project-settings-theme-button {
+  min-height: 72px;
+  padding: 13px 14px;
+}
+
+.project-settings-action-card:hover,
+.project-settings-theme-button:hover,
+.project-settings-small-button:hover,
+.project-settings-backup-list button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--accent-fade);
+}
+
+.project-settings-action-card:disabled,
+.project-settings-theme-button:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+
+.project-settings-action-card strong,
+.project-settings-theme-button strong,
+.project-settings-backup-list strong,
+.project-settings-action-card span,
+.project-settings-theme-button span,
+.project-settings-backup-list span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-settings-action-card strong,
+.project-settings-theme-button strong,
+.project-settings-backup-list strong {
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.project-settings-action-card span,
+.project-settings-theme-button span,
+.project-settings-backup-list span {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.project-settings-small-button {
+  flex: none;
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 850;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.project-settings-form-grid label,
+.project-settings-form-grid label span,
+.project-settings-category-editor label,
+.project-settings-category-editor label span {
+  display: block;
+  min-width: 0;
+}
+
+.project-settings-form-grid label span,
+.project-settings-category-editor label span {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-settings-form-grid .field,
+.project-settings-category-editor .field {
+  width: 100%;
+  min-height: 34px;
+  padding: 8px 10px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+  box-sizing: border-box;
+}
+
+.project-settings-category-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.project-settings-category-editor textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.project-settings-checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.project-settings-checks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.project-settings-checks label span,
+.project-settings-checks label > :not(input) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-settings-checks input {
+  accent-color: var(--accent);
+}
+
+.project-settings-backup-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.project-settings-backup-list button {
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+}
+
+.project-settings-backup-list p {
+  margin: 0;
+  border: 1px dashed color-mix(in srgb, var(--border) 55%, transparent);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .project-settings-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Series dash cards (below active project hero) ───────────────────────── */
 .dash-series-grid {
   display: grid;
@@ -8744,7 +9089,6 @@ body {
   position: relative;
   min-height: 230px;
   border-radius: 8px;
-  overflow: hidden;
   border: 1px solid var(--border);
   background: var(--surface);
   cursor: pointer;
@@ -8762,6 +9106,7 @@ body {
   position: relative;
   height: 132px;
   overflow: hidden;
+  border-radius: 8px 8px 0 0;
 }
 .series-dash-card-cover img {
   position: absolute;

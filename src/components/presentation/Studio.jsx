@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import YOWLogo from '../brand/YOWLogo'
 
 const cx = (...classes) => classes.filter(Boolean).join(' ')
@@ -189,10 +189,68 @@ export function StudioEmpty({ title, body, action, variant = 'page' }) {
 
 export function StudioSheet({ title, eyebrow = 'Editor', onClose, children, narrow = false, centered = false }) {
   const dialogRef = useRef(null)
+  const pendingSubmitRef = useRef(false)
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
   useEffect(() => { dialogRef.current?.focus() }, [])
 
+  const requestClose = () => {
+    if (dirty) {
+      setConfirmClose(true)
+      return
+    }
+    onClose()
+  }
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.key === 'Escape') requestClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  })
+
+  const discardAndClose = () => {
+    setDirty(false)
+    setConfirmClose(false)
+    onClose()
+  }
+
+  const saveAndClose = () => {
+    const form = dialogRef.current?.querySelector('form')
+    if (!form) {
+      discardAndClose()
+      return
+    }
+    pendingSubmitRef.current = true
+    form.requestSubmit()
+  }
+
+  const handleSubmitCapture = () => {
+    pendingSubmitRef.current = false
+    setDirty(false)
+    setConfirmClose(false)
+  }
+
+  const handleInvalidCapture = () => {
+    if (pendingSubmitRef.current) {
+      pendingSubmitRef.current = false
+      setConfirmClose(false)
+    }
+  }
+
+  const handleClickCapture = (event) => {
+    if (event.target.closest?.('.save-changes-prompt')) return
+    const button = event.target.closest?.('button')
+    if (!button || button.type !== 'button') return
+    if (button.textContent?.trim().toLowerCase() !== 'cancel') return
+    event.preventDefault()
+    event.stopPropagation()
+    requestClose()
+  }
+
   return (
-    <div className={cx('studio-sheet-backdrop', centered && 'is-centered')} onClick={onClose}>
+    <div className={cx('studio-sheet-backdrop', centered && 'is-centered')}>
       <section
         ref={dialogRef}
         role="dialog"
@@ -201,15 +259,34 @@ export function StudioSheet({ title, eyebrow = 'Editor', onClose, children, narr
         tabIndex={-1}
         className={cx('studio-sheet', narrow && 'is-narrow', centered && 'is-centered')}
         onClick={e => e.stopPropagation()}
+        onClickCapture={handleClickCapture}
+        onInputCapture={() => setDirty(true)}
+        onChangeCapture={() => setDirty(true)}
+        onSubmitCapture={handleSubmitCapture}
+        onInvalidCapture={handleInvalidCapture}
       >
         <header>
           <div>
             <p className="studio-kicker">{eyebrow}</p>
             <h2 id="studio-sheet-heading">{title}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close">×</button>
+          <button type="button" onClick={requestClose} aria-label="Close">×</button>
         </header>
         <div className="studio-sheet-body">{children}</div>
+        {confirmClose && (
+          <div className="save-changes-prompt" role="alertdialog" aria-modal="true" aria-labelledby="save-changes-title">
+            <div className="save-changes-card">
+              <p className="studio-kicker">Unsaved changes</p>
+              <h3 id="save-changes-title">Save changes?</h3>
+              <p>There are changes in this editor that have not been saved yet.</p>
+              <div className="save-changes-actions">
+                <button type="button" className="btn btn-primary" onClick={saveAndClose}>Save</button>
+                <button type="button" className="btn btn-secondary" onClick={discardAndClose}>Discard</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirmClose(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )

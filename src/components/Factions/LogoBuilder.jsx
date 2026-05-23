@@ -5,16 +5,22 @@ import { DEFAULT_LOGO_BACKGROUND, normalizeFactionLogo } from './logoData'
 const uid = () => Math.random().toString(36).slice(2)
 
 const SHAPES = [
-  { type: 'circle',   label: 'Circle'   },
-  { type: 'square',   label: 'Square'   },
-  { type: 'triangle', label: 'Triangle' },
-  { type: 'diamond',  label: 'Diamond'  },
-  { type: 'star',     label: 'Star'     },
-  { type: 'hexagon',  label: 'Hexagon'  },
-  { type: 'cross',    label: 'Cross'    },
-  { type: 'shield',   label: 'Shield'   },
-  { type: 'crescent', label: 'Moon'     },
-  { type: 'arrow',    label: 'Arrow'    },
+  { type: 'circle',    label: 'Circle'    },
+  { type: 'square',    label: 'Square'    },
+  { type: 'triangle',  label: 'Triangle'  },
+  { type: 'diamond',   label: 'Diamond'   },
+  { type: 'star',      label: 'Star'      },
+  { type: 'hexagon',   label: 'Hexagon'   },
+  { type: 'pentagon',  label: 'Pentagon'  },
+  { type: 'octagon',   label: 'Octagon'   },
+  { type: 'cross',     label: 'Cross'     },
+  { type: 'shield',    label: 'Shield'    },
+  { type: 'ring',      label: 'Ring'      },
+  { type: 'crescent',  label: 'Moon'      },
+  { type: 'arrow',     label: 'Arrow'     },
+  { type: 'lightning', label: 'Lightning' },
+  { type: 'flame',     label: 'Flame'     },
+  { type: 'teardrop',  label: 'Teardrop'  },
 ]
 
 const COLORS = [
@@ -30,7 +36,13 @@ const BACKGROUND_COLORS = [
   '#3a1630', '#111111', '#f4f1e8', '#ffffff',
 ]
 
-const BTN = 'px-2.5 py-1 rounded text-xs font-bold border border-[var(--border)] bg-[var(--bg-nav)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all text-[var(--text-muted)]'
+const checkerboard = {
+  backgroundColor: '#ffffff',
+  backgroundImage:
+    'linear-gradient(45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.16) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.16) 75%)',
+  backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+  backgroundSize: '16px 16px',
+}
 
 export default function LogoBuilder({ logo, onChange }) {
   const [selectedIdx, setSelectedIdx] = useState(null)
@@ -52,31 +64,30 @@ export default function LogoBuilder({ logo, onChange }) {
     updateLogo({ shapes: shapes.map((s, i) => i === selectedIdx ? { ...s, ...updates } : s) })
   }
 
-  const removeSelected = () => {
-    if (selectedIdx === null) return
-    updateLogo({ shapes: shapes.filter((_, i) => i !== selectedIdx) })
-    setSelectedIdx(null)
+  const removeAtIdx = (idx) => {
+    updateLogo({ shapes: shapes.filter((_, i) => i !== idx) })
+    setSelectedIdx(prev => {
+      if (prev === idx) return null
+      if (prev !== null && prev > idx) return prev - 1
+      return prev
+    })
   }
 
-  const moveLayer = (dir) => {
-    if (selectedIdx === null) return
+  // dir: +1 moves toward top of stack (higher index), -1 moves toward bottom
+  const moveLayer = (fromIdx, dir) => {
+    const toIdx = fromIdx + dir
+    if (toIdx < 0 || toIdx >= shapes.length) return
     const next = [...shapes]
-    const target = selectedIdx + dir
-    if (target < 0 || target >= next.length) return
-    ;[next[selectedIdx], next[target]] = [next[target], next[selectedIdx]]
+    ;[next[fromIdx], next[toIdx]] = [next[toIdx], next[fromIdx]]
     updateLogo({ shapes: next })
-    setSelectedIdx(target)
+    setSelectedIdx(prev => {
+      if (prev === fromIdx) return toIdx
+      if (prev === toIdx) return fromIdx
+      return prev
+    })
   }
 
   const clearAll = () => { updateLogo({ shapes: [] }); setSelectedIdx(null) }
-
-  const checkerboard = {
-    backgroundColor: '#ffffff',
-    backgroundImage:
-      'linear-gradient(45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(-45deg, rgba(0,0,0,0.16) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.16) 75%), linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.16) 75%)',
-    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
-    backgroundSize: '16px 16px',
-  }
 
   return (
     <div className="flex gap-5">
@@ -153,17 +164,6 @@ export default function LogoBuilder({ logo, onChange }) {
                 }}
               />
             ))}
-            <button
-              type="button"
-              onClick={() => updateLogo({ backgroundTransparent: true })}
-              title="Transparent background"
-              className="w-5 h-5 rounded border-2 transition-all hover:scale-110"
-              style={{
-                ...checkerboard,
-                borderColor: backgroundTransparent ? 'var(--accent)' : 'transparent',
-                outline: '1px solid rgba(255,255,255,0.15)',
-              }}
-            />
             <label title="Custom background colour" className="w-5 h-5 rounded border border-[var(--border)] overflow-hidden cursor-pointer hover:scale-110 transition-all flex-shrink-0">
               <input
                 type="color"
@@ -179,26 +179,78 @@ export default function LogoBuilder({ logo, onChange }) {
         {/* Shape palette */}
         <div>
           <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-2">Add Shape</p>
-          <div className="grid grid-cols-5 gap-1.5">
+          <div className="grid grid-cols-5 gap-1">
             {SHAPES.map(s => (
               <button
                 key={s.type}
                 type="button"
                 onClick={() => addShape(s.type)}
-                className="flex flex-col items-center gap-1 p-1.5 rounded border border-[var(--border)] bg-[var(--bg-nav)] hover:border-[var(--accent)] hover:bg-[var(--accent-fade)] transition-all group"
+                className="flex flex-col items-center gap-0.5 p-1.5 rounded border border-[var(--border)] bg-[var(--bg-nav)] hover:border-[var(--accent)] hover:bg-[var(--accent-fade)] transition-all group"
               >
-                <svg viewBox="0 0 100 100" className="w-7 h-7 text-[var(--text-muted)] group-hover:text-[var(--accent)]">
+                <svg viewBox="0 0 100 100" className="w-6 h-6 text-[var(--text-muted)] group-hover:text-[var(--accent)]">
                   {getShapeElement({ type: s.type, cx: 50, cy: 50, size: 38, color: 'currentColor' })}
                 </svg>
-                <span className="text-[9px] text-[var(--text-muted)] group-hover:text-[var(--accent)] leading-none">{s.label}</span>
+                <span className="text-[8px] text-[var(--text-muted)] group-hover:text-[var(--accent)] leading-none">{s.label}</span>
               </button>
             ))}
           </div>
         </div>
 
+        {/* Layer list */}
+        {shapes.length > 0 && (
+          <div>
+            <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-1.5">Layers</p>
+            <div className="space-y-0.5 max-h-36 overflow-y-auto border border-[var(--border)] rounded-lg p-1 bg-[var(--bg-main)]">
+              {[...shapes].reverse().map((shape, reversedIdx) => {
+                const actualIdx = shapes.length - 1 - reversedIdx
+                const isSelected = actualIdx === selectedIdx
+                return (
+                  <div
+                    key={shape.id || actualIdx}
+                    onClick={() => setSelectedIdx(actualIdx)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-[var(--accent-fade)] border border-[var(--accent)]/30'
+                        : 'hover:bg-[var(--bg-nav)] border border-transparent'
+                    }`}
+                  >
+                    <svg viewBox="0 0 100 100" className="w-4 h-4 flex-shrink-0" style={{ color: shape.color }}>
+                      {getShapeElement({ ...shape, cx: 50, cy: 50, size: 40 })}
+                    </svg>
+                    <span className={`text-[11px] flex-1 truncate ${isSelected ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
+                      {SHAPES.find(s => s.type === shape.type)?.label || shape.type}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveLayer(actualIdx, -1) }}
+                      disabled={actualIdx === 0}
+                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-main)] disabled:opacity-20 w-4 text-center"
+                      title="Move backward (lower layer)"
+                    >↓</button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveLayer(actualIdx, 1) }}
+                      disabled={actualIdx === shapes.length - 1}
+                      className="text-[10px] text-[var(--text-muted)] hover:text-[var(--text-main)] disabled:opacity-20 w-4 text-center"
+                      title="Move forward (higher layer)"
+                    >↑</button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeAtIdx(actualIdx) }}
+                      className="text-[10px] text-red-500/40 hover:text-red-500 w-4 text-center ml-0.5"
+                      title="Remove layer"
+                    >✕</button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Selected shape properties */}
         {selected ? (
           <>
-            {/* Color swatches */}
+            {/* Color */}
             <div>
               <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest mb-2">Colour</p>
               <div className="flex flex-wrap gap-1.5 items-center">
@@ -267,19 +319,23 @@ export default function LogoBuilder({ logo, onChange }) {
               </div>
             </div>
 
-            {/* Layer & delete */}
-            <div className="flex gap-2">
-              <button type="button" onClick={() => moveLayer(-1)} className={BTN} title="Move forward (higher layer)">↑ Forward</button>
-              <button type="button" onClick={() => moveLayer(1)}  className={BTN} title="Move backward (lower layer)">↓ Back</button>
-              <button type="button" onClick={removeSelected} className="px-2.5 py-1 rounded text-xs font-bold border border-red-500/30 bg-[var(--bg-nav)] hover:border-red-500 hover:text-red-500 transition-all text-red-500/50 ml-auto">
-                Remove
+            {/* Remove */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => removeAtIdx(selectedIdx)}
+                className="px-2.5 py-1 rounded text-xs font-bold border border-red-500/30 bg-[var(--bg-nav)] hover:border-red-500 hover:text-red-500 transition-all text-red-500/50"
+              >
+                Remove Shape
               </button>
             </div>
           </>
         ) : (
-          <div className="py-6 text-center text-[var(--text-muted)] text-xs italic border border-dashed border-[var(--border)] rounded-lg">
-            {shapes.length === 0 ? 'Add a shape to get started' : 'Select a shape on the canvas to edit it'}
-          </div>
+          shapes.length > 0 && (
+            <div className="py-4 text-center text-[var(--text-muted)] text-xs italic border border-dashed border-[var(--border)] rounded-lg">
+              Select a shape on the canvas or in the layer list to edit it
+            </div>
+          )
         )}
       </div>
     </div>

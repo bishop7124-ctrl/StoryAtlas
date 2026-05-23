@@ -6,7 +6,7 @@ const LABEL = 'block form-label mb-1.5'
 
 const SUGGESTED_CATEGORIES = ['Magic System', 'Religion', 'History', 'Politics', 'Geography', 'Culture', 'Technology', 'Prophecy', 'Mythology', 'Other']
 
-function EntryForm({ entry, onSave, onCancel, characters, locations, existingCategories, existingTags }) {
+function EntryForm({ entry, onSave, onCancel, characters, locations, existingCategories, existingTags, configuredCategories }) {
   const [form, setForm] = useState({
     title: entry?.title || '',
     category: entry?.category || '',
@@ -17,7 +17,10 @@ function EntryForm({ entry, onSave, onCancel, characters, locations, existingCat
   })
   const [tagInput, setTagInput] = useState('')
 
-  const allCategories = useMemo(() => [...new Set([...SUGGESTED_CATEGORIES, ...existingCategories])], [existingCategories])
+  const allCategories = useMemo(
+    () => [...new Set([...(configuredCategories?.length ? configuredCategories : SUGGESTED_CATEGORIES), ...existingCategories])],
+    [configuredCategories, existingCategories],
+  )
   const toggleArray = (field, id) => {
     setForm(prev => ({
       ...prev,
@@ -140,6 +143,7 @@ export default function Lore({ store }) {
   const [collapsed, setCollapsed] = useState({})
   const [editing, setEditing] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
+  const configuredCategories = store.activeNovel?.categoryOptions?.lore || SUGGESTED_CATEGORIES
 
   const selected = loreEntries.find(e => e.id === selectedLoreEntryId) ?? null
 
@@ -251,7 +255,7 @@ export default function Lore({ store }) {
         {editing ? (
           <div className="max-w-4xl">
             <StudioPageHeader eyebrow="Notebook page" title={editTarget ? `Edit: ${editTarget.title}` : 'New Lore Entry'} />
-            <EntryForm entry={editTarget} onSave={handleSave} onCancel={() => { setEditing(false); setEditTarget(null) }} characters={characters} locations={locations} existingCategories={existingCategories} existingTags={existingTags} />
+            <EntryForm entry={editTarget} onSave={handleSave} onCancel={() => { setEditing(false); setEditTarget(null) }} characters={characters} locations={locations} existingCategories={existingCategories} existingTags={existingTags} configuredCategories={configuredCategories} />
           </div>
         ) : selected ? (
           <div className="max-w-4xl">

@@ -22,7 +22,25 @@ function getCurrentPeriodEnd(subscription) {
   return subscription.cancel_at || subscription.trial_end || subscription.ended_at
 }
 
-// Write subscription data to app_metadata for recurring plans
+// --------------------------------------------------------------------------
+// Upsert user_profiles row (storage + founder tracking).
+// Only called server-side with the service role key.
+// --------------------------------------------------------------------------
+async function upsertUserProfile(supabaseAdmin, userId, patch = {}) {
+  const { error } = await supabaseAdmin
+    .from('user_profiles')
+    .upsert(
+      { user_id: userId, ...patch, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    )
+  if (error) {
+    console.warn('[stripe-webhook] user_profiles upsert failed:', error.message)
+  }
+}
+
+// --------------------------------------------------------------------------
+// Write subscription data to app_metadata for recurring plans.
+// --------------------------------------------------------------------------
 async function updateSubscriptionMembership(supabaseAdmin, subscription, fallbackUserId) {
   const userId = subscription.metadata?.user_id
     || (typeof subscription.latest_invoice !== 'string'
@@ -56,8 +74,11 @@ async function updateSubscriptionMembership(supabaseAdmin, subscription, fallbac
     },
   })
 
-  // When a subscription is cancelled (status: cancelled), record was_monthly so the
-  // free tier knows to lock the active project selection
+  // Ensure a user_profiles row exists for storage tracking.
+  await upsertUserProfile(supabaseAdmin, userId, {})
+
+  // When a subscription is cancelled, record was_monthly so the free tier
+  // knows to lock the active project selection.
   if (subscription.status === 'canceled') {
     const userMeta = data?.user?.user_metadata || {}
     await supabaseAdmin.auth.admin.updateUserById(userId, {
@@ -69,10 +90,12 @@ async function updateSubscriptionMembership(supabaseAdmin, subscription, fallbac
   }
 }
 
-// Write lifetime plan data to app_metadata after a one-time payment
+// --------------------------------------------------------------------------
+// Write lifetime plan data to app_metadata after a one-time payment.
+// --------------------------------------------------------------------------
 async function activateLifetimePlan(supabaseAdmin, session) {
   const userId = session.metadata?.user_id || session.client_reference_id
-  const plan = session.metadata?.plan
+  const plan   = session.metadata?.plan
 
   if (!userId || !plan) {
     console.warn('[stripe-webhook] Missing user_id or plan for lifetime activation', session.id)
@@ -89,13 +112,20 @@ async function activateLifetimePlan(supabaseAdmin, session) {
   await supabaseAdmin.auth.admin.updateUserById(userId, {
     app_metadata: {
       ...existing,
-      stripe_customer_id:   customerId,
-      subscription_status:  'active',
-      subscription_plan:    plan,
+      stripe_customer_id:  customerId,
+      subscription_status: 'active',
+      subscription_plan:   plan,
     },
   })
+
+  // Create/update user_profiles row. Set is_founder flag for Founder purchases.
+  const profilePatch = { is_founder: plan === 'founder' }
+  await upsertUserProfile(supabaseAdmin, userId, profilePatch)
 }
 
+// --------------------------------------------------------------------------
+// Webhook handler
+// --------------------------------------------------------------------------
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -127,15 +157,15 @@ export default async function handler(req, res) {
         const session = event.data.object
 
         if (session.mode === 'payment') {
-          // One-time lifetime purchase — activate immediately
+          // One-time lifetime purchase — activate immediately.
           await activateLifetimePlan(supabaseAdmin, session)
         } else if (session.subscription) {
-          // Recurring subscription — retrieve full subscription object to get status
+          // Recurring subscription — retrieve full subscription object to get status.
           const subId = typeof session.subscription === 'string'
             ? session.subscription
             : session.subscription.id
           const sub = await stripe.subscriptions.retrieve(subId, { expand: ['latest_invoice'] })
-          // Carry the plan key from session metadata into subscription metadata if missing
+          // Carry the plan key from session metadata into subscription metadata if missing.
           if (!sub.metadata?.plan && session.metadata?.plan) {
             sub.metadata = { ...sub.metadata, plan: session.metadata.plan }
           }
