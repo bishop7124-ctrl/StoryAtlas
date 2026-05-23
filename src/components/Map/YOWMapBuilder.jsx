@@ -18,7 +18,7 @@ const OBJECT_TYPES = {
   river: { label: 'River', icon: '~', fill: 'transparent', stroke: '#3c93b8' },
   road: { label: 'Road', icon: '—', fill: 'transparent', stroke: '#8b6743' },
   border: { label: 'Border', icon: '⋯', fill: 'transparent', stroke: '#9b5ab8' },
-  shape: { label: 'Shape', icon: '○', fill: LAND_FILL, stroke: LAND_STROKE },
+  shape: { label: 'Land', icon: '▰', fill: LAND_FILL, stroke: LAND_STROKE },
 }
 
 const TOOLBAR_MODES = [
@@ -29,7 +29,7 @@ const TOOLBAR_MODES = [
   { id: 'river', label: 'River', icon: '~' },
   { id: 'road', label: 'Road', icon: '—' },
   { id: 'border', label: 'Border', icon: '⋯' },
-  { id: 'shape', label: 'Shape', icon: '○' },
+  { id: 'shape', label: 'Land', icon: '▰' },
   { id: 'stamp', label: 'Stamp', icon: '✦' },
   { id: 'label', label: 'Label', icon: 'T' },
   { id: 'location', label: 'Location', icon: '⌖' },
@@ -49,7 +49,7 @@ const MAP_TYPE_OPTIONS = [
 
 const STAMP_LIBRARY = [
   { id: 'mountains', name: 'Mountains', icon: '△', category: 'Terrain', mapTypes: ['world', 'region'], size: 116, fill: '#8a8068', stroke: '#3b3328', keywords: 'peaks range hills' },
-  { id: 'forest', name: 'Forest', icon: '♣', category: 'Terrain', mapTypes: ['world', 'region', 'local'], size: 112, fill: '#40683b', stroke: '#21381f', keywords: 'woods trees woodland' },
+  { id: 'forest', name: 'Forest', icon: '♠', category: 'Terrain', mapTypes: ['world', 'region', 'local'], size: 112, fill: '#40683b', stroke: '#21381f', keywords: 'woods trees woodland' },
   { id: 'trees', name: 'Trees', icon: '♠', category: 'Nature', mapTypes: ['region', 'local'], size: 74, fill: '#3f7142', stroke: '#203821', keywords: 'tree woods forest' },
   { id: 'city', name: 'City', icon: '●', category: 'Settlements', mapTypes: ['world', 'region', 'local'], size: 86, fill: '#b9854e', stroke: '#4c3320', keywords: 'settlement place urban' },
   { id: 'capital', name: 'Capital', icon: '★', category: 'Settlements', mapTypes: ['world', 'region'], size: 96, fill: '#c89a4b', stroke: '#4a2e16', keywords: 'kingdom seat city crown' },
@@ -95,6 +95,15 @@ function saveJson(key, value) {
 function normalizeMapType(value) {
   if (value === 'regional') return 'region'
   return MAP_TYPE_OPTIONS.some(option => option.value === value) ? value : 'region'
+}
+
+function objectTypeLabel(object) {
+  return OBJECT_TYPES[object?.type]?.label || object?.type || 'Object'
+}
+
+function objectDisplayName(object) {
+  const name = object?.metadata?.name || object?.type || 'Object'
+  return object?.type === 'shape' && name === 'Shape' ? 'Land' : name
 }
 
 function clamp(value, min, max) {
@@ -572,13 +581,18 @@ function shapeFromRect(start, end, shapeKind, index) {
     height: Math.max(MIN_SIZE, bottom - top),
     metadata: {
       ...base.metadata,
-      name: shapeKind === 'circle' ? 'Circle' : 'Rectangle',
+      name: shapeKind === 'circle' ? 'Round Land' : 'Land',
       text: '',
       fill: LAND_FILL,
       stroke: LAND_STROKE,
       shapeKind,
     },
   }, index)
+}
+
+function moveLandToBase(object, current) {
+  const minZ = Math.min(0, ...current.map(item => Number.isFinite(item.zIndex) ? item.zIndex : 0))
+  return { ...object, zIndex: minZ - 1 }
 }
 
 function objectContainsPoint(object, point) {
@@ -829,6 +843,12 @@ function drawOrganicPolygonObject(ctx, object, selected) {
 
   ctx.save()
   if (fill !== 'transparent') {
+    ctx.fillStyle = colorWithAlpha(fill, 0.86)
+    organicFaces.forEach(points => {
+      drawSmoothPath(ctx, points, true)
+      ctx.fill()
+    })
+
     const radius = Math.max(object.width, object.height) * 0.62
     const gradient = ctx.createRadialGradient(0, 0, Math.min(radius * 0.5, Math.max(1, radius * 0.08)), 0, 0, Math.max(2, radius))
     gradient.addColorStop(0, colorWithAlpha(fill, 0.92))
@@ -840,9 +860,8 @@ function drawOrganicPolygonObject(ctx, object, selected) {
       drawSmoothPath(ctx, points, true)
       ctx.fill()
     })
-    ctx.strokeStyle = gradient
-    ctx.lineWidth = Math.max(5, (meta.lineThickness || 2) * 2.2)
-    ctx.setLineDash([])
+    ctx.strokeStyle = colorWithAlpha(fill, 0.74)
+    ctx.lineWidth = Math.max(8, (meta.lineThickness || 2) * 3)
     organicFaces.forEach(points => {
       drawSmoothPath(ctx, points, true)
       ctx.stroke()
@@ -987,6 +1006,12 @@ function drawFantasyMarker(ctx, object, selected) {
   ctx.strokeStyle = selected ? '#1677ff' : colorWithAlpha(meta.stroke || '#3a2a16', 0.86)
   ctx.fillStyle = colorWithAlpha(meta.fill || '#8f6a33', 0.72)
   ctx.lineWidth = Math.max(2, radius * 0.08)
+
+  ctx.beginPath()
+  ctx.arc(0, 0, radius * 0.88, 0, Math.PI * 2)
+  ctx.fillStyle = colorWithAlpha(meta.fill || '#8f6a33', 0.28)
+  ctx.fill()
+  ctx.fillStyle = colorWithAlpha(meta.fill || '#8f6a33', 0.78)
 
   if (object.type === 'location') {
     ctx.beginPath()
@@ -1141,6 +1166,15 @@ function drawFantasyLabel(ctx, object) {
   ctx.lineJoin = 'round'
   const measuredWidth = Math.max(1, ctx.measureText(text).width)
   const scale = Math.min(1, Math.max(0.34, (object.width - 12) / measuredWidth))
+  ctx.save()
+  ctx.fillStyle = colorWithAlpha(meta.stroke || '#f8edd0', 0.58)
+  ctx.strokeStyle = colorWithAlpha(meta.fill || '#2a241b', 0.2)
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.roundRect(-object.width / 2, -object.height / 2, object.width, object.height, 8)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
   ctx.scale(scale, 1)
   const totalWidth = measuredWidth
   let cursor = -totalWidth / 2
@@ -1596,7 +1630,11 @@ export default function MapBuilder({ store }) {
   function hitTest(point) {
     for (let index = visibleObjects.length - 1; index >= 0; index -= 1) {
       const object = visibleObjects[index]
-      if (objectContainsPoint(object, point)) return object
+      if (!isLandObject(object) && objectContainsPoint(object, point)) return object
+    }
+    for (let index = visibleObjects.length - 1; index >= 0; index -= 1) {
+      const object = visibleObjects[index]
+      if (isLandObject(object) && objectContainsPoint(object, point)) return object
     }
     return null
   }
@@ -1629,7 +1667,10 @@ export default function MapBuilder({ store }) {
   function placeObjectAtPoint(object) {
     let selectedId = object.id
     updateObjects(current => {
-      const merged = mergeLandObjectIntoList(current, object)
+      const placed = object.type === 'shape' ? moveLandToBase(object, current) : object
+      const merged = placed.type === 'shape'
+        ? { objects: [...current, placed], selectedId: placed.id }
+        : mergeLandObjectIntoList(current, placed)
       selectedId = merged.selectedId
       return merged.objects
     })
@@ -1856,9 +1897,9 @@ export default function MapBuilder({ store }) {
       if (object.width > MIN_SIZE || object.height > MIN_SIZE) {
         let selectedId = object.id
         updateObjects(current => {
-          const merged = mergeLandObjectIntoList(current, object)
-          selectedId = merged.selectedId
-          return merged.objects
+          const placed = moveLandToBase(object, current)
+          selectedId = placed.id
+          return [...current, placed]
         })
         setSelectedIds([selectedId])
       }
@@ -1893,10 +1934,14 @@ export default function MapBuilder({ store }) {
     }
     setDraft(current => {
       const sameTool = current?.kind === tool
+      const lastPoint = sameTool ? current.points[current.points.length - 1] : null
+      const closesOnLast = Boolean(lastPoint)
+        && Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) <= Math.max(10, 16 / viewRef.current.zoom)
+        && current.points.length >= (tool === 'region' || tool === 'shapePolygon' ? 3 : 2)
       const next = sameTool
-        ? { ...current, points: shouldComplete ? current.points : [...current.points, point], preview: point }
+        ? { ...current, points: shouldComplete || closesOnLast ? current.points : [...current.points, point], preview: point }
         : { kind: tool, points: [point], preview: point, ...defaults[tool] }
-      if (shouldComplete && next.points.length >= (tool === 'region' || tool === 'shapePolygon' ? 3 : 2)) {
+      if ((shouldComplete || closesOnLast) && next.points.length >= (tool === 'region' || tool === 'shapePolygon' ? 3 : 2)) {
         setTimeout(() => completeDraft(next), 0)
       }
       return next
@@ -1909,7 +1954,7 @@ export default function MapBuilder({ store }) {
     if (source.points.length < minPoints) return
     const objectType = source.kind === 'shapePolygon' ? 'shape' : source.kind
     const object = pointsToObject(source.points, objectType, objectsRef.current.length, {
-      name: source.kind === 'shapePolygon' ? 'Polygon' : OBJECT_TYPES[source.kind]?.label || 'Object',
+      name: source.kind === 'shapePolygon' ? 'Land' : OBJECT_TYPES[source.kind]?.label || 'Object',
       text: '',
       fill: source.fill,
       stroke: source.stroke,
@@ -1920,6 +1965,11 @@ export default function MapBuilder({ store }) {
     })
     let selectedId = object.id
     updateObjects(current => {
+      if (object.type === 'shape') {
+        const placed = moveLandToBase(object, current)
+        selectedId = placed.id
+        return [...current, placed]
+      }
       const merged = mergeLandObjectIntoList(current, object)
       selectedId = merged.selectedId
       return merged.objects
@@ -1939,7 +1989,10 @@ export default function MapBuilder({ store }) {
           : createObject(type, objects.length)
     let selectedId = object.id
     updateObjects(current => {
-      const merged = mergeLandObjectIntoList(current, object)
+      const placed = object.type === 'shape' ? moveLandToBase(object, current) : object
+      const merged = placed.type === 'shape'
+        ? { objects: [...current, placed], selectedId: placed.id }
+        : mergeLandObjectIntoList(current, placed)
       selectedId = merged.selectedId
       return merged.objects
     })
@@ -2181,7 +2234,7 @@ export default function MapBuilder({ store }) {
             )}
             {mode === 'shape' && (
               <SelectInput
-                label="Shape"
+                label="Land type"
                 value={shapeKind}
                 options={[
                   { value: 'polygon', label: 'Polygon' },
@@ -2359,7 +2412,7 @@ export default function MapBuilder({ store }) {
             <PanelTitle>Properties</PanelTitle>
             {primarySelection ? (
               <>
-                <PropertyInput label="Name" value={primarySelection.metadata?.name || ''} onChange={value => patchSelected({ metadata: { name: value } })} />
+                <PropertyInput label="Name" value={objectDisplayName(primarySelection)} onChange={value => patchSelected({ metadata: { name: value } })} />
                 <PropertyInput label="Text" value={primarySelection.metadata?.text || ''} onChange={value => patchSelected({ metadata: { text: value } })} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   <NumberInput label="X" value={primarySelection.x} onChange={value => patchSelected({ x: value })} />
@@ -2401,7 +2454,7 @@ export default function MapBuilder({ store }) {
                   <CheckboxInput label="Dashed" checked={Boolean(primarySelection.metadata?.dashed)} onChange={value => patchSelected({ metadata: { dashed: value } })} />
                   {primarySelection.type === 'shape' && (
                     <SelectInput
-                      label="Shape"
+                      label="Land type"
                       value={primarySelection.metadata?.shapeKind || 'polygon'}
                       options={[
                         { value: 'polygon', label: 'Polygon' },
@@ -2465,8 +2518,8 @@ export default function MapBuilder({ store }) {
                     <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
                       <span style={{ width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--surface) 70%, #000)', color: selected ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>{OBJECT_TYPES[object.type]?.icon || '□'}</span>
                       <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{object.metadata?.name || object.type}</span>
-                        <span style={{ color: 'var(--faint)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{object.type}{object.metadata?.groupId ? ' · group' : ''}</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{objectDisplayName(object)}</span>
+                        <span style={{ color: 'var(--faint)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{objectTypeLabel(object)}{object.metadata?.groupId ? ' · group' : ''}</span>
                       </span>
                     </span>
                   </button>

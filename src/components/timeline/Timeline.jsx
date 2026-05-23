@@ -226,15 +226,34 @@ export default function Timeline({ store }) {
         <div className="timeline-scroll flex-1 overflow-y-auto">
           <div className="timeline-list">
             {filtered.map(event => {
+              if (event.sourceType === 'birthday') {
+                return (
+                  <article key={event.id} className="timeline-item is-birthday">
+                    <span className="timeline-dot" />
+                    <div className="timeline-birthday-row">
+                      <div className="timeline-birthday-tooltip">
+                        <div className="timeline-birthday-tooltip-date">{event.date || 'Undated'}</div>
+                        <div className="timeline-birthday-tooltip-name">{event.title}</div>
+                        {event.description && <div className="timeline-birthday-tooltip-role">{event.description}</div>}
+                      </div>
+                    </div>
+                  </article>
+                )
+              }
               const linked = event.sourceType === 'timeline' ? linkedHistoryFor(event, worldHistory) : null
               return (
-                <article key={event.id} className={`timeline-item ${linked ? 'has-linked-entry' : ''} ${event.sourceType === 'history' ? 'is-history' : ''} ${event.sourceType === 'birthday' ? 'is-birthday' : ''}`}>
+                <article key={event.id} className={`timeline-item ${linked ? 'has-linked-entry' : ''} ${event.sourceType === 'history' ? 'is-history' : ''}`}>
                   <span className="timeline-dot" />
                   <button type="button" className="timeline-item-main" onClick={() => setDetailEvent(event)}>
                     <span className="timeline-item-copy">
-                      <span className="timeline-date">{event.date || 'Undated'}</span>
+                      <span className="timeline-date">{event.date || 'Undated'}{event.sourceType === 'history' ? ' · World History' : ''}</span>
                       <strong>{event.title}</strong>
                       {event.description && <small>{event.description}</small>}
+                      {event.tags?.length > 0 && (
+                        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {event.tags.map(tag => <span key={tag} className="chip">{tag}</span>)}
+                        </span>
+                      )}
                       {linked && <span className="timeline-linked-note">Linked history entry</span>}
                     </span>
                   </button>

@@ -463,7 +463,7 @@ export default function ScheduleCalendar({ store }) {
                       '--event-color': cat.color,
                       gridColumn: `${segment.col + 1} / span ${segment.span}`,
                       gridRow: segment.week + 1,
-                      top: `${34 + Math.min(segment.lane, 4) * 20}px`,
+                      marginTop: `${28 + Math.min(segment.lane, 3) * 22}px`,
                       borderTopLeftRadius: segment.startsBefore ? 0 : 6,
                       borderBottomLeftRadius: segment.startsBefore ? 0 : 6,
                       borderTopRightRadius: segment.endsAfter ? 0 : 6,
