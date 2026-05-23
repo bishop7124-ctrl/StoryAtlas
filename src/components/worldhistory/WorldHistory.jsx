@@ -1,79 +1,16 @@
 import { useEffect, useState } from 'react'
 import Modal from '../shared/Modal'
 import { StudioSplit, StudioIndex, StudioRecord, StudioDetail, StudioButton, StudioEmpty, StudioPageHeader, StudioNote } from '../presentation/Studio'
-
-// The Fix: uses theme variables so all 4 themes apply correctly
-const INPUT = 'field w-full px-3 py-2 text-sm placeholder:text-[var(--text-muted)]'
-const LABEL = 'block form-label mb-1.5'
-
-function HistoryForm({ initial, onSave, onCancel }) {
-  const [form, setForm] = useState({
-    title: initial?.title ?? '',
-    era: initial?.era ?? '',
-    dateRange: initial?.dateRange ?? '',
-    content: initial?.content ?? '',
-    tags: initial?.tags ?? [],
-  })
-  const [tagInput, setTagInput] = useState('')
-  const field = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }))
-  const addTag = (e) => {
-    if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-      e.preventDefault()
-      const tag = tagInput.trim().replace(/,$/, '')
-      if (tag && !form.tags.includes(tag)) setForm(p => ({ ...p, tags: [...p.tags, tag] }))
-      setTagInput('')
-    }
-  }
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); if (form.title.trim()) onSave(form) }} className="space-y-4">
-      <div>
-        <label className={LABEL}>Title *</label>
-        <input value={form.title} onChange={field('title')} className={INPUT} required />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={LABEL}>Era / Age</label>
-          <input value={form.era} onChange={field('era')} placeholder="e.g. The Second Age" className={INPUT} />
-        </div>
-        <div>
-          <label className={LABEL}>Date range</label>
-          <input value={form.dateRange} onChange={field('dateRange')} placeholder="e.g. Years 100–500" className={INPUT} />
-        </div>
-      </div>
-      <div>
-        <label className={LABEL}>Content</label>
-        <textarea value={form.content} onChange={field('content')} rows={10} className={INPUT + ' resize-none'} placeholder="Describe what happened during this period…" />
-      </div>
-      <div>
-        <label className={LABEL}>Tags</label>
-        {form.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-1.5">
-            {form.tags.map(t => (
-              <span key={t} className="chip">
-                {t}
-                <button type="button" onClick={() => setForm(p => ({ ...p, tags: p.tags.filter(x => x !== t) }))} className="text-[var(--text-muted)] hover:text-[var(--text-main)]">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-        <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={addTag} placeholder="Type a tag and press Enter" className={INPUT} />
-      </div>
-      <div className="flex gap-2 pt-1 border-t border-[var(--border)]">
-        <button type="submit" className="btn btn-primary">Save</button>
-        <button type="button" onClick={onCancel} className="px-4 py-2 text-[var(--text-muted)] hover:text-[var(--text-main)] text-sm transition-colors">Cancel</button>
-      </div>
-    </form>
-  )
-}
+import ChronicleEntryForm from '../shared/ChronicleEntryForm'
 
 export default function WorldHistory({ store }) {
-  const { worldHistory, addHistoryEntry, updateHistoryEntry, deleteHistoryEntry } = store
+  const { worldHistory, timeline, addHistoryEntry, updateHistoryEntry, deleteHistoryEntry, updateEvent } = store
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('title-asc')
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
+  const [linkedTimelineEdit, setLinkedTimelineEdit] = useState(null)
 
   useEffect(() => {
     const openNewHistoryForm = () => {
@@ -115,7 +52,7 @@ export default function WorldHistory({ store }) {
       updateHistoryEntry(editTarget.id, data)
       setSelected(prev => prev?.id === editTarget.id ? { ...prev, ...data } : prev)
     } else {
-      const entry = addHistoryEntry(data)
+      const entry = addHistoryEntry(data, { createTimeline: data.entryKind === 'linked' })
       setSelected(entry)
     }
     closeForm()
@@ -128,6 +65,9 @@ export default function WorldHistory({ store }) {
   }
 
   const liveSelected = selected ? (worldHistory || []).find(h => h.id === selected.id) : null
+  const linkedTimeline = liveSelected?.timelineEventId
+    ? (timeline || []).find(event => event.id === liveSelected.timelineEventId)
+    : null
 
   return (
     <StudioSplit>
@@ -182,6 +122,7 @@ export default function WorldHistory({ store }) {
               actions={(
                 <>
                   <StudioButton tone="secondary" size="sm" onClick={() => { setEditTarget(liveSelected); setShowForm(true) }}>Edit</StudioButton>
+                  {linkedTimeline && <StudioButton tone="secondary" size="sm" onClick={() => setLinkedTimelineEdit(linkedTimeline)}>Edit linked</StudioButton>}
                   <StudioButton tone="secondary" size="sm" onClick={() => handleDelete(liveSelected.id)}>Delete</StudioButton>
                 </>
               )}
@@ -193,6 +134,16 @@ export default function WorldHistory({ store }) {
             </StudioPageHeader>
             {liveSelected.content && (
               <StudioNote className="text-sm text-[var(--text-main)] leading-relaxed whitespace-pre-wrap mb-4">{liveSelected.content}</StudioNote>
+            )}
+            {linkedTimeline && (
+              <div className="linked-entry-panel mb-4">
+                <div>
+                  <span>Linked timeline</span>
+                  <strong>{linkedTimeline.title}</strong>
+                  <small>{linkedTimeline.date || 'Undated'}</small>
+                </div>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLinkedTimelineEdit(linkedTimeline)}>Edit linked</button>
+              </div>
             )}
             {liveSelected.tags?.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-3 border-t border-[var(--border)]">
@@ -207,7 +158,30 @@ export default function WorldHistory({ store }) {
 
       {showForm && (
         <Modal title={editTarget ? `Edit — ${editTarget.title}` : 'New History Entry'} onClose={closeForm} wide>
-          <HistoryForm initial={editTarget} onSave={handleSave} onCancel={closeForm} />
+          <ChronicleEntryForm
+            kind="history"
+            initial={editTarget}
+            timeline={timeline}
+            worldHistory={worldHistory}
+            allowKindChoice={!editTarget}
+            onSave={handleSave}
+            onCancel={closeForm}
+          />
+        </Modal>
+      )}
+      {linkedTimelineEdit && (
+        <Modal title={`Edit linked — ${linkedTimelineEdit.title}`} onClose={() => setLinkedTimelineEdit(null)} wide>
+          <ChronicleEntryForm
+            kind="timeline"
+            initial={linkedTimelineEdit}
+            timeline={timeline}
+            worldHistory={worldHistory}
+            onSave={(data) => {
+              updateEvent(linkedTimelineEdit.id, data)
+              setLinkedTimelineEdit(null)
+            }}
+            onCancel={() => setLinkedTimelineEdit(null)}
+          />
         </Modal>
       )}
     </StudioSplit>

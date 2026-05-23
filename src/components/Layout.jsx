@@ -6,7 +6,7 @@ import Characters from './characters/Characters'
 import FamilyTree from './familytree/FamilyTree'
 import Factions from './Factions/Factions'
 import Lore from './lore/Lore'
-import IdeasBoard from './ideas/IdeasBoard'
+import IdeasKanban from './ideas/IdeasKanban'
 import Timeline from './timeline/Timeline'
 import WorldHistory from './worldhistory/WorldHistory'
 import MapBuilder from './Map/MapBuilder'
@@ -108,7 +108,7 @@ const ALL_SECTIONS = [
   { id: 'factions',     label: 'Factions',     icon: 'factions' },
   { id: 'locations',    label: 'Locations',    icon: 'locations' },
   { id: 'lore',         label: 'Lore',         icon: 'lore' },
-  { id: 'ideas',        label: 'Notes',        icon: 'ideas' },
+  { id: 'ideas',        label: 'Idea Board',   icon: 'ideas' },
   { id: 'schedule',     label: 'Schedule',     icon: 'schedule' },
   { id: 'timeline',     label: 'Timeline',     icon: 'timeline' },
   { id: 'worldhistory', label: 'History',      icon: 'worldhistory' },
@@ -787,7 +787,7 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
     factions:     <Factions store={store} />,
     locations:    <Locations store={store} />,
     lore:         <Lore store={store} />,
-    ideas:        <IdeasBoard store={store} />,
+    ideas:        <IdeasKanban store={store} />,
     schedule:     <ScheduleCalendar store={store} />,
     timeline:     <Timeline store={store} />,
     worldhistory: <WorldHistory store={store} />,
@@ -851,7 +851,7 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
-              <span aria-hidden="true">Settings</span>
+              <span aria-hidden="true">Project Settings</span>
             </button>
             <button
               className="studio-utility-btn"

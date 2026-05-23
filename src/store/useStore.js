@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { saveAppData, saveSceneDoc, deleteSceneDoc } from '../utils/firestoreSync'
+import { saveAppData, saveSceneDoc, deleteSceneDoc, deleteProjectData } from '../utils/firestoreSync'
 import { buildAllProjectStats, buildProjectStats } from '../utils/projectStats'
 
 const load = (key, def) => {
@@ -607,39 +607,60 @@ export function useStore(userId = null, options = {}) {
   }
   const deleteLocation = (id) => setLocations(prev => prev.filter(l => l.id !== id))
 
-  const addEvent = (data) => {
+  const addEvent = (data, options = {}) => {
     const eventId = uid()
-    const historyId = uid()
+    const shouldCreateHistory = options.createHistory !== false && !data.linkedHistoryEntryId
+    const historyId = data.linkedHistoryEntryId || (shouldCreateHistory ? uid() : null)
     const createdAt = Date.now() // eslint-disable-line react-hooks/purity
-    const event = { id: eventId, novelId: activeNovelId, createdAt, worldHistoryEntryId: historyId, ...data }
-    const historyEntry = {
-      id: historyId,
-      novelId: activeNovelId,
-      createdAt,
-      timelineEventId: eventId,
-      title: data.title ?? '',
-      era: '',
-      dateRange: data.date ?? '',
-      content: data.description ?? '',
-      tags: data.tags ?? [],
-    }
+    const event = { id: eventId, novelId: activeNovelId, createdAt, ...data, worldHistoryEntryId: historyId }
     setTimeline(prev => [...prev, event])
-    setWorldHistory(prev => [...prev, historyEntry])
+    if (data.linkedHistoryEntryId) {
+      setWorldHistory(prev => prev.map(h => h.id === data.linkedHistoryEntryId
+        ? { ...h, timelineEventId: eventId }
+        : h
+      ))
+    } else if (shouldCreateHistory) {
+      const historyEntry = {
+        id: historyId,
+        novelId: activeNovelId,
+        createdAt,
+        timelineEventId: eventId,
+        title: data.title ?? '',
+        era: data.era ?? '',
+        dateRange: data.date ?? data.dateRange ?? '',
+        content: data.description ?? data.content ?? '',
+        category: data.category ?? data.type ?? '',
+        tags: data.tags ?? [],
+      }
+      setWorldHistory(prev => [...prev, historyEntry])
+    }
     return event
   }
   const updateEvent = (id, data) => {
-    setTimeline(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
-    setWorldHistory(prev => prev.map(h => h.timelineEventId === id ? {
-      ...h,
-      title: data.title ?? h.title,
-      dateRange: data.date ?? h.dateRange,
-      content: data.description ?? h.content,
-      tags: data.tags ?? h.tags,
-    } : h))
+    const linkedHistoryId = data.linkedHistoryEntryId ?? data.worldHistoryEntryId
+    setTimeline(prev => prev.map(e => e.id === id ? { ...e, ...data, worldHistoryEntryId: linkedHistoryId ?? e.worldHistoryEntryId ?? null } : e))
+    setWorldHistory(prev => prev.map(h => {
+      if (linkedHistoryId && h.timelineEventId === id && h.id !== linkedHistoryId) {
+        return { ...h, timelineEventId: null }
+      }
+      if (h.timelineEventId === id || (linkedHistoryId && h.id === linkedHistoryId)) {
+        return {
+          ...h,
+          timelineEventId: id,
+          title: data.title ?? h.title,
+          era: data.era ?? h.era,
+          dateRange: data.date ?? data.dateRange ?? h.dateRange,
+          content: data.description ?? data.content ?? h.content,
+          category: data.category ?? data.type ?? h.category,
+          tags: data.tags ?? h.tags,
+        }
+      }
+      return h
+    }))
   }
   const deleteEvent = (id) => {
     setTimeline(prev => prev.filter(e => e.id !== id))
-    setWorldHistory(prev => prev.filter(h => h.timelineEventId !== id))
+    setWorldHistory(prev => prev.map(h => h.timelineEventId === id ? { ...h, timelineEventId: null } : h))
   }
 
   const addScheduleEvent = (data) => {
@@ -650,13 +671,67 @@ export function useStore(userId = null, options = {}) {
   const updateScheduleEvent = (id, data) => setStorySchedule(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
   const deleteScheduleEvent = (id) => setStorySchedule(prev => prev.filter(e => e.id !== id))
 
-  const addHistoryEntry = (data) => {
-    const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), ...data } // eslint-disable-line react-hooks/purity
+  const addHistoryEntry = (data, options = {}) => {
+    const createdAt = Date.now() // eslint-disable-line react-hooks/purity
+    const timelineEventId = data.linkedTimelineEventId || data.timelineEventId || null
+    const entryId = uid()
+    const entry = { id: entryId, novelId: activeNovelId, createdAt, ...data, timelineEventId }
     setWorldHistory(prev => [...prev, entry])
+    if (timelineEventId) {
+      setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: entry.id } : e))
+    } else if (options.createTimeline) {
+      const eventId = uid()
+      const event = {
+        id: eventId,
+        novelId: activeNovelId,
+        createdAt,
+        title: data.title ?? '',
+        date: data.dateRange ?? data.date ?? '',
+        description: data.content ?? data.description ?? '',
+        category: data.category ?? data.type ?? '',
+        tags: data.tags ?? [],
+        linkedCharacters: [],
+        linkedLocations: [],
+        worldHistoryEntryId: entryId,
+      }
+      const linkedEntry = { ...entry, timelineEventId: eventId }
+      setTimeline(prev => [...prev, event])
+      setWorldHistory(prev => prev.map(h => h.id === entryId ? linkedEntry : h))
+    }
     return entry
   }
-  const updateHistoryEntry = (id, data) => setWorldHistory(prev => prev.map(h => h.id === id ? { ...h, ...data } : h))
-  const deleteHistoryEntry = (id) => setWorldHistory(prev => prev.filter(h => h.id !== id))
+  const updateHistoryEntry = (id, data) => {
+    const linkedTimelineId = data.linkedTimelineEventId ?? data.timelineEventId
+    setWorldHistory(prev => prev.map(h => h.id === id ? { ...h, ...data, timelineEventId: linkedTimelineId ?? h.timelineEventId ?? null } : h))
+    setTimeline(prev => prev.map(e => {
+      if (linkedTimelineId && e.id === linkedTimelineId) return { ...e, worldHistoryEntryId: id }
+      if (e.worldHistoryEntryId === id && linkedTimelineId && e.id !== linkedTimelineId) return { ...e, worldHistoryEntryId: null }
+      if (e.worldHistoryEntryId === id) {
+        return {
+          ...e,
+          title: data.title ?? e.title,
+          date: data.dateRange ?? data.date ?? e.date,
+          description: data.content ?? data.description ?? e.description,
+          category: data.category ?? data.type ?? e.category,
+          tags: data.tags ?? e.tags,
+        }
+      }
+      return e
+    }))
+  }
+  const deleteHistoryEntry = (id) => {
+    setWorldHistory(prev => prev.filter(h => h.id !== id))
+    setTimeline(prev => prev.map(e => e.worldHistoryEntryId === id ? { ...e, worldHistoryEntryId: null } : e))
+  }
+  const linkTimelineHistory = (timelineEventId, historyEntryId) => {
+    if (!timelineEventId || !historyEntryId) return
+    setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: historyEntryId } : e))
+    setWorldHistory(prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId } : (h.timelineEventId === timelineEventId ? { ...h, timelineEventId: null } : h)))
+  }
+  const unlinkTimelineHistory = (timelineEventId, historyEntryId) => {
+    setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: null } : e))
+    setWorldHistory(prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId: null } : h))
+  }
 
   const addLoreEntry = (data) => {
     const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), characterIds: [], category: '', content: '', ...data } // eslint-disable-line react-hooks/purity
@@ -671,13 +746,20 @@ export function useStore(userId = null, options = {}) {
       id: uid(),
       novelId: activeNovelId,
       createdAt: Date.now(), // eslint-disable-line react-hooks/purity
+      updatedAt: Date.now(), // eslint-disable-line react-hooks/purity
       title: '',
+      description: '',
       body: '',
       group: '',
       tags: [],
-      color: 'amber',
-      x: 40 + (novelIdeaEntries.length % 4) * 230,
-      y: 40 + Math.floor(novelIdeaEntries.length / 4) * 170,
+      status: 'raw',
+      order: novelIdeaEntries.length,
+      isFavourite: false,
+      isPinned: false,
+      aiExpanded: false,
+      linkedEntities: [],
+      linkedIdeas: [],
+      convertedTo: null,
       ...data,
     }
     setIdeaEntries(prev => [...prev, entry])
@@ -811,6 +893,7 @@ export function useStore(userId = null, options = {}) {
       delete next[id]
       return next
     })
+    if (userId) deleteProjectData(userId, id).catch(console.error)
     if (activeNovelId === id) setActiveNovelId(null)
     setSelectedCharacterId(null)
     setSelectedLocationId(null)
@@ -856,7 +939,7 @@ export function useStore(userId = null, options = {}) {
     locations: seriesScope(locations, 'locations'),
     saveLocation, deleteLocation,
     timeline: novelTimeline,
-    addEvent, updateEvent, deleteEvent,
+    addEvent, updateEvent, deleteEvent, linkTimelineHistory, unlinkTimelineHistory,
     worldHistory: novelWorldHistory,
     addHistoryEntry, updateHistoryEntry, deleteHistoryEntry,
     currentYear: activeNovel?.currentYear ?? currentYear, updateCurrentYear,
@@ -881,7 +964,7 @@ export function useStore(userId = null, options = {}) {
   const guardedMethods = [
     'addNovel', 'updateNovel', 'deleteNovel', 'addSeries', 'deleteSeries', 'updateSeries', 'reorderSeries', 'reorderNovels',
     'saveCharacter', 'deleteCharacter', 'setFactions', 'saveLocation', 'deleteLocation',
-    'addEvent', 'updateEvent', 'deleteEvent', 'addHistoryEntry', 'updateHistoryEntry', 'deleteHistoryEntry',
+    'addEvent', 'updateEvent', 'deleteEvent', 'linkTimelineHistory', 'unlinkTimelineHistory', 'addHistoryEntry', 'updateHistoryEntry', 'deleteHistoryEntry',
     'updateCurrentYear', 'addLoreEntry', 'updateLoreEntry', 'deleteLoreEntry',
     'addIdeaEntry', 'updateIdeaEntry', 'deleteIdeaEntry', 'updateWhiteboard', 'updateMapProject',
     'addMap', 'deleteMap', 'renameMap', 'updateActiveMapData', 'addLocation',

@@ -287,8 +287,8 @@ export default function ScheduleCalendar({ store }) {
   const [viewMode, setViewMode] = useState('month')
   const [modal, setModal] = useState(null)
 
-  const events = store.storySchedule ?? []
-  const categories = useMemo(() => getScheduleCategories(store.activeNovel), [store.activeNovel?.categoryOptions?.schedule])
+  const events = useMemo(() => store.storySchedule ?? [], [store.storySchedule])
+  const categories = useMemo(() => getScheduleCategories(store.activeNovel), [store.activeNovel])
   const categoriesById = useMemo(() => Object.fromEntries(categories.map(cat => [cat.id, cat])), [categories])
 
   const prevMonth = () => {
@@ -299,8 +299,12 @@ export default function ScheduleCalendar({ store }) {
     if (viewMonth === 12) { setViewMonth(1); setViewYear(y => y + 1) }
     else setViewMonth(m => m + 1)
   }
+  const goToday = () => {
+    const year = store.activeNovel?.currentYear || 1
+    setViewYear(year)
+    setViewMonth(1)
+  }
 
-  // Events spanning into the current month
   const monthEvents = useMemo(() => {
     return events.filter(ev => {
       if (ev.year !== viewYear) return false
@@ -312,26 +316,44 @@ export default function ScheduleCalendar({ store }) {
     })
   }, [events, viewYear, viewMonth])
 
-  // Map day number → events active on that day
-  const eventsByDay = useMemo(() => {
-    const map = {}
-    monthEvents.forEach(ev => {
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => (a.year - b.year) || (a.month - b.month) || (a.day - b.day) || a.title.localeCompare(b.title))
+  }, [events])
+
+  const eventSegments = useMemo(() => {
+    const segments = []
+    const lanesByWeek = Array.from({ length: 5 }, () => [])
+    const sortedMonthEvents = [...monthEvents].sort((a, b) => (a.day - b.day) || ((b.duration || 1) - (a.duration || 1)) || a.title.localeCompare(b.title))
+
+    sortedMonthEvents.forEach(ev => {
       const evAbsStart = (ev.month - 1) * DAYS_PER_MONTH + (ev.day - 1)
       const evAbsEnd = evAbsStart + (ev.duration - 1)
       const mAbsStart = (viewMonth - 1) * DAYS_PER_MONTH
       const mAbsEnd = mAbsStart + (DAYS_PER_MONTH - 1)
       const overlapStart = Math.max(evAbsStart, mAbsStart)
       const overlapEnd = Math.min(evAbsEnd, mAbsEnd)
-      for (let abs = overlapStart; abs <= overlapEnd; abs++) {
-        const day = abs - mAbsStart + 1
-        if (!map[day]) map[day] = []
-        map[day].push(ev)
+      let cursor = overlapStart
+      while (cursor <= overlapEnd) {
+        const dayIndex = cursor - mAbsStart
+        const week = Math.floor(dayIndex / 7)
+        const col = dayIndex % 7
+        const weekEnd = Math.min(overlapEnd, mAbsStart + (week * 7) + 6)
+        const span = weekEnd - cursor + 1
+        const endCol = col + span - 1
+        const weekLanes = lanesByWeek[week]
+        let lane = weekLanes.findIndex(items => items.every(item => endCol < item.col || col > item.endCol))
+        if (lane === -1) {
+          lane = weekLanes.length
+          weekLanes.push([])
+        }
+        weekLanes[lane].push({ col, endCol })
+        segments.push({ event: ev, week, col, span, lane, startsBefore: cursor > evAbsStart, endsAfter: weekEnd < evAbsEnd })
+        cursor = weekEnd + 1
       }
     })
-    return map
+    return segments
   }, [monthEvents, viewMonth])
 
-  // 35-cell grid (5 rows × 7 cols): days 1–30, then 5 empty cells
   const cells = Array.from({ length: 35 }, (_, i) => (i < DAYS_PER_MONTH ? i + 1 : null))
 
   const openCreate = day => setModal({ type: 'create', day })
@@ -343,14 +365,15 @@ export default function ScheduleCalendar({ store }) {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap' }}>
+      <div className="schedule-header">
         <button onClick={prevMonth} title="Previous month" style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 12px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>←</button>
 
-        <div style={{ flex: 1, textAlign: 'center', minWidth: 200 }}>
-          <span style={{ color: 'var(--text-main)', fontWeight: 700, fontSize: 16 }}>
-            {MONTH_NAMES[viewMonth]}
-          </span>
-          <span style={{ color: 'var(--text-muted)', fontSize: 14, marginLeft: 10 }}>Year {viewYear}</span>
+        <div className="schedule-date-controls">
+          <select value={viewMonth} onChange={e => setViewMonth(Number(e.target.value))} className="field px-2 py-1.5 text-xs">
+            {MONTH_NAMES.slice(1).map((name, index) => <option key={name} value={index + 1}>{name}</option>)}
+          </select>
+          <input type="number" value={viewYear} onChange={e => setViewYear(parseInt(e.target.value) || 1)} className="field px-2 py-1.5 text-xs" aria-label="Year" />
+          <button type="button" onClick={goToday} className="btn btn-secondary btn-sm">Today</button>
         </div>
 
         <button onClick={nextMonth} title="Next month" style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 12px', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>→</button>
@@ -386,6 +409,7 @@ export default function ScheduleCalendar({ store }) {
 
         {viewMode === 'month' ? (
           <>
+            <div className="schedule-month-title">{MONTH_NAMES[viewMonth]} · Year {viewYear}</div>
             {/* Day-of-week header */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, paddingTop: 14, marginBottom: 2 }}>
               {Array.from({ length: 7 }, (_, i) => (
@@ -396,13 +420,13 @@ export default function ScheduleCalendar({ store }) {
             </div>
 
             {/* Calendar grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: '1fr', gap: 2 }}>
+            <div className="schedule-grid">
               {cells.map((day, idx) => {
-                const dayEvs = day ? (eventsByDay[day] || []) : []
                 const isReal = day !== null
                 return (
                   <div
                     key={idx}
+                    className="schedule-day-cell"
                     onClick={() => isReal && openCreate(day)}
                     style={{
                       background: isReal ? 'var(--bg-nav)' : 'transparent',
@@ -418,48 +442,45 @@ export default function ScheduleCalendar({ store }) {
                   >
                     {day && (
                       <>
-                        <div style={{ color: dayEvs.length ? 'var(--text-main)' : 'var(--text-muted)', fontSize: 12, fontWeight: dayEvs.length ? 700 : 400, marginBottom: 4 }}>
+                        <div className="schedule-day-number" style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                           {day}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          {dayEvs.slice(0, 3).map(ev => {
-                            const cat = categoriesById[ev.category] || CAT_MAP[ev.category] || CAT_MAP.other
-                            const isStartDay = ev.day === day && ev.month === viewMonth
-                            return (
-                              <div
-                                key={ev.id}
-                                onClick={e => { e.stopPropagation(); openDetail(ev) }}
-                                title={ev.title}
-                                style={{
-                                  background: cat.color + '20',
-                                  borderLeft: `3px solid ${isStartDay ? cat.color : cat.color + '60'}`,
-                                  borderRadius: 3,
-                                  padding: '2px 5px',
-                                  fontSize: 11,
-                                  color: cat.color,
-                                  fontWeight: 600,
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {isStartDay ? '' : '↳ '}{ev.title}
-                              </div>
-                            )
-                          })}
-                          {dayEvs.length > 3 && (
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingLeft: 4 }}>
-                              +{dayEvs.length - 3} more
-                            </div>
-                          )}
                         </div>
                       </>
                     )}
                   </div>
                 )
               })}
+              {eventSegments.map((segment, index) => {
+                const cat = categoriesById[segment.event.category] || CAT_MAP[segment.event.category] || CAT_MAP.other
+                return (
+                  <button
+                    key={`${segment.event.id}-${index}`}
+                    type="button"
+                    className="schedule-ribbon"
+                    onClick={e => { e.stopPropagation(); openDetail(segment.event) }}
+                    title={segment.event.title}
+                    style={{
+                      '--event-color': cat.color,
+                      gridColumn: `${segment.col + 1} / span ${segment.span}`,
+                      gridRow: segment.week + 1,
+                      top: `${34 + Math.min(segment.lane, 4) * 20}px`,
+                      borderTopLeftRadius: segment.startsBefore ? 0 : 6,
+                      borderBottomLeftRadius: segment.startsBefore ? 0 : 6,
+                      borderTopRightRadius: segment.endsAfter ? 0 : 6,
+                      borderBottomRightRadius: segment.endsAfter ? 0 : 6,
+                    }}
+                  >
+                    {segment.startsBefore ? '← ' : ''}{segment.event.title}{segment.endsAfter ? ' →' : ''}
+                  </button>
+                )
+              })}
             </div>
+            {monthEvents.length === 0 && (
+              <div className="schedule-empty-month">
+                <p>No events in {MONTH_NAMES[viewMonth]}, Year {viewYear}</p>
+                <button onClick={() => openCreate(1)} className="btn btn-primary btn-sm">Add event</button>
+              </div>
+            )}
 
             {/* Legend */}
             <div style={{ display: 'flex', gap: 14, marginTop: 16, flexWrap: 'wrap', paddingLeft: 2 }}>
@@ -474,10 +495,10 @@ export default function ScheduleCalendar({ store }) {
         ) : (
           /* ── List view ── */
           <div style={{ paddingTop: 16 }}>
-            {monthEvents.length === 0 ? (
+            {sortedEvents.length === 0 ? (
               <div style={{ textAlign: 'center', paddingTop: 80 }}>
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 12 }}>
-                  No events in {MONTH_NAMES[viewMonth]}, Year {viewYear}
+                  No scheduled events yet.
                 </p>
                 <button
                   onClick={() => openCreate(1)}
@@ -488,8 +509,7 @@ export default function ScheduleCalendar({ store }) {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 680 }}>
-                {[...monthEvents]
-                  .sort((a, b) => (a.year - b.year) || (a.month - b.month) || (a.day - b.day))
+                {sortedEvents
                   .map(ev => {
                     const cat = categoriesById[ev.category] || CAT_MAP[ev.category] || CAT_MAP.other
                     const chars = (ev.linkedCharacters ?? [])
@@ -510,9 +530,7 @@ export default function ScheduleCalendar({ store }) {
                       >
                         <div style={{ minWidth: 44, textAlign: 'right', paddingTop: 2 }}>
                           <div style={{ color: 'var(--text-main)', fontWeight: 700, fontSize: 20, lineHeight: 1 }}>{ev.day}</div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 1 }}>
-                            {ev.month !== viewMonth ? `Mo. ${ev.month}` : 'Day'}
-                          </div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 10, marginTop: 1 }}>Y{ev.year} M{ev.month}</div>
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: 14 }}>{ev.title}</div>
@@ -526,7 +544,9 @@ export default function ScheduleCalendar({ store }) {
                               {cat.label}
                             </span>
                             {ev.duration > 1 && (
-                              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{ev.duration} days</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                                Day {ev.day} to Day {Math.min(DAYS_PER_MONTH, ev.day + ev.duration - 1)} · {ev.duration} days
+                              </span>
                             )}
                             {chars.length > 0 && (
                               <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{chars.join(', ')}</span>

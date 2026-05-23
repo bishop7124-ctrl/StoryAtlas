@@ -85,7 +85,7 @@ function BetaWatermark() {
 }
 
 function AppInner() {
-  const { user, loading: authLoading, updateProfile } = useAuth()
+  const { user, loading: authLoading, updateProfile, recoveryMode } = useAuth()
   const userId = user?.uid || user?.id || null
   const membership = getMembership(user)
   const store = useStore(userId, { readOnly: membership.isReadOnly, freeProjectId: membership.freeProjectId })
@@ -257,9 +257,9 @@ function AppInner() {
     )
   }
 
-  if (!user) return (
+  if (!user || recoveryMode) return (
     <>
-      <LoginPage onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} />
+      <LoginPage onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} recoveryMode={recoveryMode} />
       <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
       <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
       <AboutPage open={aboutOpen} onClose={() => setAboutOpen(false)} />

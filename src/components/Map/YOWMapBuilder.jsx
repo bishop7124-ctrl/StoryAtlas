@@ -11,7 +11,9 @@ const LAND_STROKE = '#162a1c'
 
 const OBJECT_TYPES = {
   marker: { label: 'Marker', icon: '•', fill: '#d6b45f', stroke: '#6f5524' },
+  stamp: { label: 'Stamp', icon: '✦', fill: '#8f6a33', stroke: '#312719' },
   label: { label: 'Label', icon: 'T', fill: '#f7e7ba', stroke: '#262118' },
+  location: { label: 'Location', icon: '⌖', fill: '#d6b45f', stroke: '#6f5524' },
   region: { label: 'Region', icon: '□', fill: LAND_FILL, stroke: LAND_STROKE },
   river: { label: 'River', icon: '~', fill: 'transparent', stroke: '#3c93b8' },
   road: { label: 'Road', icon: '—', fill: 'transparent', stroke: '#8b6743' },
@@ -28,13 +30,71 @@ const TOOLBAR_MODES = [
   { id: 'road', label: 'Road', icon: '—' },
   { id: 'border', label: 'Border', icon: '⋯' },
   { id: 'shape', label: 'Shape', icon: '○' },
+  { id: 'stamp', label: 'Stamp', icon: '✦' },
+  { id: 'label', label: 'Label', icon: 'T' },
+  { id: 'location', label: 'Location', icon: '⌖' },
 ]
 
 const POINT_DRAW_TOOLS = new Set(['region', 'river', 'road', 'border'])
 const LINE_OBJECT_TYPES = new Set(['river', 'road', 'border'])
+const CONTENT_OBJECT_TYPES = new Set(['marker', 'stamp', 'label', 'location'])
+const SNAP_SIZES = [20, 40, 80]
+
+const MAP_TYPE_OPTIONS = [
+  { value: 'world', label: 'World' },
+  { value: 'region', label: 'Region' },
+  { value: 'local', label: 'Local' },
+  { value: 'interior', label: 'Interior' },
+]
+
+const STAMP_LIBRARY = [
+  { id: 'mountains', name: 'Mountains', icon: '△', category: 'Terrain', mapTypes: ['world', 'region'], size: 116, fill: '#8a8068', stroke: '#3b3328', keywords: 'peaks range hills' },
+  { id: 'forest', name: 'Forest', icon: '♣', category: 'Terrain', mapTypes: ['world', 'region', 'local'], size: 112, fill: '#40683b', stroke: '#21381f', keywords: 'woods trees woodland' },
+  { id: 'trees', name: 'Trees', icon: '♠', category: 'Nature', mapTypes: ['region', 'local'], size: 74, fill: '#3f7142', stroke: '#203821', keywords: 'tree woods forest' },
+  { id: 'city', name: 'City', icon: '●', category: 'Settlements', mapTypes: ['world', 'region', 'local'], size: 86, fill: '#b9854e', stroke: '#4c3320', keywords: 'settlement place urban' },
+  { id: 'capital', name: 'Capital', icon: '★', category: 'Settlements', mapTypes: ['world', 'region'], size: 96, fill: '#c89a4b', stroke: '#4a2e16', keywords: 'kingdom seat city crown' },
+  { id: 'town', name: 'Town', icon: '○', category: 'Settlements', mapTypes: ['region', 'local'], size: 70, fill: '#bd875a', stroke: '#4b321f', keywords: 'village settlement' },
+  { id: 'kingdom', name: 'Kingdom', icon: '♛', category: 'Political', mapTypes: ['world'], size: 128, fill: '#a85f61', stroke: '#4a2325', keywords: 'realm country empire' },
+  { id: 'castle', name: 'Castle', icon: '▣', category: 'Landmarks', mapTypes: ['world', 'region', 'local'], size: 92, fill: '#8f8574', stroke: '#352d25', keywords: 'fort keep citadel' },
+  { id: 'ruins', name: 'Ruins', icon: '⌁', category: 'Landmarks', mapTypes: ['world', 'region', 'local'], size: 86, fill: '#92745b', stroke: '#3f3026', keywords: 'ancient broken landmark' },
+  { id: 'walls', name: 'Walls', icon: '▤', category: 'Structure', mapTypes: ['interior'], size: 120, fill: '#8a7b68', stroke: '#3d342b', keywords: 'room stone barrier' },
+  { id: 'door', name: 'Door', icon: '▯', category: 'Structure', mapTypes: ['interior', 'local'], size: 70, fill: '#8b5a33', stroke: '#3d2414', keywords: 'entry exit gate' },
+  { id: 'table', name: 'Table', icon: '▭', category: 'Furniture', mapTypes: ['interior'], size: 90, fill: '#7a4f30', stroke: '#382213', keywords: 'desk furniture dining' },
+  { id: 'chair', name: 'Chair', icon: '┘', category: 'Furniture', mapTypes: ['interior'], size: 58, fill: '#7b5435', stroke: '#3a2415', keywords: 'seat furniture' },
+  { id: 'bed', name: 'Bed', icon: '▰', category: 'Furniture', mapTypes: ['interior'], size: 108, fill: '#926d65', stroke: '#3d2727', keywords: 'sleep furniture' },
+  { id: 'container', name: 'Container', icon: '▣', category: 'Furniture', mapTypes: ['interior', 'local'], size: 66, fill: '#9a6a32', stroke: '#3e2611', keywords: 'chest crate barrel box' },
+  { id: 'fireplace', name: 'Fireplace', icon: '▲', category: 'Furniture', mapTypes: ['interior'], size: 78, fill: '#a24e36', stroke: '#432018', keywords: 'hearth fire' },
+]
+
+const DEFAULT_CATEGORIES_BY_MAP_TYPE = {
+  world: ['Terrain', 'Political', 'Settlements', 'Landmarks'],
+  region: ['Terrain', 'Nature', 'Settlements', 'Landmarks'],
+  local: ['Nature', 'Settlements', 'Landmarks', 'Structure'],
+  interior: ['Structure', 'Furniture'],
+}
 
 function uid(prefix = 'obj') {
   return `${prefix}_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`
+}
+
+function loadJson(key, fallback) {
+  if (typeof localStorage === 'undefined') return fallback
+  try {
+    const value = JSON.parse(localStorage.getItem(key))
+    return value ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+function saveJson(key, value) {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(key, JSON.stringify(value))
+}
+
+function normalizeMapType(value) {
+  if (value === 'regional') return 'region'
+  return MAP_TYPE_OPTIONS.some(option => option.value === value) ? value : 'region'
 }
 
 function clamp(value, min, max) {
@@ -164,13 +224,14 @@ function createObject(type, index = 0) {
   const base = OBJECT_TYPES[type] || OBJECT_TYPES.region
   const stagger = index * 28
   const isLine = LINE_OBJECT_TYPES.has(type)
+  const isContent = CONTENT_OBJECT_TYPES.has(type)
   return {
     id: uid(type),
     type,
     x: 420 + stagger,
     y: 320 + stagger,
-    width: isLine ? 360 : type === 'marker' ? 82 : type === 'label' ? 260 : type === 'shape' ? 220 : 420,
-    height: isLine ? 90 : type === 'marker' ? 82 : type === 'label' ? 88 : type === 'shape' ? 160 : 260,
+    width: isLine ? 360 : type === 'label' ? 260 : isContent ? 82 : type === 'shape' ? 220 : 420,
+    height: isLine ? 90 : type === 'label' ? 88 : isContent ? 82 : type === 'shape' ? 160 : 260,
     rotation: 0,
     zIndex: index + 1,
     locked: false,
@@ -181,13 +242,68 @@ function createObject(type, index = 0) {
       fill: base.fill,
       stroke: base.stroke,
       opacity: 1,
+      fontSize: type === 'label' ? 34 : undefined,
+      curvedLabel: type === 'label',
       lineThickness: type === 'river' ? 12 : type === 'road' ? 7 : type === 'border' ? 5 : 2,
       dashed: type === 'road' || type === 'border',
-      shapeKind: 'rectangle',
+      shapeKind: type === 'shape' ? 'polygon' : 'rectangle',
       points: isLine ? [{ x: -0.5, y: 0 }, { x: 0.5, y: 0 }] : null,
       layerId: DEFAULT_OBJECT_LAYER_ID,
     },
   }
+}
+
+function createStampObject(stamp, index = 0, point = null) {
+  const size = stamp.size || 82
+  return normalizeObject({
+    id: uid('stamp'),
+    type: 'stamp',
+    x: point?.x ?? 420 + index * 24,
+    y: point?.y ?? 320 + index * 24,
+    width: size,
+    height: size,
+    rotation: 0,
+    zIndex: index + 1,
+    metadata: {
+      name: stamp.name,
+      text: stamp.name,
+      fill: stamp.fill || OBJECT_TYPES.stamp.fill,
+      stroke: stamp.stroke || OBJECT_TYPES.stamp.stroke,
+      stampId: stamp.id,
+      stampType: stamp.name,
+      category: stamp.category,
+      opacity: 1,
+      lineThickness: 2,
+      layerId: DEFAULT_OBJECT_LAYER_ID,
+    },
+  }, index)
+}
+
+function createLabelObject(index = 0, point = null) {
+  return normalizeObject({
+    ...createObject('label', index),
+    x: point?.x ?? 440 + index * 24,
+    y: point?.y ?? 340 + index * 24,
+  }, index)
+}
+
+function createLocationObject(location, index = 0, point = null) {
+  return normalizeObject({
+    ...createObject('location', index),
+    x: point?.x ?? 460 + index * 24,
+    y: point?.y ?? 360 + index * 24,
+    width: 96,
+    height: 96,
+    metadata: {
+      ...createObject('location', index).metadata,
+      name: location?.name || 'New Location',
+      text: location?.name || 'New Location',
+      locationId: location?.id || null,
+      category: location?.category || 'Other',
+      fill: '#d6b45f',
+      stroke: '#6f5524',
+    },
+  }, index)
 }
 
 function normalizeObject(raw, index) {
@@ -230,8 +346,10 @@ function normalizeMetadata(metadata, type) {
     faces,
     opacity: Number.isFinite(metadata.opacity) ? clamp(metadata.opacity, 0, 1) : 1,
     lineThickness: Math.max(1, Number.isFinite(metadata.lineThickness) ? metadata.lineThickness : LINE_OBJECT_TYPES.has(type) ? 8 : 2),
+    fontSize: Number.isFinite(metadata.fontSize) ? clamp(metadata.fontSize, 10, 144) : (type === 'label' ? 34 : metadata.fontSize),
+    curvedLabel: Boolean(metadata.curvedLabel),
     dashed: Boolean(metadata.dashed),
-    shapeKind: metadata.shapeKind || 'rectangle',
+    shapeKind: metadata.shapeKind || (type === 'shape' ? 'polygon' : 'rectangle'),
   }
 }
 
@@ -303,7 +421,7 @@ function migrateLegacyObjects(map) {
   ;(map?.mapStamps || []).forEach((stamp, index) => {
     migrated.push(normalizeObject({
       id: stamp.id,
-      type: 'marker',
+      type: 'stamp',
       x: stamp.mapX || MAP_W / 2,
       y: stamp.mapY || MAP_H / 2,
       width: stamp.size || 72,
@@ -680,13 +798,13 @@ function drawObject(ctx, object, selected) {
   ctx.lineCap = 'round'
   if (meta.dashed) ctx.setLineDash([Math.max(8, (meta.lineThickness || 4) * 2.2), Math.max(6, (meta.lineThickness || 4) * 1.4)])
 
-  if (object.type === 'marker') {
+  if (object.type === 'marker' || object.type === 'stamp' || object.type === 'location') {
     drawFantasyMarker(ctx, object, selected)
   } else if (object.type === 'label') {
     drawFantasyLabel(ctx, object)
   } else if (LINE_OBJECT_TYPES.has(object.type)) {
     drawStyledLineObject(ctx, object, selected)
-  } else if ((object.type === 'region' || meta.shapeKind === 'polygon') && Array.isArray(meta.points) && meta.points.length >= 3) {
+  } else if ((object.type === 'region' || meta.shapeKind === 'polygon') && objectLocalFaces(object).length) {
     drawOrganicPolygonObject(ctx, object, selected)
   } else if (object.type === 'shape' && meta.shapeKind === 'circle') {
     drawOrganicEllipseObject(ctx, object, selected)
@@ -710,16 +828,25 @@ function drawOrganicPolygonObject(ctx, object, selected) {
   const stroke = selected ? '#1677ff' : meta.stroke || '#5e4a28'
 
   ctx.save()
-  organicFaces.forEach(points => drawSmoothPath(ctx, points, true))
   if (fill !== 'transparent') {
     const radius = Math.max(object.width, object.height) * 0.62
-    const gradient = ctx.createRadialGradient(0, 0, Math.max(12, radius * 0.08), 0, 0, radius)
+    const gradient = ctx.createRadialGradient(0, 0, Math.min(radius * 0.5, Math.max(1, radius * 0.08)), 0, 0, Math.max(2, radius))
     gradient.addColorStop(0, colorWithAlpha(fill, 0.92))
     gradient.addColorStop(0.42, colorWithAlpha(fill, 0.72))
     gradient.addColorStop(0.78, colorWithAlpha('#5d6f3d', 0.36))
     gradient.addColorStop(1, colorWithAlpha('#d5c391', 0.18))
     ctx.fillStyle = gradient
-    ctx.fill()
+    organicFaces.forEach(points => {
+      drawSmoothPath(ctx, points, true)
+      ctx.fill()
+    })
+    ctx.strokeStyle = gradient
+    ctx.lineWidth = Math.max(5, (meta.lineThickness || 2) * 2.2)
+    ctx.setLineDash([])
+    organicFaces.forEach(points => {
+      drawSmoothPath(ctx, points, true)
+      ctx.stroke()
+    })
     ctx.save()
     organicFaces.forEach(points => drawSmoothPath(ctx, points, true))
     ctx.clip()
@@ -730,16 +857,18 @@ function drawOrganicPolygonObject(ctx, object, selected) {
   ctx.strokeStyle = colorWithAlpha(stroke, selected ? 1 : 0.88)
   ctx.lineWidth = selected ? Math.max(4, meta.lineThickness || 2) : Math.max(2, meta.lineThickness || 2)
   ctx.setLineDash([])
-  organicFaces.forEach(points => drawSmoothPath(ctx, points, true))
-  ctx.stroke()
+  organicFaces.forEach(points => {
+    drawSmoothPath(ctx, points, true)
+    ctx.stroke()
+  })
   ctx.strokeStyle = colorWithAlpha('#3a2b17', selected ? 0.15 : 0.32)
   ctx.lineWidth = Math.max(1, (meta.lineThickness || 2) * 0.65)
   for (let pass = 0; pass < 2; pass += 1) {
     faces.forEach((face, faceIndex) => {
       const sketch = organicPoints(face, seed + faceIndex * 1009 + pass * 77, { closed: true, amplitude: 6 + pass * 3, spacing: 38 })
       drawSmoothPath(ctx, sketch, true)
+      ctx.stroke()
     })
-    ctx.stroke()
   }
   ctx.restore()
 }
@@ -859,7 +988,19 @@ function drawFantasyMarker(ctx, object, selected) {
   ctx.fillStyle = colorWithAlpha(meta.fill || '#8f6a33', 0.72)
   ctx.lineWidth = Math.max(2, radius * 0.08)
 
-  if (name.includes('forest') || name.includes('tree')) {
+  if (object.type === 'location') {
+    ctx.beginPath()
+    ctx.moveTo(0, radius * 0.78)
+    ctx.bezierCurveTo(radius * 0.72, radius * 0.06, radius * 0.52, -radius * 0.76, 0, -radius * 0.76)
+    ctx.bezierCurveTo(-radius * 0.52, -radius * 0.76, -radius * 0.72, radius * 0.06, 0, radius * 0.78)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+    ctx.fillStyle = colorWithAlpha('#fff8dc', 0.9)
+    ctx.beginPath()
+    ctx.arc(0, -radius * 0.2, radius * 0.26, 0, Math.PI * 2)
+    ctx.fill()
+  } else if (name.includes('forest') || name.includes('tree')) {
     const count = 5 + Math.floor(seededNoise(seed, 1) * 5)
     for (let index = 0; index < count; index += 1) {
       const x = (seededNoise(seed, index + 10) - 0.5) * radius * 1.25
@@ -893,6 +1034,87 @@ function drawFantasyMarker(ctx, object, selected) {
       ctx.stroke()
       ctx.strokeStyle = selected ? '#1677ff' : colorWithAlpha(meta.stroke || '#3a2a16', 0.86)
     }
+  } else if (name.includes('castle')) {
+    const w = radius * 1.35
+    const h = radius * 1.18
+    ctx.fillRect(-w / 2, -h * 0.18, w, h * 0.72)
+    ctx.strokeRect(-w / 2, -h * 0.18, w, h * 0.72)
+    ;[-0.42, 0, 0.42].forEach(offset => {
+      const x = offset * w
+      ctx.fillRect(x - radius * 0.16, -h * 0.58, radius * 0.32, h * 0.42)
+      ctx.strokeRect(x - radius * 0.16, -h * 0.58, radius * 0.32, h * 0.42)
+    })
+  } else if (name.includes('ruin')) {
+    for (let index = 0; index < 5; index += 1) {
+      const x = -radius * 0.6 + index * radius * 0.3
+      const h = radius * (0.42 + seededNoise(seed, index + 101) * 0.58)
+      ctx.fillRect(x, radius * 0.48 - h, radius * 0.18, h)
+      ctx.strokeRect(x, radius * 0.48 - h, radius * 0.18, h)
+    }
+  } else if (name.includes('city') || name.includes('capital') || name.includes('town') || name.includes('kingdom')) {
+    const buildings = name.includes('town') ? 3 : 5
+    for (let index = 0; index < buildings; index += 1) {
+      const w = radius * (0.22 + seededNoise(seed, index + 201) * 0.12)
+      const h = radius * (0.42 + seededNoise(seed, index + 211) * 0.5)
+      const x = (index - (buildings - 1) / 2) * radius * 0.28
+      ctx.fillRect(x - w / 2, radius * 0.5 - h, w, h)
+      ctx.strokeRect(x - w / 2, radius * 0.5 - h, w, h)
+    }
+    if (name.includes('capital') || name.includes('kingdom')) {
+      ctx.beginPath()
+      ctx.moveTo(0, -radius * 0.76)
+      for (let index = 0; index < 5; index += 1) {
+        const angle = -Math.PI / 2 + index * Math.PI * 0.4
+        const r = index % 2 ? radius * 0.34 : radius * 0.62
+        ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r - radius * 0.1)
+      }
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+    }
+  } else if (name.includes('wall')) {
+    const brickH = radius * 0.28
+    for (let row = 0; row < 3; row += 1) {
+      const offset = row % 2 ? radius * 0.24 : 0
+      for (let col = -2; col <= 1; col += 1) {
+        ctx.strokeRect(col * radius * 0.48 + offset, -radius * 0.45 + row * brickH, radius * 0.46, brickH)
+      }
+    }
+  } else if (name.includes('door')) {
+    ctx.fillRect(-radius * 0.38, -radius * 0.62, radius * 0.76, radius * 1.24)
+    ctx.strokeRect(-radius * 0.38, -radius * 0.62, radius * 0.76, radius * 1.24)
+    ctx.beginPath()
+    ctx.arc(radius * 0.18, 0, radius * 0.06, 0, Math.PI * 2)
+    ctx.fillStyle = '#f7d27c'
+    ctx.fill()
+  } else if (name.includes('table') || name.includes('bed') || name.includes('container')) {
+    ctx.beginPath()
+    ctx.roundRect(-radius * 0.68, -radius * 0.42, radius * 1.36, radius * 0.84, radius * 0.12)
+    ctx.fill()
+    ctx.stroke()
+    if (name.includes('container')) {
+      ctx.beginPath()
+      ctx.moveTo(-radius * 0.68, -radius * 0.08)
+      ctx.lineTo(radius * 0.68, -radius * 0.08)
+      ctx.stroke()
+    }
+  } else if (name.includes('chair')) {
+    ctx.strokeRect(-radius * 0.35, -radius * 0.1, radius * 0.7, radius * 0.52)
+    ctx.beginPath()
+    ctx.moveTo(-radius * 0.35, -radius * 0.1)
+    ctx.lineTo(-radius * 0.35, -radius * 0.62)
+    ctx.lineTo(radius * 0.35, -radius * 0.62)
+    ctx.lineTo(radius * 0.35, -radius * 0.1)
+    ctx.stroke()
+  } else if (name.includes('fire')) {
+    ctx.beginPath()
+    ctx.moveTo(0, -radius * 0.62)
+    ctx.quadraticCurveTo(radius * 0.55, -radius * 0.05, radius * 0.18, radius * 0.5)
+    ctx.quadraticCurveTo(0, radius * 0.72, -radius * 0.24, radius * 0.5)
+    ctx.quadraticCurveTo(-radius * 0.58, -radius * 0.08, 0, -radius * 0.62)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
   } else {
     ctx.beginPath()
     ctx.arc(0, 0, radius * 0.78, 0, Math.PI * 2)
@@ -910,8 +1132,8 @@ function drawFantasyMarker(ctx, object, selected) {
 function drawFantasyLabel(ctx, object) {
   const meta = object.metadata || {}
   const text = meta.text || meta.name || 'Label'
-  const size = Math.max(20, Math.min(72, object.height * 0.45))
-  const curve = Math.min(18, object.width * 0.05)
+  const size = Math.max(10, Math.min(144, meta.fontSize || object.height * 0.45))
+  const curve = meta.curvedLabel ? Math.min(24, object.width * 0.055) : 0
   ctx.save()
   ctx.font = `700 ${size}px Georgia, serif`
   ctx.textAlign = 'center'
@@ -927,7 +1149,7 @@ function drawFantasyLabel(ctx, object) {
     const x = cursor + charWidth / 2
     const t = chars.length <= 1 ? 0.5 : index / (chars.length - 1)
     const y = Math.sin((t - 0.5) * Math.PI) * curve
-    const angle = Math.cos((t - 0.5) * Math.PI) * 0.08
+    const angle = meta.curvedLabel ? Math.cos((t - 0.5) * Math.PI) * 0.08 : 0
     ctx.save()
     ctx.translate(x, y)
     ctx.rotate(angle)
@@ -1050,7 +1272,7 @@ function drawDraft(ctx, draft, zoom) {
   if (!draft) return
   ctx.save()
   ctx.strokeStyle = draft.stroke || '#1677ff'
-  ctx.fillStyle = draft.fill || 'rgba(22, 119, 255, 0.12)'
+  ctx.fillStyle = draft.fill && draft.fill !== 'transparent' ? colorWithAlpha(draft.fill, 0.62) : 'rgba(22, 119, 255, 0.12)'
   ctx.lineWidth = Math.max(2 / zoom, draft.lineThickness || 2)
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
@@ -1100,6 +1322,8 @@ export default function MapBuilder({ store }) {
     deleteMap,
     renameMap,
     updateActiveMapData,
+    locations = [],
+    saveLocation,
   } = store
 
   const activeMap = project?.maps?.find(map => map.id === project?.activeMapId) || null
@@ -1122,9 +1346,20 @@ export default function MapBuilder({ store }) {
   const [jsonStatus, setJsonStatus] = useState('')
   const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 920 : false)
   const [draft, setDraft] = useState(null)
-  const [shapeKind, setShapeKind] = useState('rectangle')
+  const [shapeKind, setShapeKind] = useState('polygon')
   const [lineThickness, setLineThickness] = useState(8)
   const [dashedLines, setDashedLines] = useState(false)
+  const [mapType, setMapType] = useState('region')
+  const [stampSearch, setStampSearch] = useState('')
+  const [stampCategory, setStampCategory] = useState('All')
+  const [selectedStampId, setSelectedStampId] = useState('mountains')
+  const [favoriteStamps, setFavoriteStamps] = useState(() => loadJson('yow_map_favorite_stamps', []))
+  const [recentStamps, setRecentStamps] = useState(() => loadJson('yow_map_recent_stamps', []))
+  const [snapEnabled, setSnapEnabled] = useState(true)
+  const [snapSize, setSnapSize] = useState(40)
+  const [locationSearch, setLocationSearch] = useState('')
+  const [selectedLocationId, setSelectedLocationId] = useState('')
+  const [newLocationName, setNewLocationName] = useState('')
 
   const schema = useMemo(() => normalizeMapSchema(activeMap), [activeMap])
   const objects = schema.objects
@@ -1136,6 +1371,36 @@ export default function MapBuilder({ store }) {
   }, [objects, schema.layers])
   const selectedObjects = objects.filter(object => selectedIds.includes(object.id))
   const primarySelection = selectedObjects[0] || null
+  const layerObjects = useMemo(() => [...objects].sort((a, b) => b.zIndex - a.zIndex), [objects])
+  const activeMapType = normalizeMapType(activeMap?.mapType || activeMap?.metadata?.mapType || mapType || 'region')
+  const selectedStamp = STAMP_LIBRARY.find(stamp => stamp.id === selectedStampId) || STAMP_LIBRARY[0]
+  const defaultCategories = DEFAULT_CATEGORIES_BY_MAP_TYPE[activeMapType] || DEFAULT_CATEGORIES_BY_MAP_TYPE.region
+  const stampCategories = useMemo(() => {
+    const categories = new Set(STAMP_LIBRARY.map(stamp => stamp.category))
+    return ['All', 'Default', 'Favourites', 'Recent', ...categories]
+  }, [])
+  const filteredStamps = useMemo(() => {
+    const query = stampSearch.trim().toLowerCase()
+    return STAMP_LIBRARY.filter(stamp => {
+      const inDefault = defaultCategories.includes(stamp.category) || stamp.mapTypes.includes(activeMapType)
+      const categoryMatch = stampCategory === 'All'
+        || (stampCategory === 'Default' && inDefault)
+        || (stampCategory === 'Favourites' && favoriteStamps.includes(stamp.id))
+        || (stampCategory === 'Recent' && recentStamps.includes(stamp.id))
+        || stamp.category === stampCategory
+      const searchMatch = !query || `${stamp.name} ${stamp.category} ${stamp.keywords}`.toLowerCase().includes(query)
+      return categoryMatch && searchMatch
+    }).sort((a, b) => {
+      const aDefault = defaultCategories.includes(a.category) || a.mapTypes.includes(activeMapType)
+      const bDefault = defaultCategories.includes(b.category) || b.mapTypes.includes(activeMapType)
+      if (aDefault !== bDefault) return aDefault ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [activeMapType, defaultCategories, favoriteStamps, recentStamps, stampCategory, stampSearch])
+  const filteredLocations = useMemo(() => {
+    const query = locationSearch.trim().toLowerCase()
+    return (locations || []).filter(location => !query || `${location.name || ''} ${location.category || ''}`.toLowerCase().includes(query))
+  }, [locationSearch, locations])
 
   useEffect(() => {
     objectsRef.current = objects
@@ -1151,6 +1416,14 @@ export default function MapBuilder({ store }) {
     viewRef.current = view
     requestRender()
   }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMapType(normalizeMapType(activeMap?.mapType || activeMap?.metadata?.mapType || 'region'))
+      setStampCategory('Default')
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [activeMap?.id, activeMap?.mapType, activeMap?.metadata?.mapType])
 
   useEffect(() => {
     requestRender()
@@ -1174,7 +1447,10 @@ export default function MapBuilder({ store }) {
   }, [activeMap, updateActiveMapData])
 
   useEffect(() => {
-    setSelectedIds(current => current.filter(id => objects.some(object => object.id === id)))
+    const timer = window.setTimeout(() => {
+      setSelectedIds(current => current.filter(id => objects.some(object => object.id === id)))
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [objects])
 
   useEffect(() => {
@@ -1197,6 +1473,10 @@ export default function MapBuilder({ store }) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
         event.preventDefault()
         setSelectedIds(objectsRef.current.filter(object => !object.locked).map(object => object.id))
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd' && selectedIdsRef.current.length) {
+        event.preventDefault()
+        duplicateSelectedObjects()
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1274,12 +1554,16 @@ export default function MapBuilder({ store }) {
     const viewport = viewportRef.current
     if (!viewport) return
     const rect = viewport.getBoundingClientRect()
-    const zoom = Math.min((rect.width - 96) / MAP_W, (rect.height - 96) / MAP_H, 1)
+    const mapWidth = schema.width || MAP_W
+    const mapHeight = schema.height || MAP_H
+    const padding = Math.min(96, Math.max(32, Math.min(rect.width, rect.height) * 0.1))
+    const zoom = Math.min((rect.width - padding) / mapWidth, (rect.height - padding) / mapHeight, 1)
+    const nextZoom = clamp(zoom || DEFAULT_ZOOM, 0.12, 2.5)
     const nextView = {
-      zoom: clamp(zoom || DEFAULT_ZOOM, 0.12, 2.5),
+      zoom: nextZoom,
       pan: {
-        x: (rect.width - MAP_W * clamp(zoom || DEFAULT_ZOOM, 0.12, 2.5)) / 2,
-        y: (rect.height - MAP_H * clamp(zoom || DEFAULT_ZOOM, 0.12, 2.5)) / 2,
+        x: (rect.width - mapWidth * nextZoom) / 2,
+        y: (rect.height - mapHeight * nextZoom) / 2,
       },
     }
     setView(nextView)
@@ -1302,12 +1586,82 @@ export default function MapBuilder({ store }) {
     })
   }
 
+  function zoomViewportCenter(factor) {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const rect = viewport.getBoundingClientRect()
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor)
+  }
+
   function hitTest(point) {
     for (let index = visibleObjects.length - 1; index >= 0; index -= 1) {
       const object = visibleObjects[index]
       if (objectContainsPoint(object, point)) return object
     }
     return null
+  }
+
+  function snapPoint(point) {
+    if (!snapEnabled) return point
+    return {
+      x: Math.round(point.x / snapSize) * snapSize,
+      y: Math.round(point.y / snapSize) * snapSize,
+    }
+  }
+
+  function noteStampUsed(stampId) {
+    if (!stampId) return
+    setRecentStamps(current => {
+      const next = [stampId, ...current.filter(id => id !== stampId)].slice(0, 10)
+      saveJson('yow_map_recent_stamps', next)
+      return next
+    })
+  }
+
+  function toggleFavoriteStamp(stampId) {
+    setFavoriteStamps(current => {
+      const next = current.includes(stampId) ? current.filter(id => id !== stampId) : [...current, stampId]
+      saveJson('yow_map_favorite_stamps', next)
+      return next
+    })
+  }
+
+  function placeObjectAtPoint(object) {
+    let selectedId = object.id
+    updateObjects(current => {
+      const merged = mergeLandObjectIntoList(current, object)
+      selectedId = merged.selectedId
+      return merged.objects
+    })
+    setSelectedIds([selectedId])
+  }
+
+  function placeStampAt(point, stamp = selectedStamp) {
+    if (!stamp) return
+    const object = createStampObject(stamp, objectsRef.current.length, snapPoint(point))
+    placeObjectAtPoint(object)
+    setSelectedStampId(stamp.id)
+    noteStampUsed(stamp.id)
+  }
+
+  function placeLabelAt(point) {
+    placeObjectAtPoint(createLabelObject(objectsRef.current.length, snapPoint(point)))
+  }
+
+  function createLocationFromName(point) {
+    const name = newLocationName.trim() || 'New Location'
+    const location = saveLocation
+      ? saveLocation({ name, category: activeMapType === 'interior' ? 'Landmark' : 'Other', description: '' })
+      : { id: uid('location'), name, category: 'Other' }
+    setNewLocationName('')
+    setSelectedLocationId(location?.id || '')
+    placeObjectAtPoint(createLocationObject(location, objectsRef.current.length, snapPoint(point)))
+  }
+
+  function placeLocationAt(point) {
+    const linked = (locations || []).find(location => location.id === selectedLocationId)
+    if (linked) placeObjectAtPoint(createLocationObject(linked, objectsRef.current.length, snapPoint(point)))
+    else createLocationFromName(point)
   }
 
   function handlePointerDown(event) {
@@ -1319,7 +1673,7 @@ export default function MapBuilder({ store }) {
     const hit = hitTest(point)
     event.currentTarget.setPointerCapture(event.pointerId)
 
-    if (mode === 'pan' || event.altKey || event.spaceKey) {
+    if (mode === 'pan' || event.altKey || event.shiftKey || event.spaceKey) {
       interactionRef.current = { type: 'pan', startX: event.clientX, startY: event.clientY, startPan: viewRef.current.pan }
       return
     }
@@ -1329,6 +1683,18 @@ export default function MapBuilder({ store }) {
     }
     if (POINT_DRAW_TOOLS.has(mode)) {
       startOrExtendPointDraft(point, mode, event.detail >= 2)
+      return
+    }
+    if (mode === 'stamp') {
+      placeStampAt(point)
+      return
+    }
+    if (mode === 'label') {
+      placeLabelAt(point)
+      return
+    }
+    if (mode === 'location') {
+      placeLocationAt(point)
       return
     }
     if (mode === 'shape' && shapeKind === 'polygon') {
@@ -1385,10 +1751,15 @@ export default function MapBuilder({ store }) {
     }
     if (hit && !hit.locked) {
       const additive = event.shiftKey || event.metaKey || event.ctrlKey
+      const groupIds = hit.metadata?.groupId && !additive
+        ? objectsRef.current.filter(object => object.metadata?.groupId === hit.metadata.groupId && !object.locked).map(object => object.id)
+        : null
       const nextSelected = additive
         ? selectedIdsRef.current.includes(hit.id)
           ? selectedIdsRef.current.filter(id => id !== hit.id)
           : [...selectedIdsRef.current, hit.id]
+        : groupIds?.length
+          ? groupIds
         : selectedIdsRef.current.includes(hit.id)
           ? selectedIdsRef.current
           : [hit.id]
@@ -1430,7 +1801,7 @@ export default function MapBuilder({ store }) {
       const dy = point.y - interaction.startPoint.y
       updateObjects(current => current.map(object => {
         const start = interaction.startObjects.find(item => item.id === object.id)
-        return start ? { ...object, x: start.x + dx, y: start.y + dy } : object
+        return start ? { ...object, ...snapPoint({ x: start.x + dx, y: start.y + dy }) } : object
       }))
       return
     }
@@ -1502,6 +1873,16 @@ export default function MapBuilder({ store }) {
     zoomAt(event.clientX, event.clientY, event.deltaY > 0 ? 0.9 : 1.1)
   }
 
+  function handleDrop(event) {
+    event.preventDefault()
+    if (!activeMap) return
+    const stampId = event.dataTransfer.getData('application/x-yow-stamp')
+    const stamp = STAMP_LIBRARY.find(item => item.id === stampId)
+    if (!stamp) return
+    const point = screenToMap(event.clientX, event.clientY, viewportRef.current, viewRef.current)
+    placeStampAt(point, stamp)
+  }
+
   function startOrExtendPointDraft(point, tool, shouldComplete = false) {
     const defaults = {
       region: { closed: true, fill: LAND_FILL, stroke: LAND_STROKE, lineThickness: 3, dashed: false },
@@ -1549,7 +1930,13 @@ export default function MapBuilder({ store }) {
   }
 
   function addObject(type) {
-    const object = createObject(type, objects.length)
+    const object = type === 'stamp'
+      ? createStampObject(selectedStamp, objects.length)
+      : type === 'label'
+        ? createLabelObject(objects.length)
+        : type === 'location'
+          ? createLocationObject((locations || []).find(location => location.id === selectedLocationId), objects.length)
+          : createObject(type, objects.length)
     let selectedId = object.id
     updateObjects(current => {
       const merged = mergeLandObjectIntoList(current, object)
@@ -1557,6 +1944,7 @@ export default function MapBuilder({ store }) {
       return merged.objects
     })
     setSelectedIds([selectedId])
+    if (type === 'stamp') noteStampUsed(selectedStamp?.id)
   }
 
   function deleteSelectedObjects() {
@@ -1576,6 +1964,40 @@ export default function MapBuilder({ store }) {
       : object))
   }
 
+  function duplicateSelectedObjects() {
+    if (!selectedIds.length) return
+    const selected = new Set(selectedIds)
+    const copies = objects
+      .filter(object => selected.has(object.id) && !object.locked)
+      .map((object, index) => normalizeObject({
+        ...object,
+        id: uid(object.type),
+        x: object.x + 36,
+        y: object.y + 36,
+        zIndex: Math.max(...objects.map(item => item.zIndex), 0) + index + 1,
+        metadata: { ...object.metadata, groupId: object.metadata?.groupId },
+      }, objects.length + index))
+    if (!copies.length) return
+    updateObjects(current => [...current, ...copies])
+    setSelectedIds(copies.map(object => object.id))
+  }
+
+  function groupSelectedObjects() {
+    if (selectedIds.length < 2) return
+    const groupId = uid('group')
+    patchSelected({ metadata: { groupId } })
+  }
+
+  function ungroupSelectedObjects() {
+    patchSelected({ metadata: { groupId: null } })
+  }
+
+  function updateMapType(nextType) {
+    setMapType(nextType)
+    updateActiveMapData(() => ({ mapType: nextType, metadata: { ...(activeMap?.metadata || {}), mapType: nextType } }))
+    setStampCategory('Default')
+  }
+
   function moveLayer(direction) {
     if (!selectedIds.length) return
     const selected = new Set(selectedIds)
@@ -1591,6 +2013,41 @@ export default function MapBuilder({ store }) {
     updateObjects(next.map((object, index) => ({ ...object, zIndex: object.zIndex + index * 0.001 })))
   }
 
+  function normalizeZOrder(list) {
+    return [...list]
+      .sort((a, b) => a.zIndex - b.zIndex)
+      .map((object, index) => ({ ...object, zIndex: index + 1 }))
+  }
+
+  function moveLayerObject(id, direction) {
+    const ordered = normalizeZOrder(objects)
+    const index = ordered.findIndex(object => object.id === id)
+    if (index < 0 || ordered[index].locked) return
+    const targetIndex = direction === 'front'
+      ? ordered.length - 1
+      : direction === 'back'
+        ? 0
+        : clamp(index + direction, 0, ordered.length - 1)
+    if (targetIndex === index) return
+    const [item] = ordered.splice(index, 1)
+    ordered.splice(targetIndex, 0, item)
+    updateObjects(ordered.map((object, nextIndex) => ({ ...object, zIndex: nextIndex + 1 })))
+  }
+
+  function selectLayerObject(event, object) {
+    event.stopPropagation()
+    const additive = event.metaKey || event.ctrlKey
+    if (additive) {
+      setSelectedIds(current => current.includes(object.id) ? current.filter(id => id !== object.id) : [...current, object.id])
+      return
+    }
+    if (selectedIdsRef.current.length === 1 && selectedIdsRef.current[0] === object.id) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds([object.id])
+  }
+
   function toggleVisibility(id) {
     updateObjects(current => current.map(object => object.id === id ? { ...object, visible: object.visible === false } : object))
   }
@@ -1601,7 +2058,7 @@ export default function MapBuilder({ store }) {
 
   function handleCreateMap(event) {
     event.preventDefault()
-    const id = addMap(newMapName.trim() || 'Untitled Map', 'object')
+    const id = addMap(newMapName.trim() || 'Untitled Map', mapType || 'region')
     setNewMapName('')
     setTimeout(() => {
       selectMap(id)
@@ -1667,34 +2124,16 @@ export default function MapBuilder({ store }) {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateRows: 'auto 1fr', background: 'var(--surface)', color: 'var(--text)' }}>
+    <div style={{ flex: 1, minHeight: 0, height: isCompact ? 'auto' : 'calc(100vh - 168px)', maxHeight: isCompact ? undefined : 'calc(100vh - 168px)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', background: 'var(--surface)', color: 'var(--text)' }}>
       <div className="studio-topbar map-builder-topbar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', minWidth: 0, flexWrap: 'wrap' }}>
         <strong style={{ fontFamily: 'var(--font-serif)', fontSize: 16, flexShrink: 0 }}>Map Builder</strong>
-        <div style={{ display: 'flex', gap: 4, padding: 3, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface2)' }}>
-          {TOOLBAR_MODES.map(item => (
-            <button
-              key={item.id}
-              className="btn btn-secondary btn-sm"
-              onClick={() => selectEditorMode(item.id)}
-              title={item.label}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                border: 'none',
-                background: mode === item.id ? 'var(--accent)' : 'transparent',
-                color: mode === item.id ? '#fff' : 'var(--muted)',
-              }}
-            >
-              <span aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
+        <span style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface2)' }}>
+          {TOOLBAR_MODES.find(item => item.id === mode)?.label || 'Select'}
+        </span>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginLeft: isCompact ? 0 : 'auto', flexShrink: 0, flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, 0.86)} title="Zoom out">−</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => zoomViewportCenter(0.86)} title="Zoom out">−</button>
           <span style={{ minWidth: 48, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{Math.round(view.zoom * 100)}%</span>
-          <button className="btn btn-secondary btn-sm" onClick={() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.16)} title="Zoom in">+</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => zoomViewportCenter(1.16)} title="Zoom in">+</button>
           <button className="btn btn-secondary btn-sm" onClick={fitCanvasToViewport}>Fit</button>
           <button className="btn btn-secondary btn-sm" onClick={downloadJson}>Export JSON</button>
           <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()}>Import JSON</button>
@@ -1714,6 +2153,12 @@ export default function MapBuilder({ store }) {
             />
             <button className="btn btn-primary btn-sm" type="submit">+</button>
           </form>
+          <SelectInput
+            label="Map type"
+            value={activeMap ? activeMapType : mapType}
+            options={MAP_TYPE_OPTIONS}
+            onChange={value => activeMap ? updateMapType(value) : setMapType(value)}
+          />
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 150 : 0 }}>
             <PanelTitle>Draw</PanelTitle>
@@ -1739,9 +2184,9 @@ export default function MapBuilder({ store }) {
                 label="Shape"
                 value={shapeKind}
                 options={[
+                  { value: 'polygon', label: 'Polygon' },
                   { value: 'rectangle', label: 'Rectangle' },
                   { value: 'circle', label: 'Circle' },
-                  { value: 'polygon', label: 'Polygon' },
                 ]}
                 onChange={value => { setShapeKind(value); setDraft(null) }}
               />
@@ -1754,14 +2199,94 @@ export default function MapBuilder({ store }) {
             ) : null}
           </section>
 
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: isCompact ? 220 : 0 }}>
+            <PanelTitle>Stamps</PanelTitle>
+            <input
+              value={stampSearch}
+              onChange={event => setStampSearch(event.target.value)}
+              placeholder="Search stamps"
+              style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+            />
+            <select
+              value={stampCategory}
+              onChange={event => setStampCategory(event.target.value)}
+              style={{ border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+            >
+              {stampCategories.map(category => <option key={category} value={category}>{category}</option>)}
+            </select>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))', gap: 6 }}>
+              {filteredStamps.slice(0, 24).map(stamp => (
+                <button
+                  key={stamp.id}
+                  className="btn btn-secondary btn-sm"
+                  draggable
+                  onDragStart={event => event.dataTransfer.setData('application/x-yow-stamp', stamp.id)}
+                  onClick={() => { setSelectedStampId(stamp.id); selectEditorMode('stamp') }}
+                  title={`${stamp.name} (${stamp.category})`}
+                  style={{ minHeight: 62, padding: 6, display: 'grid', gap: 3, justifyItems: 'center', borderColor: selectedStampId === stamp.id ? 'var(--accent)' : undefined, background: selectedStampId === stamp.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface2))' : undefined }}
+                >
+                  <span style={{ fontSize: 20, color: stamp.fill }}>{stamp.icon}</span>
+                  <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>{stamp.name}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => selectEditorMode('stamp')} style={{ flex: 1 }}>Place</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => toggleFavoriteStamp(selectedStampId)} title="Favourite stamp">{favoriteStamps.includes(selectedStampId) ? '★' : '☆'}</button>
+            </div>
+          </section>
+
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 190 : 0 }}>
+            <PanelTitle>Content</PanelTitle>
+            <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('label')} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, background: mode === 'label' ? 'var(--accent)' : undefined, color: mode === 'label' ? '#fff' : undefined }}>
+              <span style={{ width: 16 }}>T</span>
+              <span>Place label</span>
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('location')} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, background: mode === 'location' ? 'var(--accent)' : undefined, color: mode === 'location' ? '#fff' : undefined }}>
+              <span style={{ width: 16 }}>⌖</span>
+              <span>Place location</span>
+            </button>
+            {mode === 'location' && (
+              <>
+                <input
+                  value={locationSearch}
+                  onChange={event => setLocationSearch(event.target.value)}
+                  placeholder="Find location"
+                  style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+                />
+                <select value={selectedLocationId} onChange={event => setSelectedLocationId(event.target.value)} style={{ border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}>
+                  <option value="">New linked location</option>
+                  {filteredLocations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+                </select>
+                {!selectedLocationId && (
+                  <input
+                    value={newLocationName}
+                    onChange={event => setNewLocationName(event.target.value)}
+                    placeholder="New location name"
+                    style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+                  />
+                )}
+              </>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <CheckboxInput label="Snap" checked={snapEnabled} onChange={setSnapEnabled} />
+              <select value={snapSize} onChange={event => setSnapSize(Number(event.target.value))} disabled={!snapEnabled} style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}>
+                {SNAP_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}
+              </select>
+            </div>
+          </section>
+
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 150 : 0 }}>
             <PanelTitle>Objects</PanelTitle>
-            {Object.entries(OBJECT_TYPES).map(([type, item]) => (
+            {['marker', 'shape', 'region', 'river', 'road', 'border'].map(type => {
+              const item = OBJECT_TYPES[type]
+              return (
               <button key={type} className="btn btn-secondary btn-sm" onClick={() => addObject(type)} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8 }}>
                 <span style={{ width: 16 }}>{item.icon}</span>
                 <span>{item.label}</span>
               </button>
-            ))}
+              )
+            })}
           </section>
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0, minWidth: isCompact ? 180 : 0 }}>
@@ -1809,6 +2334,8 @@ export default function MapBuilder({ store }) {
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
+          onDragOver={event => event.preventDefault()}
+          onDrop={handleDrop}
           style={{ minWidth: 0, minHeight: isCompact ? 420 : 0, position: 'relative', overflow: 'hidden', touchAction: 'none', cursor: mode === 'pan' ? 'grab' : mode === 'zoom' ? 'zoom-in' : 'default' }}
         >
           {activeMap ? (
@@ -1846,6 +2373,26 @@ export default function MapBuilder({ store }) {
                   <ColorInput label="Fill" value={primarySelection.metadata?.fill || LAND_FILL} onChange={value => patchSelected({ metadata: { fill: value } })} />
                   <ColorInput label="Stroke" value={primarySelection.metadata?.stroke || LAND_STROKE} onChange={value => patchSelected({ metadata: { stroke: value } })} />
                 </div>
+                {primarySelection.type === 'label' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, alignItems: 'end' }}>
+                    <NumberInput label="Font size" value={primarySelection.metadata?.fontSize || 34} min={10} onChange={value => patchSelected({ metadata: { fontSize: value } })} />
+                    <CheckboxInput label="Curved" checked={Boolean(primarySelection.metadata?.curvedLabel)} onChange={value => patchSelected({ metadata: { curvedLabel: value } })} />
+                  </div>
+                )}
+                {primarySelection.type === 'location' && (
+                  <SelectInput
+                    label="Linked location"
+                    value={primarySelection.metadata?.locationId || ''}
+                    options={[
+                      { value: '', label: 'Unlinked' },
+                      ...(locations || []).map(location => ({ value: location.id, label: location.name || 'Untitled' })),
+                    ]}
+                    onChange={value => {
+                      const linked = (locations || []).find(location => location.id === value)
+                      patchSelected({ metadata: { locationId: value || null, name: linked?.name || primarySelection.metadata?.name || 'Location', text: linked?.name || primarySelection.metadata?.text || 'Location', category: linked?.category || primarySelection.metadata?.category } })
+                    }}
+                  />
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   <NumberInput label="Opacity" value={round((primarySelection.metadata?.opacity ?? 1) * 100, 0)} min={0} onChange={value => patchSelected({ metadata: { opacity: clamp(value / 100, 0, 1) } })} />
                   <NumberInput label="Line" value={primarySelection.metadata?.lineThickness || 2} min={1} onChange={value => patchSelected({ metadata: { lineThickness: value } })} />
@@ -1855,11 +2402,11 @@ export default function MapBuilder({ store }) {
                   {primarySelection.type === 'shape' && (
                     <SelectInput
                       label="Shape"
-                      value={primarySelection.metadata?.shapeKind || 'rectangle'}
+                      value={primarySelection.metadata?.shapeKind || 'polygon'}
                       options={[
+                        { value: 'polygon', label: 'Polygon' },
                         { value: 'rectangle', label: 'Rectangle' },
                         { value: 'circle', label: 'Circle' },
-                        { value: 'polygon', label: 'Polygon' },
                       ]}
                       onChange={value => patchSelected({ metadata: { shapeKind: value } })}
                     />
@@ -1868,6 +2415,9 @@ export default function MapBuilder({ store }) {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary btn-sm" onClick={() => patchSelected({ locked: !primarySelection.locked })}>{primarySelection.locked ? 'Unlock' : 'Lock'}</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => patchSelected({ visible: primarySelection.visible === false })}>{primarySelection.visible === false ? 'Show' : 'Hide'}</button>
+                  <button className="btn btn-secondary btn-sm" onClick={duplicateSelectedObjects}>Duplicate</button>
+                  {selectedIds.length > 1 && <button className="btn btn-secondary btn-sm" onClick={groupSelectedObjects}>Group</button>}
+                  {selectedObjects.some(object => object.metadata?.groupId) && <button className="btn btn-secondary btn-sm" onClick={ungroupSelectedObjects}>Ungroup</button>}
                   <button className="btn btn-secondary btn-sm" onClick={() => moveLayer('front')}>Front</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => moveLayer('back')}>Back</button>
                   <button className="btn btn-secondary btn-sm" onClick={deleteSelectedObjects}>Delete</button>
@@ -1879,25 +2429,53 @@ export default function MapBuilder({ store }) {
           </section>
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <PanelTitle>Layers</PanelTitle>
-            {[...objects].sort((a, b) => b.zIndex - a.zIndex).map(object => {
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+              <PanelTitle>Layers</PanelTitle>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds(objects.filter(object => !object.locked).map(object => object.id))} title="Select all layers">All</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds([])} title="Clear layer selection">None</button>
+              </div>
+            </div>
+            <div style={{ color: 'var(--muted)', fontSize: 11, lineHeight: 1.35 }}>Top layers are drawn last. Click a selected layer again to deselect it.</div>
+            {layerObjects.map((object, index) => {
               const selected = selectedIds.includes(object.id)
+              const isTop = index === 0
+              const isBottom = index === layerObjects.length - 1
               return (
-                <div key={object.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 4, alignItems: 'center', padding: 5, borderRadius: 7, border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`, background: selected ? 'color-mix(in srgb, var(--accent) 14%, var(--surface2))' : 'var(--surface2)' }}>
+                <div
+                  key={object.id}
+                  onClick={event => selectLayerObject(event, object)}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    gap: 6,
+                    alignItems: 'center',
+                    padding: 7,
+                    borderRadius: 7,
+                    border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                    background: selected ? 'color-mix(in srgb, var(--accent) 14%, var(--surface2))' : 'var(--surface2)',
+                    cursor: object.locked ? 'default' : 'pointer',
+                  }}
+                >
                   <button
-                    onClick={event => {
-                      if (event.shiftKey || event.metaKey || event.ctrlKey) {
-                        setSelectedIds(current => current.includes(object.id) ? current.filter(id => id !== object.id) : [...current, object.id])
-                      } else {
-                        setSelectedIds([object.id])
-                      }
-                    }}
-                    style={{ minWidth: 0, textAlign: 'left', background: 'none', border: 'none', color: selected ? 'var(--text-main)' : 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    onClick={event => selectLayerObject(event, object)}
+                    title={selected ? 'Deselect layer' : 'Select layer'}
+                    style={{ minWidth: 0, textAlign: 'left', background: 'none', border: 'none', color: selected ? 'var(--text-main)' : 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', overflow: 'hidden', padding: 0 }}
                   >
-                    {OBJECT_TYPES[object.type]?.icon || '□'} {object.metadata?.name || object.type}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      <span style={{ width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--surface) 70%, #000)', color: selected ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>{OBJECT_TYPES[object.type]?.icon || '□'}</span>
+                      <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{object.metadata?.name || object.type}</span>
+                        <span style={{ color: 'var(--faint)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{object.type}{object.metadata?.groupId ? ' · group' : ''}</span>
+                      </span>
+                    </span>
                   </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => toggleVisibility(object.id)} title={object.visible === false ? 'Show' : 'Hide'}>{object.visible === false ? '○' : '●'}</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => toggleLock(object.id)} title={object.locked ? 'Unlock' : 'Lock'}>{object.locked ? 'L' : 'U'}</button>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 28px)', gap: 4 }}>
+                    <button className="btn btn-secondary btn-sm" disabled={isTop || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, 1) }} title="Move up">↑</button>
+                    <button className="btn btn-secondary btn-sm" disabled={isBottom || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, -1) }} title="Move down">↓</button>
+                    <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleVisibility(object.id) }} title={object.visible === false ? 'Show' : 'Hide'}>{object.visible === false ? '○' : '●'}</button>
+                    <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleLock(object.id) }} title={object.locked ? 'Unlock' : 'Lock'}>{object.locked ? 'L' : 'U'}</button>
+                  </div>
                 </div>
               )
             })}

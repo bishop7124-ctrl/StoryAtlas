@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import UserMenu from './auth/UserMenu'
 import YOWLogo from './brand/YOWLogo'
+import AIImportModal from './AIImportModal'
 import { PROJECT_TYPES, DEFAULT_TYPE, getProjectType } from '../constants/projectTypes'
 import {
   createProjectZipBlob,
@@ -900,6 +901,7 @@ function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
 
 export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const [showForm, setShowForm] = useState(false)
+  const [showAIImport, setShowAIImport] = useState(false)
   const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
   const [showSeriesForm, setShowSeriesForm] = useState(false)
   const [seriesName, setSeriesName] = useState('')
@@ -1025,6 +1027,9 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
               </button>
               <button className="library-new-series-button" type="button" onClick={() => setShowSeriesForm(true)}>
                 New Series
+              </button>
+              <button className="library-new-series-button" type="button" onClick={() => setShowAIImport(true)} title="Import files and let AI build your project">
+                AI Import
               </button>
             </>
           )}
@@ -1197,6 +1202,15 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
             </div>
           </form>
         </div>
+      )}
+
+      {/* AI Import modal */}
+      {showAIImport && (
+        <AIImportModal
+          store={store}
+          onClose={() => setShowAIImport(false)}
+          onImportDone={(novelId) => { onOpenProject?.(novelId) }}
+        />
       )}
 
       {/* New project modal */}

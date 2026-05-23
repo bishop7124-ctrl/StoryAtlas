@@ -77,8 +77,8 @@ function HeroIllustration() {
   )
 }
 
-export default function LoginPage({ onOpenLegal, onOpenAbout }) {
-  const { signIn, signUp } = useAuth()
+export default function LoginPage({ onOpenLegal, onOpenAbout, recoveryMode }) {
+  const { signIn, signUp, resetPassword, updatePassword, clearRecoveryMode } = useAuth()
   const [screen, setScreen] = useState('home')
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState(import.meta.env.VITE_DEV_EMAIL ?? '')
@@ -86,6 +86,10 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [newPwd, setNewPwd] = useState('')
+  const [confirmPwd, setConfirmPwd] = useState('')
+  const [pwdUpdated, setPwdUpdated] = useState(false)
 
   // Surface auth errors that Supabase encodes in the URL hash (e.g. expired link)
   useEffect(() => {
@@ -102,6 +106,49 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
       history.replaceState(null, '', window.location.pathname + window.location.search)
     }
   }, [])
+
+  // When Supabase fires PASSWORD_RECOVERY, switch straight to the new-password screen
+  useEffect(() => {
+    if (recoveryMode) {
+      setScreen('newPassword')
+      setError('')
+    }
+  }, [recoveryMode])
+
+  const handleReset = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      const { error: err } = await resetPassword(email)
+      if (err) setError(err.message)
+      else setResetSent(true)
+    } catch (err) {
+      setError(err.message || 'Something went wrong.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNewPassword = async (e) => {
+    e.preventDefault()
+    if (newPwd !== confirmPwd) { setError('Passwords do not match.'); return }
+    setError('')
+    setLoading(true)
+    try {
+      const { error: err } = await updatePassword(newPwd)
+      if (err) {
+        setError(err.message)
+      } else {
+        setPwdUpdated(true)
+        clearRecoveryMode()
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const openAuth = (nextMode) => {
     setMode(nextMode)
@@ -254,7 +301,105 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
         {/* Right panel — form */}
         <main className="auth-main flex items-center justify-center">
           <div className="w-full max-w-md">
-            {sent ? (
+
+            {/* ── Set new password (arrived via reset link) ── */}
+            {screen === 'newPassword' ? (
+              pwdUpdated ? (
+                <>
+                  <div className="mb-6">
+                    <p className="eyebrow mb-2">Your Own World</p>
+                    <h2 className="font-serif text-4xl font-medium leading-none">Password updated</h2>
+                    <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Your password has been changed. You can now sign in with your new password.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setPwdUpdated(false); setScreen('auth'); setMode('login'); setNewPwd(''); setConfirmPwd('') }}
+                    className="btn btn-primary w-full justify-center py-3"
+                  >
+                    Go to login
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <p className="eyebrow mb-2">Your Own World</p>
+                    <h2 className="font-serif text-4xl font-medium leading-none">Set new password</h2>
+                    <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Choose a new password for your account.
+                    </p>
+                  </div>
+                  <form onSubmit={handleNewPassword} className="auth-form space-y-3">
+                    <input
+                      type="password"
+                      placeholder="New password"
+                      value={newPwd}
+                      onChange={e => setNewPwd(e.target.value)}
+                      required
+                      minLength={8}
+                      className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirm new password"
+                      value={confirmPwd}
+                      onChange={e => setConfirmPwd(e.target.value)}
+                      required
+                      className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                    />
+                    {error && (
+                      <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                        {error}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? '…' : 'Update password'}
+                    </button>
+                  </form>
+                </>
+              )
+
+            /* ── Reset-email sent confirmation ── */
+            ) : resetSent ? (
+              <>
+                <div className="mb-6">
+                  <p className="eyebrow mb-2">Your Own World</p>
+                  <h2 className="font-serif text-4xl font-medium leading-none">Check your inbox</h2>
+                  <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    We sent a password reset link to <strong style={{ color: 'var(--text-main)' }}>{email}</strong>. Click it to choose a new password.
+                  </p>
+                </div>
+                <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
+                  Wrong address?{' '}
+                  <button
+                    onClick={() => { setResetSent(false); setEmail('') }}
+                    className="text-[var(--accent)] hover:underline font-medium"
+                  >
+                    Try again
+                  </button>
+                </p>
+                <p className="mt-3 text-center text-sm text-[var(--text-muted)]">
+                  Remembered it?{' '}
+                  <button
+                    onClick={() => { setResetSent(false); setMode('login'); setError('') }}
+                    className="text-[var(--accent)] hover:underline font-medium"
+                  >
+                    Back to login
+                  </button>
+                </p>
+                <p className="mt-4 text-center text-xs">
+                  <button type="button" onClick={() => setScreen('home')} className="text-[var(--text-muted)] hover:text-[var(--accent)]">
+                    Back to homepage
+                  </button>
+                </p>
+              </>
+
+            /* ── Signup email-confirmation sent ── */
+            ) : sent ? (
               <>
                 <div className="mb-6">
                   <p className="eyebrow mb-2">Your Own World</p>
@@ -287,61 +432,125 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
                   </button>
                 </p>
               </>
+
+            /* ── Login / Signup / Reset-request forms ── */
             ) : (
               <>
                 <div className="mb-6">
                   <p className="eyebrow mb-2">Your Own World</p>
                   <h2 className="font-serif text-4xl font-medium leading-none">
-                    {mode === 'login' ? 'Welcome back' : 'Create account'}
+                    {mode === 'login' ? 'Welcome back' : mode === 'signup' ? 'Create account' : 'Reset password'}
                   </h2>
                   <p className="page-copy mt-3 text-sm" style={{ color: 'var(--text-muted)' }}>
                     {mode === 'login'
                       ? 'Sign in to return to your worlds, drafts, timelines, and story notes.'
-                      : 'Create your account and start building your first story world.'}
+                      : mode === 'signup'
+                      ? 'Create your account and start building your first story world.'
+                      : 'Enter your email and we\'ll send you a link to reset your password.'}
                   </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="auth-form space-y-3">
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
-                  />
+                {mode === 'reset' ? (
+                  <form onSubmit={handleReset} className="auth-form space-y-3">
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                    />
+                    {error && (
+                      <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                        {error}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? '…' : 'Send reset link'}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleSubmit} className="auth-form space-y-3">
+                    <input
+                      type="email"
+                      placeholder="Email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      required
+                      className="field w-full px-4 py-3 text-sm placeholder:text-[var(--text-muted)]"
+                    />
 
-                  {error && (
-                    <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
-                      {error}
-                    </p>
-                  )}
+                    {error && (
+                      <p className="text-red-400 text-sm text-center bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+                        {error}
+                      </p>
+                    )}
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create Account'}
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn btn-primary w-full justify-center py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? '…' : mode === 'login' ? 'Sign In' : 'Create Account'}
+                    </button>
+                  </form>
+                )}
+
+                {mode === 'login' && (
+                  <p className="mt-3 text-center text-sm text-[var(--text-muted)]">
+                    <button
+                      onClick={() => { setMode('reset'); setError('') }}
+                      className="text-[var(--accent)] hover:underline font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  </p>
+                )}
 
                 <p className="mt-6 text-center text-sm text-[var(--text-muted)]">
-                  {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-                  <button
-                    onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSent(false) }}
-                    className="text-[var(--accent)] hover:underline font-medium"
-                  >
-                    {mode === 'login' ? 'Sign up' : 'Sign in'}
-                  </button>
+                  {mode === 'reset' ? (
+                    <>
+                      Remembered it?{' '}
+                      <button
+                        onClick={() => { setMode('login'); setError('') }}
+                        className="text-[var(--accent)] hover:underline font-medium"
+                      >
+                        Back to login
+                      </button>
+                    </>
+                  ) : mode === 'login' ? (
+                    <>
+                      Don&apos;t have an account?{' '}
+                      <button
+                        onClick={() => { setMode('signup'); setError(''); setSent(false) }}
+                        className="text-[var(--accent)] hover:underline font-medium"
+                      >
+                        Sign up
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Already have an account?{' '}
+                      <button
+                        onClick={() => { setMode('login'); setError(''); setSent(false) }}
+                        className="text-[var(--accent)] hover:underline font-medium"
+                      >
+                        Sign in
+                      </button>
+                    </>
+                  )}
                 </p>
 
                 <p className="mt-8 text-center text-xs text-[var(--text-muted)]">
@@ -365,6 +574,7 @@ export default function LoginPage({ onOpenLegal, onOpenAbout }) {
                 )}
               </>
             )}
+
           </div>
         </main>
       </div>

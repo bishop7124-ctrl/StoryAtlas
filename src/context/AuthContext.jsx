@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../supabase'
 
-const AuthContext = createContext({ user: null, loading: false, signUp: () => {}, signIn: () => {}, signOut: () => {}, updateProfile: () => {}, refreshUser: () => null, getAccessToken: () => null })
+const AuthContext = createContext({ user: null, loading: false, recoveryMode: false, signUp: () => {}, signIn: () => {}, signOut: () => {}, updateProfile: () => {}, refreshUser: () => null, getAccessToken: () => null, resetPassword: () => {}, updatePassword: () => {}, clearRecoveryMode: () => {} })
 
 // Read the cached Supabase session from localStorage synchronously so the app
 // renders immediately on return visits without waiting for a network round-trip.
@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(readCachedUser)
   // loading is always false — we derive initial state synchronously above
   const [loading] = useState(false)
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
     // Silently validate / refresh the session in the background
@@ -26,8 +27,14 @@ export function AuthProvider({ children }) {
       setUser(session?.user ?? null)
     }).catch(console.warn)
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryMode(true)
+        setUser(session?.user ?? null)
+      } else {
+        setRecoveryMode(false)
+        setUser(session?.user ?? null)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -36,6 +43,11 @@ export function AuthProvider({ children }) {
   const signUp = (email, password) => supabase.auth.signUp({ email, password })
   const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password })
   const signOut = () => supabase.auth.signOut()
+  const resetPassword = (email) => supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}${window.location.pathname}`,
+  })
+  const updatePassword = (password) => supabase.auth.updateUser({ password })
+  const clearRecoveryMode = () => setRecoveryMode(false)
   const updateProfile = async (profile) => {
     const { data, error } = await supabase.auth.updateUser({ data: profile })
     if (error) throw error
@@ -63,7 +75,7 @@ export function AuthProvider({ children }) {
   const isAdmin = user?.app_metadata?.is_admin === true
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, signUp, signIn, signOut, updateProfile, refreshUser, getAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, recoveryMode, signUp, signIn, signOut, updateProfile, refreshUser, getAccessToken, resetPassword, updatePassword, clearRecoveryMode }}>
       {children}
     </AuthContext.Provider>
   )

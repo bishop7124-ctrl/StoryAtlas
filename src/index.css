@@ -4211,6 +4211,11 @@ textarea:focus {
   border-color: color-mix(in srgb, var(--text-muted) 64%, var(--border));
 }
 
+.timeline-item.has-linked-entry .timeline-dot {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 26%, var(--bg-main));
+}
+
 .timeline-item.is-expanded .timeline-dot {
   background: var(--accent);
 }
@@ -4271,6 +4276,18 @@ textarea:focus {
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.timeline-linked-note {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 680;
 }
 
 /* Birthday items: dot-only, tooltip on hover */
@@ -4358,6 +4375,292 @@ textarea:focus {
   white-space: nowrap;
 }
 
+.timeline-topbar {
+  gap: 14px;
+}
+
+.timeline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.timeline-segmented {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.timeline-segmented button {
+  padding: 6px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  background: transparent;
+}
+
+.timeline-segmented button.is-active {
+  color: var(--bg-main);
+  background: var(--accent);
+}
+
+.timeline-visual-wrap {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--bg-main);
+}
+
+.timeline-zoombar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-zoombar button {
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: var(--bg-nav);
+}
+
+.timeline-rail-scroll {
+  flex: 1;
+  overflow: auto;
+  cursor: grab;
+  touch-action: pan-x pan-y;
+  background:
+    linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg-nav) 30%, transparent)),
+    var(--bg-main);
+}
+
+.timeline-rail {
+  position: relative;
+  min-height: 720px;
+  height: 100%;
+  padding: 150px 190px;
+}
+
+.timeline-axis {
+  position: absolute;
+  left: 90px;
+  right: 90px;
+  top: 50%;
+  height: 2px;
+  background: color-mix(in srgb, var(--border) 86%, transparent);
+}
+
+.timeline-year-start,
+.timeline-year-end {
+  position: absolute;
+  top: calc(50% + 18px);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.timeline-year-start { left: 96px; }
+.timeline-year-end { right: 96px; }
+
+.timeline-visual-node {
+  position: absolute;
+  top: calc(50% - 12px);
+  transform: translateX(-50%);
+}
+
+.timeline-visual-node.lane-0 { margin-top: -240px; }
+.timeline-visual-node.lane-1 { margin-top: -154px; }
+.timeline-visual-node.lane-2 { margin-top: -68px; }
+.timeline-visual-node.lane-3 { margin-top: 58px; }
+.timeline-visual-node.lane-4 { margin-top: 144px; }
+.timeline-visual-node.lane-5 { margin-top: 230px; }
+
+.timeline-cluster {
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--border));
+  border-radius: 999px;
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--accent-fade) 72%, var(--bg-nav));
+  box-shadow: 0 8px 28px color-mix(in srgb, #000 14%, transparent);
+}
+
+.timeline-cluster strong {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.timeline-cluster span {
+  margin-top: -20px;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.timeline-node-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-node-card {
+  width: 176px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  text-align: left;
+  background: color-mix(in srgb, var(--bg-nav) 84%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 12%, transparent);
+}
+
+.timeline-node-card.history {
+  border-color: color-mix(in srgb, var(--text-muted) 44%, var(--border));
+}
+
+.timeline-node-card.birthday {
+  width: 150px;
+  opacity: .8;
+}
+
+.timeline-node-card span {
+  display: block;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.timeline-node-card strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linked-entry-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-nav) 54%, transparent);
+}
+
+.linked-entry-panel span,
+.linked-entry-panel small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.linked-entry-panel strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.schedule-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-date-controls {
+  flex: 1;
+  min-width: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.schedule-date-controls input {
+  width: 82px;
+}
+
+.schedule-month-title {
+  padding-top: 14px;
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.schedule-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(92px, 1fr));
+  grid-auto-rows: 124px;
+  gap: 2px;
+  min-width: 720px;
+}
+
+.schedule-day-cell {
+  position: relative;
+  z-index: 1;
+}
+
+.schedule-day-number {
+  position: relative;
+  z-index: 5;
+  width: 22px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg-nav) 88%, transparent);
+}
+
+.schedule-ribbon {
+  position: relative;
+  z-index: 3;
+  align-self: start;
+  margin-inline: 4px;
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--event-color) 74%, transparent);
+  padding: 0 8px;
+  color: var(--event-color);
+  background: color-mix(in srgb, var(--event-color) 18%, var(--bg-nav));
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 16px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--bg-main) 80%, transparent);
+}
+
+.schedule-empty-month {
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  padding: 28px 0 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .timeline-detail {
   margin: 2px 0 18px clamp(26px, 5vw, 36px);
   padding: 14px;
@@ -4397,6 +4700,48 @@ textarea:focus {
 }
 
 @media (max-width: 640px) {
+  .timeline-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .timeline-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .timeline-toolbar .field {
+    width: 100%;
+  }
+
+  .timeline-rail {
+    min-height: 640px;
+    padding-inline: 100px;
+  }
+
+  .timeline-node-card {
+    width: 148px;
+  }
+
+  .schedule-date-controls {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .schedule-grid {
+    grid-template-columns: repeat(7, minmax(78px, 1fr));
+    grid-auto-rows: 116px;
+    min-width: 590px;
+  }
+
+  .schedule-ribbon {
+    height: 16px;
+    padding-inline: 5px;
+    font-size: 9px;
+    line-height: 14px;
+  }
+
   .timeline-list {
     --tl-axis: 26px;
     padding-inline-end: 14px;
@@ -9532,4 +9877,97 @@ body {
     width: 100%;
     justify-content: flex-end;
   }
+}
+
+@keyframes ai-import-spin {
+  to { transform: rotate(360deg); }
+}
+.ai-import-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ai-import-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── AI Import — writing animation ────────────────────────────────────────── */
+
+/* 5-second loop. Per-line timing (each line = 20% of 5s = 1s):
+   draw 0.7s (14%) → snap to next line start 0.05s (1%) → hold 0.25s (5%) → repeat
+   After line 5: pen lifts 0.4s (8%) → invisible reset → fade in at start */
+
+.ai-wl { fill: none; }
+
+.ai-wl1 { stroke-dasharray: 88; animation: ai-draw-l1 5s linear infinite; }
+.ai-wl2 { stroke-dasharray: 76; animation: ai-draw-l2 5s linear infinite; }
+.ai-wl3 { stroke-dasharray: 84; animation: ai-draw-l3 5s linear infinite; }
+.ai-wl4 { stroke-dasharray: 70; animation: ai-draw-l4 5s linear infinite; }
+.ai-wl5 { stroke-dasharray: 42; animation: ai-draw-l5 5s linear infinite; }
+
+@keyframes ai-draw-l1 {
+  0%          { stroke-dashoffset: 88; }
+  2%          { stroke-dashoffset: 88; } /* wait for pen to appear */
+  14%         { stroke-dashoffset: 0;  }
+  94%         { stroke-dashoffset: 0;  } /* stay drawn */
+  100%        { stroke-dashoffset: 88; } /* instant reset while pen is invisible */
+}
+@keyframes ai-draw-l2 {
+  0%, 20%     { stroke-dashoffset: 76; }
+  34%         { stroke-dashoffset: 0;  }
+  94%         { stroke-dashoffset: 0;  }
+  100%        { stroke-dashoffset: 76; }
+}
+@keyframes ai-draw-l3 {
+  0%, 40%     { stroke-dashoffset: 84; }
+  54%         { stroke-dashoffset: 0;  }
+  94%         { stroke-dashoffset: 0;  }
+  100%        { stroke-dashoffset: 84; }
+}
+@keyframes ai-draw-l4 {
+  0%, 60%     { stroke-dashoffset: 70; }
+  74%         { stroke-dashoffset: 0;  }
+  94%         { stroke-dashoffset: 0;  }
+  100%        { stroke-dashoffset: 70; }
+}
+@keyframes ai-draw-l5 {
+  0%, 80%     { stroke-dashoffset: 42; }
+  88%         { stroke-dashoffset: 0;  }
+  94%         { stroke-dashoffset: 0;  }
+  100%        { stroke-dashoffset: 42; }
+}
+
+.ai-pen { animation: ai-pen-move 5s linear infinite; }
+
+@keyframes ai-pen-move {
+  /* Fade in at line 1 start */
+  0%    { transform: translate(22px, 52px);  opacity: 0; }
+  2%    { transform: translate(22px, 52px);  opacity: 1; }
+  /* Draw line 1 */
+  14%   { transform: translate(110px, 52px); opacity: 1; }
+  /* Snap to line 2 start, hold */
+  15%   { transform: translate(22px, 70px);  opacity: 1; }
+  20%   { transform: translate(22px, 70px);  opacity: 1; }
+  /* Draw line 2 */
+  34%   { transform: translate(98px, 70px);  opacity: 1; }
+  /* Snap to line 3, hold */
+  35%   { transform: translate(22px, 88px);  opacity: 1; }
+  40%   { transform: translate(22px, 88px);  opacity: 1; }
+  /* Draw line 3 */
+  54%   { transform: translate(106px, 88px); opacity: 1; }
+  /* Snap to line 4, hold */
+  55%   { transform: translate(22px, 106px); opacity: 1; }
+  60%   { transform: translate(22px, 106px); opacity: 1; }
+  /* Draw line 4 */
+  74%   { transform: translate(92px, 106px); opacity: 1; }
+  /* Snap to line 5, hold */
+  75%   { transform: translate(22px, 124px); opacity: 1; }
+  80%   { transform: translate(22px, 124px); opacity: 1; }
+  /* Draw line 5 (partial — still writing) */
+  88%   { transform: translate(64px, 124px); opacity: 1; }
+  /* Pen lifts off page */
+  93%   { transform: translate(64px, 112px); opacity: 0; }
+  /* Stay invisible, reset to start */
+  100%  { transform: translate(22px, 52px);  opacity: 0; }
 }

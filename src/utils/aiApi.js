@@ -80,7 +80,7 @@ async function readSSE(body, onEvent) {
 
 // ── Provider implementations ──────────────────────────────────────────────────
 
-async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError }) {
+async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, maxTokens = 4096 }) {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -90,28 +90,30 @@ async function streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({ model, max_tokens: 4096, stream: true, system: systemPrompt, messages }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, stream: true, system: systemPrompt, messages }),
     })
     if (!res.ok) {
       let msg = `HTTP ${res.status}`
       try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
+    let done = false
+    const onceDone = () => { if (!done) { done = true; onDone() } }
     await readSSE(res.body, (parsed) => {
       if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') onChunk(parsed.delta.text)
-      if (parsed.type === 'message_stop') { onDone(); return true }
+      if (parsed.type === 'message_stop') { onceDone(); return true }
     })
-    onDone()
+    onceDone()
   } catch (e) { onError(e.message || 'Network error') }
 }
 
-async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode }) {
+async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode, maxTokens = 4096 }) {
   try {
     const contents = messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }))
-    const generationConfig = { maxOutputTokens: 4096 }
+    const generationConfig = { maxOutputTokens: maxTokens }
     if (jsonMode) generationConfig.response_mime_type = 'application/json'
     const body = { contents, generationConfig }
     if (systemPrompt) body.systemInstruction = { parts: [{ text: systemPrompt }] }
@@ -127,50 +129,54 @@ async function streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, on
       try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
+    let done = false
+    const onceDone = () => { if (!done) { done = true; onDone() } }
     await readSSE(res.body, (parsed) => {
       const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text
       if (text) onChunk(text)
-      if (parsed.candidates?.[0]?.finishReason === 'STOP') { onDone(); return true }
+      if (parsed.candidates?.[0]?.finishReason === 'STOP') { onceDone(); return true }
     })
-    onDone()
+    onceDone()
   } catch (e) { onError(e.message || 'Network error') }
 }
 
-async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt, messages, onChunk, onDone, onError }) {
+async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt, messages, onChunk, onDone, onError, maxTokens = 4096 }) {
   try {
     const url        = `${(baseUrl || PROVIDERS.openai.defaultBaseUrl).replace(/\/$/, '')}/chat/completions`
     const apiMessages = [{ role: 'system', content: systemPrompt }, ...messages]
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}`, ...extraHeaders },
-      body: JSON.stringify({ model, max_tokens: 4096, stream: true, messages: apiMessages }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, stream: true, messages: apiMessages }),
     })
     if (!res.ok) {
       let msg = `HTTP ${res.status}`
       try { const d = await res.json(); msg = d.error?.message || msg } catch { /* ignore */ }
       return onError(msg)
     }
+    let done = false
+    const onceDone = () => { if (!done) { done = true; onDone() } }
     await readSSE(res.body, (parsed) => {
       const text = parsed.choices?.[0]?.delta?.content
       if (text) onChunk(text)
-      if (parsed.choices?.[0]?.finish_reason === 'stop') { onDone(); return true }
+      if (parsed.choices?.[0]?.finish_reason === 'stop') { onceDone(); return true }
     })
-    onDone()
+    onceDone()
   } catch (e) { onError(e.message || 'Network error') }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError, jsonMode }) {
+export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError, jsonMode, maxTokens }) {
   if (!apiKey)              return onError('No API key configured.')
-  if (provider === 'anthropic')   return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError })
-  if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode })
+  if (provider === 'anthropic')   return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, maxTokens })
+  if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode, maxTokens })
   if (provider === 'openrouter')  return streamOpenAI({
-    apiKey, model, systemPrompt, messages, onChunk, onDone, onError,
+    apiKey, model, systemPrompt, messages, onChunk, onDone, onError, maxTokens,
     baseUrl: 'https://openrouter.ai/api/v1',
     extraHeaders: { 'HTTP-Referer': 'https://yow.app', 'X-Title': 'Your Own World' },
   })
-  if (provider === 'openai')      return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError })
+  if (provider === 'openai')      return streamOpenAI({ apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError, maxTokens })
   onError(`Unknown provider: ${provider}`)
 }
 
