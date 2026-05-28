@@ -357,7 +357,6 @@ export default function ProjectDashboard({ store }) {
   const project = stats.project
   const availableSections = new Set(getEnabledSections(project))
   const visibleRooms = NAV_ROOMS.filter(room => room.requires.some(id => availableSections.has(id)))
-  const primaryActionSection = availableSections.has('outline') ? 'outline' : visibleRooms[0]?.primarySection || 'dashboard'
 
   const recentScenes = [...stats.scenes]
     .sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0))
@@ -380,7 +379,6 @@ export default function ProjectDashboard({ store }) {
             <h1>{project.title}</h1>
             <p>{project.description || 'No project description yet.'}</p>
             <div className="overview-hero-actions">
-              <button type="button" onClick={() => teleport(primaryActionSection)}>Open workspace</button>
               <button type="button" onClick={openProjectSettings}>Project settings</button>
             </div>
           </div>

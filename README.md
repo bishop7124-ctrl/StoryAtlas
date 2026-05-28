@@ -13,6 +13,12 @@ It includes modules for character management, factions, locations, timeline/hist
 - Manuscript editor with acts, chapters, scenes, and autosave
 - Theme switching (midnight, aubergine, paper, ocean)
 
+## Planning
+
+[docs/ROADMAP.md](docs/ROADMAP.md) is the canonical planning source for launch scope, MVP acceptance criteria, post-launch work, icebox ideas, and confirmed bugs.
+
+New launch features are frozen unless they replace an existing MVP item or fix a launch blocker.
+
 ## Tech Stack
 
 - React 19

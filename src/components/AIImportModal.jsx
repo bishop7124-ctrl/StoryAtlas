@@ -60,6 +60,29 @@ async function tryReadYowZip(file) {
   })
 }
 
+// Extract plain text from a YOW visual PDF (uncompressed content streams).
+// Decodes as latin-1 (lossless byte↔char), then extracts (text) Tj operators
+// from BT...ET blocks — the exact format YOW's hand-crafted PDF generator produces.
+async function readPdfFile(file) {
+  const buffer = await file.arrayBuffer()
+  const raw = new TextDecoder('latin1').decode(buffer)
+  const parts = []
+  const btRe = /BT([\s\S]*?)ET/g
+  let bt
+  while ((bt = btRe.exec(raw)) !== null) {
+    const tjRe = /\(((?:[^\\()]|\\[\s\S])*)\)\s*Tj/g
+    let tj
+    while ((tj = tjRe.exec(bt[1])) !== null) {
+      const s = tj[1]
+        .replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\\\/g, '\\').replace(/\\([()])/g, '$1')
+      if (s.trim()) parts.push(s.trim())
+    }
+  }
+  const content = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  if (!content) throw new Error(`Could not extract text from "${file.name}". Try a YOW .zip export for lossless import.`)
+  return { name: file.name, content }
+}
+
 // Extract plain text from a .docx file (OOXML — ZIP of XML files).
 async function readDocxFile(file) {
   const { unzip } = await import('fflate')
@@ -92,6 +115,8 @@ async function processFiles(fileList) {
       results.push(...zipFiles)
     } else if (lower.endsWith('.docx')) {
       results.push(await readDocxFile(file))
+    } else if (lower.endsWith('.pdf')) {
+      results.push(await readPdfFile(file))
     } else {
       results.push(await readTextFile(file))
     }
@@ -105,7 +130,7 @@ const IMPORT_SYSTEM_PROMPT = `You are a writing project analyzer for YOW (Your O
 
 Return ONLY a valid JSON object (no markdown fences, no explanation) with this structure:
 {
-  "project": { "title": "string", "description": "string (1-3 sentence premise)", "type": "novel|novella|short_story|play|screenplay|tv_show|dnd_campaign|tabletop_rpg|comic|video_game" },
+  "project": { "title": "string", "description": "string (1-3 sentence premise)", "type": "novel" },
   "characters": [{ "name": "string", "role": "string (e.g. protagonist, antagonist, supporting)", "bio": "string (1-2 sentences)" }],
   "locations": [{ "name": "string", "category": "string (e.g. City, Dungeon, Forest, Planet)", "description": "string (1-2 sentences)" }],
   "factions": [{ "name": "string", "description": "string (1-2 sentences)" }],
@@ -116,7 +141,7 @@ Return ONLY a valid JSON object (no markdown fences, no explanation) with this s
 }
 
 Rules:
-- Infer project type from context and style
+- Always set project.type to "novel"; other project types are deferred until after launch
 - Only include arrays that have actual content — omit empty ones entirely
 - ALWAYS extract characters, locations, lore, and world-building elements regardless of content type
 - If the files contain ANY narrative prose, chapters, scenes, or story text — you MUST include an "acts" array. Even a single act with a single chapter is required.
@@ -453,19 +478,38 @@ function populateYowProject(store, data, sel) {
       }
     }
   }
+
+  if (sel.maps) {
+    for (const map of data.maps || []) {
+      // addMap creates the map and immediately makes it the active map for this novel,
+      // so updateActiveMapData targets the map we just created.
+      store.addMap(map.name || 'Map', map.mapType || 'regional')
+      const { id: _id, novelId: _nid, name: _n, mapType: _mt, created: _c, ...rest } = map
+      if (Object.keys(rest).length) store.updateActiveMapData(() => rest)
+    }
+  }
+
+  if (sel.storySchedule) {
+    for (const ev of ord(data.storySchedule)) {
+      const { id: _id, novelId: _nid, ...rest } = ev
+      store.addScheduleEvent(rest)
+    }
+  }
 }
 
 // ── YOW section config & helpers ──────────────────────────────────────────────
 
 const YOW_SECTIONS = [
-  { key: 'characters',   label: 'Characters' },
-  { key: 'factions',     label: 'Factions' },
-  { key: 'locations',    label: 'Locations' },
-  { key: 'loreEntries',  label: 'Lore entries' },
-  { key: 'worldHistory', label: 'World history' },
-  { key: 'timeline',     label: 'Timeline events' },
-  { key: 'acts',         label: 'Manuscript' },
-  { key: 'ideaEntries',  label: 'Ideas & notes' },
+  { key: 'characters',    label: 'Characters' },
+  { key: 'factions',      label: 'Factions' },
+  { key: 'locations',     label: 'Locations' },
+  { key: 'loreEntries',   label: 'Lore entries' },
+  { key: 'worldHistory',  label: 'World history' },
+  { key: 'timeline',      label: 'Timeline events' },
+  { key: 'acts',          label: 'Manuscript' },
+  { key: 'ideaEntries',   label: 'Ideas & notes' },
+  { key: 'maps',          label: 'Maps' },
+  { key: 'storySchedule', label: 'Story schedule' },
 ]
 
 function yowSectionCount(data, key) {
@@ -484,9 +528,11 @@ function yowCountLabel(data, key) {
     return `${nA} act${nA !== 1 ? 's' : ''}, ${nC} chapter${nC !== 1 ? 's' : ''}, ${nS} scene${nS !== 1 ? 's' : ''}${wordNote}`
   }
   const n = (data[key] || []).length
-  if (key === 'loreEntries')  return `${n} lore ${n !== 1 ? 'entries' : 'entry'}`
-  if (key === 'worldHistory') return `${n} world history ${n !== 1 ? 'entries' : 'entry'}`
-  if (key === 'ideaEntries')  return `${n} ${n !== 1 ? 'ideas' : 'idea'}`
+  if (key === 'loreEntries')   return `${n} lore ${n !== 1 ? 'entries' : 'entry'}`
+  if (key === 'worldHistory')  return `${n} world history ${n !== 1 ? 'entries' : 'entry'}`
+  if (key === 'ideaEntries')   return `${n} ${n !== 1 ? 'ideas' : 'idea'}`
+  if (key === 'maps')          return `${n} ${n !== 1 ? 'maps' : 'map'}`
+  if (key === 'storySchedule') return `${n} schedule ${n !== 1 ? 'events' : 'event'}`
   const singular = { characters: 'character', factions: 'faction', locations: 'location', timeline: 'timeline event' }[key] || key
   return `${n} ${singular}${n !== 1 ? 's' : ''}`
 }
@@ -560,8 +606,8 @@ export default function AIImportModal({ store, onClose, onImportDone }) {
 
   const handleFiles = async (fileList) => {
     setFileError('')
-    const accepted = Array.from(fileList).filter(f => /\.(txt|md|markdown|zip|docx)$/i.test(f.name))
-    if (!accepted.length) { setFileError('Please upload .txt, .md, .docx, or .zip files.'); return }
+    const accepted = Array.from(fileList).filter(f => /\.(txt|md|markdown|zip|docx|pdf)$/i.test(f.name))
+    if (!accepted.length) { setFileError('Please upload .txt, .md, .docx, .pdf, or .zip files.'); return }
     try {
       // If a single .zip is uploaded, check whether it's a native YOW export first.
       // If so, skip AI entirely and go straight to the preview.
@@ -682,7 +728,7 @@ export default function AIImportModal({ store, onClose, onImportDone }) {
     const novel = store.addNovel({
       title: proj?.title || 'Imported Project',
       description: proj?.description || '',
-      type: proj?.type || 'novel',
+      type: 'novel',
     })
     if (!novel) { setAiError('Could not create project (read-only mode?).'); return }
     setPhase('creating')
@@ -742,7 +788,7 @@ export default function AIImportModal({ store, onClose, onImportDone }) {
                   transition: 'all .15s',
                 }}
               >
-                <input ref={fileInputRef} type="file" accept=".txt,.md,.markdown,.zip,.docx" multiple onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }} />
+                <input ref={fileInputRef} type="file" accept=".txt,.md,.markdown,.zip,.docx,.pdf" multiple onChange={e => handleFiles(e.target.files)} style={{ display: 'none' }} />
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: files.length ? 'var(--accent)' : 'var(--text-muted)', margin: '0 auto 10px', display: 'block' }}>
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
@@ -754,7 +800,7 @@ export default function AIImportModal({ store, onClose, onImportDone }) {
                 ) : (
                   <>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>Drop files here or click to browse</p>
-                    <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>.txt · .md · .docx · .zip — or a YOW export ZIP</p>
+                    <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>.txt · .md · .docx · .pdf · .zip — or a YOW export ZIP</p>
                   </>
                 )}
               </div>

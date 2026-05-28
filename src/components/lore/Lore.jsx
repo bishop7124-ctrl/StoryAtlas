@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import Modal from '../shared/Modal'
 import { StudioSplit, StudioIndex, StudioRecord, StudioDetail, StudioButton, StudioEmpty, StudioPageHeader, StudioNote } from '../presentation/Studio'
 
 const INPUT = 'field w-full px-3 py-2 text-sm placeholder:text-[var(--text-muted)]'
@@ -252,12 +253,7 @@ export default function Lore({ store }) {
       </StudioIndex>
 
       <StudioDetail>
-        {editing ? (
-          <div className="max-w-4xl">
-            <StudioPageHeader eyebrow="Notebook page" title={editTarget ? `Edit: ${editTarget.title}` : 'New Lore Entry'} />
-            <EntryForm entry={editTarget} onSave={handleSave} onCancel={() => { setEditing(false); setEditTarget(null) }} characters={characters} locations={locations} existingCategories={existingCategories} existingTags={existingTags} configuredCategories={configuredCategories} />
-          </div>
-        ) : selected ? (
+        {selected ? (
           <div className="max-w-4xl">
             <StudioPageHeader
               eyebrow="Lore entry"
@@ -316,6 +312,26 @@ export default function Lore({ store }) {
           <StudioEmpty title="Select a notebook page" body="Choose an entry or pin a new piece of lore." action={<StudioButton tone="primary" className="mt-4" onClick={handleNew}>New Lore Entry</StudioButton>} />
         )}
       </StudioDetail>
+
+      {editing && (
+        <Modal
+          title={editTarget ? `Edit: ${editTarget.title}` : 'New Lore Entry'}
+          onClose={() => { setEditing(false); setEditTarget(null) }}
+          wide
+          centered
+        >
+          <EntryForm
+            entry={editTarget}
+            onSave={handleSave}
+            onCancel={() => { setEditing(false); setEditTarget(null) }}
+            characters={characters}
+            locations={locations}
+            existingCategories={existingCategories}
+            existingTags={existingTags}
+            configuredCategories={configuredCategories}
+          />
+        </Modal>
+      )}
     </StudioSplit>
   )
 }

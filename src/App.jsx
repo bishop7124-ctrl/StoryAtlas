@@ -16,7 +16,15 @@ import FreeProjectSelector from './components/account/FreeProjectSelector'
 import PricingPage from './components/pricing/PricingPage'
 import { getMembership } from './utils/membership'
 import { estimateStoreSize } from './utils/storageQuota'
-import { applyThemeToDocument, loadThemeChoice, saveThemeChoice } from './utils/theme'
+import {
+  applyThemeToDocument,
+  applyThemeTuning,
+  getThemeColors,
+  loadThemeChoice,
+  loadThemeTuning,
+  saveThemeChoice,
+  saveThemeTuning,
+} from './utils/theme'
 
 const APP_FONT_OPTIONS = {
   system: 'system-ui, sans-serif',
@@ -76,14 +84,6 @@ class ErrorBoundary extends Component {
   }
 }
 
-function BetaWatermark() {
-  return (
-    <div className="beta-watermark" aria-hidden="true">
-      Beta
-    </div>
-  )
-}
-
 function AppInner() {
   const { user, loading: authLoading, updateProfile, recoveryMode } = useAuth()
   const userId = user?.uid || user?.id || null
@@ -113,10 +113,14 @@ function AppInner() {
   }, [accountOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    applyThemeToDocument(loadThemeChoice())
+    const savedTheme = loadThemeChoice()
+    let customColors = {}
+    try { customColors = JSON.parse(localStorage.getItem('nf-custom-colors') || '{}') }
+    catch {}
+    applyThemeToDocument(savedTheme, customColors)
+    applyThemeTuning(loadThemeTuning(), getThemeColors(savedTheme, customColors))
     const fontChoice = localStorage.getItem('nf-font') || 'system'
     document.documentElement.style.setProperty('--font', APP_FONT_OPTIONS[fontChoice] || APP_FONT_OPTIONS.system)
-    localStorage.removeItem('nf-radius')
     document.documentElement.removeAttribute('data-radius')
   }, [])
 
@@ -125,6 +129,9 @@ function AppInner() {
   }, [store.activeNovelId])
 
   useEffect(() => {
+    // If the URL pointed to a specific project on load, keep that view active;
+    // it will be fully restored once data finishes loading below.
+    if (initialRoute.current.novelId) return
     setViewMode('manager')
     setLayoutViewMode('planning')
   }, [userId])
@@ -195,11 +202,23 @@ function AppInner() {
     const profileCustomColors = user?.user_metadata?.custom_theme_colors || {}
     if (profileTheme) {
       const appliedTheme = saveThemeChoice(profileTheme, profileCustomColors)
+      const profileTuning = {
+        ...loadThemeTuning(),
+        ...(Number.isFinite(Number(user?.user_metadata?.theme_radius_unit)) ? { radiusUnit: Number(user.user_metadata.theme_radius_unit) } : {}),
+        ...(Number.isFinite(Number(user?.user_metadata?.theme_visual_strength)) ? { visualStrength: Number(user.user_metadata.theme_visual_strength) } : {}),
+      }
+      saveThemeTuning(profileTuning, getThemeColors(appliedTheme, profileCustomColors))
       if (appliedTheme === 'custom') {
         localStorage.setItem('nf-custom-colors', JSON.stringify(profileCustomColors))
       }
     }
-  }, [user?.id, user?.user_metadata?.theme, user?.user_metadata?.custom_theme_colors])
+  }, [
+    user?.id,
+    user?.user_metadata?.theme,
+    user?.user_metadata?.custom_theme_colors,
+    user?.user_metadata?.theme_radius_unit,
+    user?.user_metadata?.theme_visual_strength,
+  ])
 
   useEffect(() => {
     if (!user) {
@@ -216,9 +235,13 @@ function AppInner() {
     loadUserData(userId)
       .then(data => {
         importData(data)
-        // URL takes priority over remote last-active project
+        // URL takes priority over remote last-active project; also restore the view/section
         const urlNovelId = initialRoute.current.novelId
-        if (urlNovelId) store.setActiveNovelId(urlNovelId)
+        if (urlNovelId) {
+          store.setActiveNovelId(urlNovelId)
+          setViewMode('editor')
+          setLayoutViewMode(initialRoute.current.layoutViewMode)
+        }
       })
       .catch(error => {
         console.error(error)
@@ -337,13 +360,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <>
-      <ErrorBoundary>
-        <AuthProvider>
-          <AppInner />
-        </AuthProvider>
-      </ErrorBoundary>
-      <BetaWatermark />
-    </>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppInner />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }

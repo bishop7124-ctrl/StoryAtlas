@@ -15,8 +15,8 @@ import Manuscript from './Manuscript/Manuscript'
 import StoryOutline from './outline/StoryOutline'
 import ProjectDashboard from './dashboard/ProjectDashboard'
 import ScheduleCalendar from './schedule/ScheduleCalendar'
-import { PROJECT_TYPES, getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
-import { StudioFrame, StudioWorkspace, StudioTab, StudioButton } from './presentation/Studio'
+import { getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
+import { StudioFrame, StudioWorkspace, StudioTab, StudioButton, StudioEmpty } from './presentation/Studio'
 import {
   EXPORT_PDF_THEME_OPTIONS,
   createProjectZipBlob,
@@ -456,16 +456,13 @@ function ProjectSettings({ store, onClose }) {
 
               <label style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Project type</span>
-                <select
-                  value={details.type}
-                  onChange={e => updateDetail('type', e.target.value)}
+                <input
+                  value="Novel"
+                  readOnly
                   className="field"
                   style={{ padding: '8px 10px', fontSize: 13 }}
-                >
-                  {Object.entries(PROJECT_TYPES).map(([id, type]) => (
-                    <option key={id} value={id}>{type.label}</option>
-                  ))}
-                </select>
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Other project types are coming soon!</span>
               </label>
 
               {store.series.length > 0 && (
@@ -736,6 +733,7 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
 
   const [aiOpen, setAiOpen] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
 
   // Redirect away from a section that just got disabled
   useEffect(() => {
@@ -759,7 +757,15 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
       window.removeEventListener('switch-section', handleTeleport)
       window.removeEventListener('open-project-settings', handleOpenProjectSettings)
     }
-  }, [setSection])
+  }, [setSection, setViewMode])
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 860px)')
+    const handleChange = () => setIsMobileViewport(media.matches)
+    handleChange()
+    media.addEventListener('change', handleChange)
+    return () => media.removeEventListener('change', handleChange)
+  }, [])
 
   // iOS Safari requires a passive touchstart listener on scroll containers
   // to properly recognise them as touch-scroll targets.
@@ -808,7 +814,12 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
     ? []
     : planningSections.filter(s => activeRoom?.sections.includes(s.id))
 
+  const resetStudioIndex = () => {
+    window.dispatchEvent(new Event('studio-index-reset'))
+  }
+
   const openRoom = (room) => {
+    resetStudioIndex()
     setViewMode('planning')
     if (!room.sections.includes(section)) setSection(room.sections[0])
   }
@@ -833,7 +844,10 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
             tone={viewMode === 'writing' ? 'primary' : 'secondary'}
             size="md"
             className="studio-write-button"
-            onClick={() => setViewMode('writing')}
+            onClick={() => {
+              resetStudioIndex()
+              setViewMode('writing')
+            }}
           >
             Write
           </StudioButton>
@@ -876,7 +890,14 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
           tabs={viewMode === 'planning' && activeRoomSections.length > 1 ? (
             <>
               {activeRoomSections.map(s => (
-                <StudioTab key={s.id} onClick={() => setSection(s.id)} active={section === s.id}>
+                <StudioTab
+                  key={s.id}
+                  onClick={() => {
+                    resetStudioIndex()
+                    setSection(s.id)
+                  }}
+                  active={section === s.id}
+                >
                   <span><Icon name={s.icon} size={14} /></span>
                   <span>{s.label}</span>
                 </StudioTab>
@@ -892,7 +913,16 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
           <div className="h-full overflow-hidden">
             {viewMode === 'planning' ? (
               <SectionErrorBoundary key={section}>
-                {databaseContent[section] || databaseContent['characters']}
+                {section === 'map' && isMobileViewport ? (
+                  <div className="workspace-page grid h-full place-items-center p-6">
+                    <StudioEmpty
+                      title="Map Builder is desktop-only"
+                      body="Open this project on a tablet or desktop to create and edit maps. Locations remain available on mobile."
+                    />
+                  </div>
+                ) : (
+                  databaseContent[section] || databaseContent['characters']
+                )}
               </SectionErrorBoundary>
             ) : (
               <SectionErrorBoundary key="manuscript">

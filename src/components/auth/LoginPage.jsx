@@ -188,9 +188,14 @@ export default function LoginPage({ onOpenLegal, onOpenAbout, recoveryMode }) {
         <header className="yow-home-nav">
           <div className="flex items-center gap-3">
             <div className="studio-logo"><YOWLogo /></div>
-            <div>
-              <p className="eyebrow text-xs mb-0.5">Story world workspace</p>
-              <strong>Your Own World</strong>
+            <div className="yow-home-wordmark">
+              <div className="studio-brand-name-stack yow-home-stack" aria-label="Your Own World">
+                <span><strong>Y</strong>our</span>
+                <span><strong>O</strong>wn</span>
+                <span><strong>W</strong>orld</span>
+              </div>
+              <span className="yow-home-abbr">YOW</span>
+              <span className="beta-watermark" aria-label="Beta">Beta</span>
             </div>
           </div>
           <div className="flex items-center gap-2">

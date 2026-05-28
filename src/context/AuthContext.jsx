@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../supabase'
+import { OFFLINE_MODE, OFFLINE_USER } from '../utils/offlineMock'
 
 const AuthContext = createContext({ user: null, loading: false, recoveryMode: false, signUp: () => {}, signIn: () => {}, signOut: () => {}, updateProfile: () => {}, refreshUser: () => null, getAccessToken: () => null, resetPassword: () => {}, updatePassword: () => {}, clearRecoveryMode: () => {} })
 
@@ -16,13 +17,13 @@ function readCachedUser() {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readCachedUser)
-  // loading is always false — we derive initial state synchronously above
+  const [user, setUser] = useState(OFFLINE_MODE ? OFFLINE_USER : readCachedUser)
   const [loading] = useState(false)
   const [recoveryMode, setRecoveryMode] = useState(false)
 
   useEffect(() => {
-    // Silently validate / refresh the session in the background
+    if (OFFLINE_MODE) return
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
     }).catch(console.warn)
@@ -40,37 +41,64 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signUp = (email, password) => supabase.auth.signUp({ email, password })
-  const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password })
-  const signOut = () => supabase.auth.signOut()
-  const resetPassword = (email) => supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}${window.location.pathname}`,
-  })
-  const updatePassword = (password) => supabase.auth.updateUser({ password })
-  const clearRecoveryMode = () => setRecoveryMode(false)
-  const updateProfile = async (profile) => {
-    const { data, error } = await supabase.auth.updateUser({ data: profile })
-    if (error) throw error
-    setUser(data.user ?? null)
-    return data.user
-  }
-  const refreshUser = async () => {
-    const { data: { session }, error: sessionError } = await supabase.auth.refreshSession()
-    if (sessionError) throw sessionError
-    if (session?.user) {
-      setUser(session.user)
-      return session.user
-    }
+  const signUp = OFFLINE_MODE
+    ? () => { setUser(OFFLINE_USER); return Promise.resolve({ data: { user: OFFLINE_USER }, error: null }) }
+    : (email, password) => supabase.auth.signUp({ email, password })
 
-    const { data: { user: nextUser }, error } = await supabase.auth.getUser()
-    if (error) throw error
-    setUser(nextUser ?? null)
-    return nextUser
-  }
-  const getAccessToken = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token ?? null
-  }
+  const signIn = OFFLINE_MODE
+    ? () => { setUser(OFFLINE_USER); return Promise.resolve({ data: { user: OFFLINE_USER }, error: null }) }
+    : (email, password) => supabase.auth.signInWithPassword({ email, password })
+
+  const signOut = OFFLINE_MODE
+    ? () => { setUser(null); return Promise.resolve() }
+    : () => supabase.auth.signOut()
+
+  const resetPassword = OFFLINE_MODE
+    ? () => Promise.resolve({ data: null, error: null })
+    : (email) => supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}${window.location.pathname}`,
+      })
+
+  const updatePassword = OFFLINE_MODE
+    ? () => Promise.resolve({ data: null, error: null })
+    : (password) => supabase.auth.updateUser({ password })
+
+  const clearRecoveryMode = () => setRecoveryMode(false)
+
+  const updateProfile = OFFLINE_MODE
+    ? (profile) => {
+        const updated = { ...user, user_metadata: { ...(user?.user_metadata ?? {}), ...profile } }
+        setUser(updated)
+        return Promise.resolve(updated)
+      }
+    : async (profile) => {
+        const { data, error } = await supabase.auth.updateUser({ data: profile })
+        if (error) throw error
+        setUser(data.user ?? null)
+        return data.user
+      }
+
+  const refreshUser = OFFLINE_MODE
+    ? () => Promise.resolve(user)
+    : async () => {
+        const { data: { session }, error: sessionError } = await supabase.auth.refreshSession()
+        if (sessionError) throw sessionError
+        if (session?.user) {
+          setUser(session.user)
+          return session.user
+        }
+        const { data: { user: nextUser }, error } = await supabase.auth.getUser()
+        if (error) throw error
+        setUser(nextUser ?? null)
+        return nextUser
+      }
+
+  const getAccessToken = OFFLINE_MODE
+    ? () => Promise.resolve('offline-mock-token')
+    : async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        return session?.access_token ?? null
+      }
 
   const isAdmin = user?.app_metadata?.is_admin === true
 

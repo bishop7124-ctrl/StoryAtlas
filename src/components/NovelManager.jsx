@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import UserMenu from './auth/UserMenu'
 import YOWLogo from './brand/YOWLogo'
 import AIImportModal from './AIImportModal'
@@ -12,6 +12,8 @@ import {
 } from '../utils/projectExport'
 
 const TYPE_OPTIONS = Object.entries(PROJECT_TYPES).map(([id, cfg]) => ({ id, ...cfg }))
+const LAUNCH_TYPES = new Set(['novel', 'novella', 'short_story', 'dnd_campaign', 'tabletop_rpg'])
+const isLaunchProjectType = (type) => LAUNCH_TYPES.has(type)
 
 const COVER_GRADIENTS = [
   'linear-gradient(160deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
@@ -252,19 +254,21 @@ function ActiveProjectHero({ stats, allStats, series, userName, onOpen, onSetSta
   const [settingsOpen, setSettingsOpen] = useState(false)
   const novel = stats?.project ?? null
   const totalWords = allStats.reduce((sum, item) => sum + item.manuscriptWords, 0)
-  const totalScenes = allStats.reduce((sum, item) => sum + item.scenes.length, 0)
-  const totalCharacters = allStats.reduce((sum, item) => sum + item.characters.length, 0)
   const currentStatus = STATUS_DATA[novel?.status]?.aliasFor ?? novel?.status
   const progress = Number.isFinite(Number(novel?.progress)) ? Math.max(0, Math.min(100, Number(novel.progress))) : null
   const hasActiveProject = !!novel
 
   return (
     <div
-      className={`active-project-command${hasActiveProject ? '' : ' active-project-command--empty'}`}
+      className={[
+        'active-project-command',
+        hasActiveProject ? '' : 'active-project-command--empty',
+        novel?.coverPhoto ? 'active-project-command--has-photo' : '',
+      ].filter(Boolean).join(' ')}
       onMouseLeave={() => setSettingsOpen(false)}
       onClick={() => { if (hasActiveProject && !settingsOpen) onOpen(novel.id) }}
     >
-      <section className="active-project-command-main">
+      <section className="active-project-command-main" style={{ gridRow: 2 }}>
         <div className="active-project-command-copy">
           <div className="active-project-badge">
             {hasActiveProject && <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>}
@@ -290,13 +294,14 @@ function ActiveProjectHero({ stats, allStats, series, userName, onOpen, onSetSta
             </div>
             {hasActiveProject && <StatusBadge status={novel.status} />}
           </div>
+          {hasActiveProject && <span className="active-project-command-cue">Open project</span>}
         </div>
       </section>
 
       <aside className="active-project-command-cover">
         <div className="active-project-cover-card" style={{ background: novel?.coverPhoto ? undefined : getCoverGradient(novel?.title || 'Your Own World') }}>
           <div className="active-project-cover-inner">
-            <div className="active-project-hero-bg" style={{ background: getCoverGradient(novel?.title || 'Your Own World') }} />
+            {!novel?.coverPhoto && <div className="active-project-hero-bg" style={{ background: getCoverGradient(novel?.title || 'Your Own World') }} />}
           {novel?.coverPhoto
             ? <img src={novel.coverPhoto} alt="" />
             : <span className="active-project-cover-letter">{hasActiveProject ? novel.title[0]?.toUpperCase() : '?'}</span>
@@ -346,7 +351,7 @@ function ActiveProjectHero({ stats, allStats, series, userName, onOpen, onSetSta
         </div>
       </aside>
 
-      <section className="active-project-command-snapshot" onClick={e => e.stopPropagation()}>
+      <section className="active-project-command-snapshot" style={{ gridRow: 1 }} onClick={e => e.stopPropagation()}>
         <p className="active-project-settings-label">Library Snapshot</p>
         <div className="active-project-command-stats active-project-command-stats--compact">
           <div className="active-project-command-stat">
@@ -361,10 +366,6 @@ function ActiveProjectHero({ stats, allStats, series, userName, onOpen, onSetSta
             <strong>{totalWords.toLocaleString()}</strong>
             <span>Total words</span>
           </div>
-        </div>
-        <div className="active-project-command-mini">
-          <span>{totalScenes.toLocaleString()} scenes</span>
-          <span>{totalCharacters.toLocaleString()} character records</span>
         </div>
       </section>
     </div>
@@ -450,6 +451,23 @@ function EditSeriesModal({ series, allStats, onSave, onDelete, onClose }) {
   const [assignedIds, setAssignedIds] = useState(
     () => new Set(allStats.filter(s => s.project.seriesId === series.id).map(s => s.project.id))
   )
+  const initialFormRef = useRef(JSON.stringify({
+    name: series.name || '',
+    summary: series.summary || '',
+    status: series.status || 'ongoing',
+    tags: series.tags || [],
+    coverPhoto: series.coverPhoto || null,
+  }))
+  const initialAssignedRef = useRef(JSON.stringify(
+    [...allStats.filter(s => s.project.seriesId === series.id).map(s => s.project.id)].sort()
+  ))
+
+  const requestClose = () => {
+    const formDirty = JSON.stringify(form) !== initialFormRef.current
+    const assignedDirty = JSON.stringify([...assignedIds].sort()) !== initialAssignedRef.current
+    if ((formDirty || assignedDirty) && !confirm('Discard changes?')) return
+    onClose()
+  }
 
   const handleCoverSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -494,6 +512,7 @@ function EditSeriesModal({ series, allStats, onSave, onDelete, onClose }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
+      onClick={requestClose}
     >
       <form
         onSubmit={handleSave}
@@ -600,7 +619,7 @@ function EditSeriesModal({ series, allStats, onSave, onDelete, onClose }) {
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
             Delete series
           </button>
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={requestClose}
             style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
             Cancel
           </button>
@@ -627,6 +646,21 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
   })
   const [tagInput, setTagInput] = useState('')
   const [coverError, setCoverError] = useState('')
+  const initialFormRef = useRef(JSON.stringify({
+    title: project.title || '',
+    description: project.description || '',
+    type: project.type || DEFAULT_TYPE,
+    status: project.status || null,
+    seriesId: project.seriesId || '',
+    tags: project.tags || [],
+    coverPhoto: project.coverPhoto || null,
+    progress: project.progress ?? '',
+  }))
+
+  const requestClose = () => {
+    if (JSON.stringify(form) !== initialFormRef.current && !confirm('Discard changes?')) return
+    onClose()
+  }
 
   const handleCoverSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -667,6 +701,7 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
       ...form,
       title: form.title.trim(),
       description: form.description.trim(),
+      type: isLaunchProjectType(form.type) ? form.type : project.type || DEFAULT_TYPE,
       seriesId: form.seriesId || null,
       progress: form.progress === '' ? null : Number(form.progress),
       updatedAt: new Date().toISOString(),
@@ -676,6 +711,7 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}
+      onClick={requestClose}
     >
       <form
         onSubmit={handleSave}
@@ -757,20 +793,26 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
           <div>
             <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Type</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              {TYPE_OPTIONS.map(t => (
-                <button key={t.id} type="button" onClick={() => setForm(p => ({ ...p, type: t.id }))}
-                  style={{
-                    textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
-                    border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
-                    background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
-                  }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <ProjectTypeImage type={t.id} label={t.label} size={24} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{t.description}</p>
-                </button>
-              ))}
+              {TYPE_OPTIONS.map(t => {
+                const isLaunch = isLaunchProjectType(t.id)
+                return (
+                  <button key={t.id} type="button" disabled={!isLaunch} onClick={() => isLaunch && setForm(p => ({ ...p, type: t.id }))}
+                    title={isLaunch ? undefined : 'Coming soon!'}
+                    style={{
+                      textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: isLaunch ? 'pointer' : 'not-allowed',
+                      border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                      background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
+                      opacity: isLaunch ? 1 : 0.54,
+                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <ProjectTypeImage type={t.id} label={t.label} size={24} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
+                      {!isLaunch && <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Soon</span>}
+                    </div>
+                    <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{isLaunch ? t.description : 'Coming soon!'}</p>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -803,7 +845,7 @@ function EditProjectModal({ project, series, onSave, onDelete, onClose }) {
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
             Delete project
           </button>
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={requestClose}
             style={{ padding: '9px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
             Cancel
           </button>
@@ -852,7 +894,7 @@ function SeriesCard({ series, seriesStats, onClick }) {
   )
 }
 
-function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
+function ProjectCard({ stats, onClick, onEdit, onExport, isFocus, onSetFocus }) {
   const project = stats.project
   const cfg = getProjectType(project.type)
   return (
@@ -866,7 +908,26 @@ function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
           : <span className="series-dash-card-letter">{project.title[0]?.toUpperCase()}</span>
         }
         <span className="series-dash-card-count">{cfg.label}</span>
-        {isFocus && <span className="novel-focus-badge" title="Active project"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>}
+        <button
+          type="button"
+          style={{
+            position: 'absolute', top: 78, right: 6, zIndex: 5,
+            width: 30, height: 30,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            border: isFocus ? '1px solid rgba(245,158,11,.7)' : '1px solid rgba(255,255,255,.18)',
+            borderRadius: '50%',
+            background: isFocus ? 'rgba(245,158,11,.85)' : 'rgba(0,0,0,.48)',
+            color: isFocus ? '#fff' : 'rgba(255,255,255,.38)',
+            cursor: 'pointer',
+            backdropFilter: 'blur(4px)',
+            transition: 'color .15s, background .15s, border-color .15s',
+          }}
+          onClick={e => { e.stopPropagation(); onSetFocus(project.id) }}
+          title={isFocus ? 'Remove active project' : 'Set as active project'}
+          aria-label={isFocus ? 'Remove active project' : 'Set as active project'}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </button>
         <button
           className="dash-card-settings-button"
           type="button"
@@ -890,10 +951,10 @@ function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
       <div className="series-dash-card-hover">
         <p>Project</p>
         <ul>
-          <li><span>Scenes</span><span>{stats.scenes.length}</span></li>
           <li><span>Characters</span><span>{stats.characters.length}</span></li>
           <li><span>Status</span><StatusBadge status={project.status} small /></li>
         </ul>
+        <span className="project-dash-card-select-cue">Select project</span>
       </div>
     </div>
   )
@@ -902,7 +963,9 @@ function ProjectCard({ stats, onClick, onEdit, onExport, isFocus }) {
 export default function NovelManager({ store, user, onOpenProject, onOpenChat, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership }) {
   const [showForm, setShowForm] = useState(false)
   const [showAIImport, setShowAIImport] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE })
+  const [restoring, setRestoring] = useState(false)
+  const restoreInputRef = useRef(null)
+  const [form, setForm] = useState({ title: '', description: '', type: DEFAULT_TYPE, seriesId: '' })
   const [showSeriesForm, setShowSeriesForm] = useState(false)
   const [seriesName, setSeriesName] = useState('')
   const [editingSeries, setEditingSeries] = useState(null)
@@ -954,9 +1017,52 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
   const handleCreate = (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
-    store.addNovel({ ...form, seriesId: seriesFilter || null })
-    setForm({ title: '', description: '', type: DEFAULT_TYPE })
+    store.addNovel({ ...form, type: isLaunchProjectType(form.type) ? form.type : DEFAULT_TYPE, seriesId: form.seriesId || seriesFilter || null })
+    setForm({ title: '', description: '', type: DEFAULT_TYPE, seriesId: '' })
     setShowForm(false)
+  }
+
+  const handleRestoreFromZip = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setRestoring(true)
+    try {
+      const { unzip } = await import('fflate')
+      const buffer = await file.arrayBuffer()
+      await new Promise((resolve, reject) => {
+        unzip(new Uint8Array(buffer), (err, files) => {
+          if (err) { reject(err); return }
+          const dataFile = files['project-data.json']
+          if (!dataFile) { reject(new Error('Not a valid YOW backup. Missing project-data.json.')); return }
+          try {
+            const data = JSON.parse(new TextDecoder().decode(dataFile))
+            if (!data.project) { reject(new Error('Backup file is missing project data.')); return }
+            const imported = store.importProjectFromData(data)
+            if (!imported) { reject(new Error('Could not import project. You may be on a free plan.')); return }
+            resolve()
+          } catch (parseErr) {
+            reject(new Error('Could not read backup file. The file may be corrupt.'))
+          }
+        })
+      })
+    } catch (err) {
+      alert(err.message || 'Restore failed. Please try again.')
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  const handleCloseProjectForm = () => {
+    if ((form.title.trim() || form.description.trim()) && !confirm('Discard new project?')) return
+    setForm({ title: '', description: '', type: DEFAULT_TYPE, seriesId: '' })
+    setShowForm(false)
+  }
+
+  const handleCloseSeriesForm = () => {
+    if (seriesName.trim() && !confirm('Discard new series?')) return
+    setSeriesName('')
+    setShowSeriesForm(false)
   }
 
   const handleDelete = (id) => {
@@ -1003,6 +1109,14 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
 
   const focusStats = store.allProjectStats.find(s => s.project.focus) ?? null
 
+  const allStatsCount = store.allProjectStats.length
+  useEffect(() => {
+    const allStats = store.allProjectStats
+    if (allStats.length === 1 && !allStats[0].project.focus) {
+      store.updateNovel(allStats[0].project.id, { focus: true })
+    }
+  }, [allStatsCount]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const visibleStats = seriesFilter
     ? store.allProjectStats.filter(s => s.project.seriesId === seriesFilter)
     : store.allProjectStats
@@ -1020,6 +1134,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       <div className="library-top-bar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="library-brand-logo"><YOWLogo /></span>
+          <span className="beta-watermark" aria-label="Beta">Beta</span>
           {!store.readOnly && !membership?.freeProjectId && (
             <>
               <button className="library-new-project-button" type="button" onClick={() => setShowForm(true)}>
@@ -1031,6 +1146,22 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
               <button className="library-new-series-button" type="button" onClick={() => setShowAIImport(true)} title="Import files and let AI build your project">
                 AI Import
               </button>
+              <button
+                className="library-new-series-button"
+                type="button"
+                disabled={restoring}
+                onClick={() => restoreInputRef.current?.click()}
+                title="Restore a project from a YOW backup ZIP"
+              >
+                {restoring ? 'Restoring…' : 'Restore'}
+              </button>
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept=".zip"
+                style={{ display: 'none' }}
+                onChange={handleRestoreFromZip}
+              />
             </>
           )}
         </div>
@@ -1117,10 +1248,11 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                       <ProjectCard
                         key={stats.project.id}
                         stats={stats}
-                        onClick={() => handleSetFocus(stats.project.id)}
+                        onClick={() => onOpenProject(stats.project.id)}
                         onEdit={() => setEditingProject(stats.project)}
                         onExport={handleExportProject}
                         isFocus={!!stats.project.focus}
+                        onSetFocus={handleSetFocus}
                       />
                     ))}
                   </div>
@@ -1128,16 +1260,36 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                   <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>No projects yet.</p>
                 )}
               </div>
-              <StatusQueue stats={store.allProjectStats} onOpenProject={onOpenProject} />
+              <StatusQueue stats={visibleStats} onOpenProject={onOpenProject} />
             </section>
           )
         })()}
 
         {/* Empty state */}
         {store.novels.length === 0 && !store.readOnly && (
-          <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, marginTop: 48 }}>
-            Create your first project to get started.
-          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 360, textAlign: 'center', padding: '56px 16px' }}>
+            <div style={{ fontSize: 52, marginBottom: 24, opacity: 0.12, lineHeight: 1 }}>✦</div>
+            <h2 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-.02em', lineHeight: 1.15 }}>
+              Start your first project
+            </h2>
+            <p style={{ margin: '0 0 32px', fontSize: 15, color: 'var(--text-muted)', maxWidth: 400, lineHeight: 1.65 }}>
+              Build your story world — characters, locations, lore, and manuscript — all in one place.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setShowForm(true)}
+                style={{ padding: '14px 40px', borderRadius: 10, border: 'none', background: 'var(--accent)', color: 'var(--bg-main)', fontSize: 15, fontWeight: 800, cursor: 'pointer', letterSpacing: '-.01em' }}
+              >
+                New Project
+              </button>
+              <button
+                onClick={() => setShowAIImport(true)}
+                style={{ padding: '9px 22px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Import with AI
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -1167,6 +1319,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       {showSeriesForm && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={handleCloseSeriesForm}
         >
           <form
             onSubmit={handleCreateSeries}
@@ -1176,6 +1329,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
               borderRadius: 14, boxShadow: '0 24px 60px rgba(0,0,0,.4)',
               display: 'flex', flexDirection: 'column', gap: 14,
             }}
+            onClick={e => e.stopPropagation()}
           >
             <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-main)' }}>New Series</p>
             <input
@@ -1195,7 +1349,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                 }}>
                 Create
               </button>
-              <button type="button" onClick={() => setShowSeriesForm(false)}
+              <button type="button" onClick={handleCloseSeriesForm}
                 style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
                 Cancel
               </button>
@@ -1217,6 +1371,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
       {showForm && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={handleCloseProjectForm}
         >
           <form
             onSubmit={handleCreate}
@@ -1226,6 +1381,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
               borderRadius: 14, boxShadow: '0 24px 60px rgba(0,0,0,.4)',
               display: 'flex', flexDirection: 'column', gap: 14,
             }}
+            onClick={e => e.stopPropagation()}
           >
             <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-main)' }}>New Project</p>
 
@@ -1246,24 +1402,44 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
               style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-main)', resize: 'none', outline: 'none' }}
             />
 
+            {store.series.length > 0 && (
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Series</p>
+                <select
+                  value={form.seriesId}
+                  onChange={e => setForm(p => ({ ...p, seriesId: e.target.value }))}
+                  style={{ width: '100%', background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: 'var(--text-main)', outline: 'none' }}
+                >
+                  <option value="">Standalone</option>
+                  {store.series.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            )}
+
             {/* Project type */}
             <div>
               <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Type</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {TYPE_OPTIONS.map(t => (
-                  <button key={t.id} type="button" onClick={() => setForm(p => ({ ...p, type: t.id }))}
-                    style={{
-                      textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
-                      border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
-                      background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
-                    }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <ProjectTypeImage type={t.id} label={t.label} size={24} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
-                    </div>
-                    <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{t.description}</p>
-                  </button>
-                ))}
+                {TYPE_OPTIONS.map(t => {
+                  const isLaunch = isLaunchProjectType(t.id)
+                  return (
+                    <button key={t.id} type="button" disabled={!isLaunch} onClick={() => isLaunch && setForm(p => ({ ...p, type: t.id }))}
+                      title={isLaunch ? undefined : 'Coming soon!'}
+                      style={{
+                        textAlign: 'left', padding: '8px 10px', borderRadius: 6, cursor: isLaunch ? 'pointer' : 'not-allowed',
+                        border: `1px solid ${form.type === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                        background: form.type === t.id ? 'var(--accent-fade)' : 'var(--bg-main)',
+                        opacity: isLaunch ? 1 : 0.54,
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <ProjectTypeImage type={t.id} label={t.label} size={24} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{t.label}</span>
+                        {!isLaunch && <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Soon</span>}
+                      </div>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.3 }}>{isLaunch ? t.description : 'Coming soon!'}</p>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -1276,7 +1452,7 @@ export default function NovelManager({ store, user, onOpenProject, onOpenChat, o
                 }}>
                 Create
               </button>
-              <button type="button" onClick={() => setShowForm(false)}
+              <button type="button" onClick={handleCloseProjectForm}
                 style={{ padding: '10px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer' }}>
                 Cancel
               </button>

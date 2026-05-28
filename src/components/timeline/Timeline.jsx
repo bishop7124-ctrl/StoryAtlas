@@ -20,10 +20,6 @@ function compareEventsByYear(a, b) {
   return safeA - safeB || (a.title || '').localeCompare(b.title || '')
 }
 
-function linkedHistoryFor(event, history) {
-  return history.find(h => h.id === event.worldHistoryEntryId || h.timelineEventId === event.id) || null
-}
-
 function buildClusters(events, zoom) {
   if (!events.length) return []
   const threshold = { era: 90, years: 42, months: 16, days: 6 }[zoom] ?? 42
@@ -43,8 +39,8 @@ function buildClusters(events, zoom) {
 
 export default function Timeline({ store }) {
   const {
-    timeline = [], worldHistory = [], characters = [], locations = [],
-    addEvent, updateEvent, addHistoryEntry, updateHistoryEntry,
+    timeline = [], characters = [], locations = [],
+    addEvent, updateEvent, deleteEvent,
     currentYear,
   } = store
   const railRef = useRef(null)
@@ -56,31 +52,12 @@ export default function Timeline({ store }) {
   const [formState, setFormState] = useState(null)
 
   const allEvents = useMemo(() => {
-    const timelineIds = new Set(timeline.map(e => e.id))
-    const manual = timeline.map(e => {
-      const linked = linkedHistoryFor(e, worldHistory)
-      return {
-        ...e,
-        year: parseTimelineYear(e.date),
-        sourceType: 'timeline',
-        isWorldHistory: Boolean(linked),
-        linkedHistory: linked,
-        readOnly: false,
-      }
-    })
-    const historyOnly = worldHistory
-      .filter(h => !h.timelineEventId || !timelineIds.has(h.timelineEventId))
-      .map(h => ({
-        id: `history-${h.id}`,
-        historyId: h.id,
-        title: h.title,
-        date: h.dateRange || h.era || '',
-        description: h.content || '',
-        tags: h.tags || [],
-        year: parseTimelineYear(h.dateRange || h.era),
-        sourceType: 'history',
-        readOnly: true,
-      }))
+    const manual = timeline.map(e => ({
+      ...e,
+      year: parseTimelineYear(e.date),
+      sourceType: 'timeline',
+      readOnly: false,
+    }))
     const birthdays = characters
       .filter(c => c.birthDate && c.birthDate.toString().trim())
       .map(c => ({
@@ -95,8 +72,8 @@ export default function Timeline({ store }) {
         sourceType: 'birthday',
         readOnly: true,
       }))
-    return [...manual, ...historyOnly, ...birthdays].sort(compareEventsByYear)
-  }, [timeline, worldHistory, characters])
+    return [...manual, ...birthdays].sort(compareEventsByYear)
+  }, [timeline, characters])
 
   const filtered = useMemo(() => {
     const query = search.toLowerCase()
@@ -122,30 +99,10 @@ export default function Timeline({ store }) {
   const clusters = buildClusters(positioned, zoom)
 
   const saveEntry = (data) => {
-    const mode = data.entryKind
-    const cleaned = {
-      title: data.title,
-      date: data.date,
-      description: data.description,
-      type: data.type,
-      category: data.category,
-      tags: data.tags,
-      linkedCharacters: data.linkedCharacters,
-      linkedLocations: data.linkedLocations,
-      linkedHistoryEntryId: data.linkedHistoryEntryId,
-      worldHistoryEntryId: data.linkedHistoryEntryId,
-      era: data.era,
-    }
     if (formState?.type === 'timeline') {
-      updateEvent(formState.item.id, cleaned)
-    } else if (formState?.type === 'history') {
-      updateHistoryEntry(formState.item.id, data)
-    } else if (mode === 'history') {
-      addHistoryEntry(data)
-    } else if (mode === 'linked') {
-      addEvent(cleaned)
+      updateEvent(formState.item.id, data)
     } else {
-      addEvent(cleaned, { createHistory: !data.linkedHistoryEntryId })
+      addEvent(data, { createHistory: false })
     }
     setFormState(null)
   }
@@ -176,7 +133,7 @@ export default function Timeline({ store }) {
         <div className="flex-1 grid place-items-center text-center px-6">
           <div className="empty-state">
             <p className="text-sm text-[var(--text-main)]">{allEvents.length === 0 ? 'No chronicle entries yet.' : 'No matches.'}</p>
-            <p className="text-xs text-[var(--text-muted)] mt-1">{allEvents.length === 0 ? 'Create a timeline event, history entry, or linked pair to begin the story spine.' : 'Try a different title, date, tag, or era.'}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1">{allEvents.length === 0 ? 'Create a timeline event to begin the story spine.' : 'Try a different title, date, tag, or era.'}</p>
           </div>
         </div>
       ) : viewMode === 'visual' ? (
@@ -240,13 +197,12 @@ export default function Timeline({ store }) {
                   </article>
                 )
               }
-              const linked = event.sourceType === 'timeline' ? linkedHistoryFor(event, worldHistory) : null
               return (
-                <article key={event.id} className={`timeline-item ${linked ? 'has-linked-entry' : ''} ${event.sourceType === 'history' ? 'is-history' : ''}`}>
+                <article key={event.id} className="timeline-item">
                   <span className="timeline-dot" />
                   <button type="button" className="timeline-item-main" onClick={() => setDetailEvent(event)}>
                     <span className="timeline-item-copy">
-                      <span className="timeline-date">{event.date || 'Undated'}{event.sourceType === 'history' ? ' · World History' : ''}</span>
+                      <span className="timeline-date">{event.date || 'Undated'}{event.era ? ` · ${event.era}` : ''}</span>
                       <strong>{event.title}</strong>
                       {event.description && <small>{event.description}</small>}
                       {event.tags?.length > 0 && (
@@ -254,7 +210,6 @@ export default function Timeline({ store }) {
                           {event.tags.map(tag => <span key={tag} className="chip">{tag}</span>)}
                         </span>
                       )}
-                      {linked && <span className="timeline-linked-note">Linked history entry</span>}
                     </span>
                   </button>
                 </article>
@@ -267,37 +222,53 @@ export default function Timeline({ store }) {
       {detailEvent && (
         <Modal title={detailEvent.title} onClose={() => setDetailEvent(null)} wide>
           <div className="space-y-4">
-            <div className="text-xs text-[var(--accent)]">{detailEvent.date || 'Undated'} · {detailEvent.sourceType === 'history' ? 'History' : detailEvent.sourceType === 'birthday' ? 'Birthday' : 'Timeline'}</div>
-            {detailEvent.description && <p className="text-sm text-[var(--text-main)] leading-relaxed whitespace-pre-wrap">{detailEvent.description}</p>}
-            {!(detailEvent.linkedHistory || linkedHistoryFor(detailEvent, worldHistory)) && !detailEvent.readOnly && (
+            <div className="text-xs text-[var(--accent)]">
+              {detailEvent.date || 'Undated'}
+              {detailEvent.era ? ` · ${detailEvent.era}` : ''}
+              {detailEvent.sourceType === 'birthday' ? ' · Birthday' : ''}
+            </div>
+            {detailEvent.description && (
+              <p className="text-sm text-[var(--text-main)] leading-relaxed whitespace-pre-wrap">{detailEvent.description}</p>
+            )}
+            {!detailEvent.readOnly && (
               <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border)]">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFormState({ type: 'timeline', item: detailEvent })}>Edit entry</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setDetailEvent(null); setFormState({ type: 'timeline', item: detailEvent }) }}
+                >Edit entry</button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    if (confirm(`Delete "${detailEvent.title}"?`)) {
+                      deleteEvent(detailEvent.id)
+                      setDetailEvent(null)
+                    }
+                  }}
+                >Delete</button>
               </div>
             )}
-            {(detailEvent.linkedHistory || linkedHistoryFor(detailEvent, worldHistory)) && (
-              <div className="linked-entry-panel">
-                <div>
-                  <span>Linked history</span>
-                  <strong>{(detailEvent.linkedHistory || linkedHistoryFor(detailEvent, worldHistory)).title}</strong>
-                </div>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFormState({ type: 'history', item: detailEvent.linkedHistory || linkedHistoryFor(detailEvent, worldHistory) })}>Edit linked entry</button>
+            {detailEvent.tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {detailEvent.tags.map(tag => <span key={tag} className="chip">{tag}</span>)}
               </div>
             )}
-            {detailEvent.tags?.length > 0 && <div className="flex flex-wrap gap-1">{detailEvent.tags.map(tag => <span key={tag} className="chip">{tag}</span>)}</div>}
           </div>
         </Modal>
       )}
 
       {formState && (
-        <Modal title={formState.type === 'new' ? 'New Chronicle Entry' : `Edit - ${formState.item.title}`} onClose={() => setFormState(null)} wide>
+        <Modal
+          title={formState.type === 'new' ? 'New Chronicle Entry' : `Edit — ${formState.item?.title}`}
+          onClose={() => setFormState(null)}
+          wide
+        >
           <ChronicleEntryForm
-            kind={formState.type === 'history' ? 'history' : 'timeline'}
-            initial={formState.item}
-            timeline={timeline}
-            worldHistory={worldHistory}
+            kind="timeline"
+            initial={formState.type === 'timeline' ? formState.item : null}
             characters={characters}
             locations={locations}
-            allowKindChoice={formState.type === 'new'}
             onSave={saveEntry}
             onCancel={() => setFormState(null)}
           />

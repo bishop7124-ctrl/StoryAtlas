@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YOW — Launch QA Tracker</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --bg-card: #161616;
+    --bg-card2: #1c1c1c;
+    --border: #2a2a2a;
+    --accent: #c9b97a;
+    --accent-fade: rgba(201,185,122,.08);
+    --text: #e8e4d8;
+    --text-muted: #6b6655;
+    --text-dim: #9a9280;
+    --green: #4ade80;
+    --red: #f87171;
+    --orange: #fb923c;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 0 80px;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(15,15,15,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .header-logo {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .header-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .total-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .total-bar-track {
+    width: 140px;
+    height: 5px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .total-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 99px;
+    transition: width .4s ease;
+  }
+
+  .total-label {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* ── Reset button ── */
+  .reset-btn {
+    padding: 5px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .12s;
+  }
+  .reset-btn:hover { color: var(--red); border-color: rgba(248,113,113,.4); }
+
+  /* ── Main layout ── */
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 32px 0;
+  }
+
+  /* ── Section ── */
+  .section {
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 14px 18px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .section-header:hover { background: var(--bg-card2); }
+
+  .section-badge {
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 99px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-blocker { background: rgba(248,113,113,.12); color: var(--red); border: 1px solid rgba(248,113,113,.25); }
+  .badge-high    { background: rgba(251,146,60,.10); color: var(--orange); border: 1px solid rgba(251,146,60,.25); }
+  .badge-qa      { background: rgba(201,185,122,.10); color: var(--accent); border: 1px solid rgba(201,185,122,.2); }
+  .badge-polish  { background: rgba(148,163,184,.08); color: #94a3b8; border: 1px solid rgba(148,163,184,.18); }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .section-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-bar-track {
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .section-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width .3s ease;
+  }
+
+  .section-count {
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .section-chevron {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform .2s;
+  }
+
+  .section.collapsed .section-chevron { transform: rotate(-90deg); }
+
+  /* ── Subsection ── */
+  .subsection {
+    border-bottom: 1px solid var(--border);
+  }
+  .subsection:last-child { border-bottom: none; }
+
+  .subsection-label {
+    padding: 10px 18px 6px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Check items ── */
+  .items {
+    padding: 6px 0;
+  }
+
+  .item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 18px;
+    transition: background .1s;
+  }
+
+  .item:hover { background: var(--bg-card); }
+
+  .item.done { opacity: .5; }
+  .item.done .item-text { text-decoration: line-through; color: var(--text-muted); }
+
+  .item input[type="checkbox"] {
+    margin-top: 2px;
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .item-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+    cursor: pointer;
+  }
+
+  .item-note {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    line-height: 1.45;
+  }
+
+  /* ── Collapsed state ── */
+  .section.collapsed .section-body { display: none; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 0 0 24px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  /* ── Done banner ── */
+  #done-banner {
+    display: none;
+    text-align: center;
+    padding: 28px;
+    margin-bottom: 28px;
+    border: 1px solid rgba(74,222,128,.3);
+    border-radius: var(--radius);
+    background: rgba(74,222,128,.06);
+    color: var(--green);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: .04em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="header-logo">YOW</span>
+  <span style="color:var(--border)">·</span>
+  <span class="header-title">Launch QA Tracker</span>
+  <span class="header-meta" id="date-label"></span>
+  <div class="header-right">
+    <div class="total-progress">
+      <div class="total-bar-track">
+        <div class="total-bar-fill" id="total-bar" style="width:0%"></div>
+      </div>
+      <span class="total-label" id="total-label">0%</span>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">Reset all</button>
+  </div>
+</header>
+
+<main>
+  <div id="done-banner">🎉 All checks complete — ready to launch.</div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="section-badge badge-blocker">Blocker</span> launch-blocking if broken</div>
+    <div class="legend-item"><span class="section-badge badge-high">High risk</span> data / payment safety</div>
+    <div class="legend-item"><span class="section-badge badge-qa">Needs QA</span> implemented, verify it works</div>
+    <div class="legend-item"><span class="section-badge badge-polish">Polish</span> nice to have before launch</div>
+  </div>
+
+  <!-- ── 1. AI Panel ── -->
+  <div class="section" id="s-ai">
+    <div class="section-header" onclick="toggleSection('s-ai')">
+      <span class="section-badge badge-qa">Needs QA</span>
+      <span class="section-title">1 · AI Suggestion Panel</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-ai-bar" style="width:0%;background:var(--accent)"></div></div>
+        <span class="section-count" id="s-ai-count" style="color:var(--accent)">0 / 9</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Functional</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Each quick-action chip (Continue, What's next?, Improve, Add dialogue) fires and streams a relevant response</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Custom prompt textarea — type a prompt, click Generate — response streams in</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Ctrl+Enter in the textarea triggers generation</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Stop button halts streaming cleanly; no partial text corruption</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Append to scene — suggestion is appended as a new paragraph; existing text is untouched</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Copy — copies suggestion to clipboard</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">Discard — clears suggestion, no changes to the scene</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Context &amp; config</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">With a scene focused and content written — suggestions reference the scene text (not generic)<div class="item-note">Quick bonus: add a named character; verify their name appears in suggestions</div></span></label>
+          <label class="item"><input type="checkbox" data-section="s-ai"><span class="item-text">No API key configured — orange warning banner shows; chips and Generate are disabled</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2. Data Safety ── -->
+  <div class="section" id="s-data">
+    <div class="section-header" onclick="toggleSection('s-data')">
+      <span class="section-badge badge-blocker">Blocker</span>
+      <span class="section-title">2 · Data Safety &amp; Autosave</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-data-bar" style="width:0%;background:var(--red)"></div></div>
+        <span class="section-count" id="s-data-count" style="color:var(--red)">0 / 8</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Manuscript autosave</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Type rapidly for 30 seconds, close the tab, reopen — all content preserved</span></label>
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Type a paragraph, immediately hard-refresh (Cmd+Shift+R) — content preserved</span></label>
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Write in one scene, switch to another, switch back — first scene unchanged</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Worldbuilding instant-save</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Create a character, immediately refresh — character still exists with all fields</span></label>
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Create a location, immediately refresh — location still exists</span></label>
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Create a lore entry, immediately refresh — entry still exists</span></label>
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Create a timeline event, immediately refresh — event still exists</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Deletion cleanup</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-data"><span class="item-text">Delete a character who is linked to lore/timeline — no orphaned broken links remain</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. Export & Restore ── -->
+  <div class="section" id="s-export">
+    <div class="section-header" onclick="toggleSection('s-export')">
+      <span class="section-badge badge-blocker">Blocker</span>
+      <span class="section-title">3 · Export &amp; Restore Round-Trip</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-export-bar" style="width:0%;background:var(--red)"></div></div>
+        <span class="section-count" id="s-export-count" style="color:var(--red)">0 / 7</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Project ZIP export → restore</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Export a project ZIP with characters, scenes, lore, timeline, and chapters present</span></label>
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Use the Restore button to import that ZIP — project appears in the library with a new ID</span></label>
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Verify all characters, scenes, lore entries, timeline events, and chapters match the original</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Manuscript DOCX export</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Export DOCX from a project with 2+ acts, multiple chapters, and multiple scenes</span></label>
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Open in Word/Pages — chapter order and numbering are correct; scene breaks (***) present</span></label>
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Empty scenes are skipped (no blank pages or orphaned breaks)</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">PDF visual encyclopedia export</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-export"><span class="item-text">Export PDF — opens correctly, contains characters, locations, and lore entries</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. Auth ── -->
+  <div class="section" id="s-auth">
+    <div class="section-header" onclick="toggleSection('s-auth')">
+      <span class="section-badge badge-blocker">Blocker</span>
+      <span class="section-title">4 · Authentication</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-auth-bar" style="width:0%;background:var(--red)"></div></div>
+        <span class="section-count" id="s-auth-count" style="color:var(--red)">0 / 5</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="items">
+        <label class="item"><input type="checkbox" data-section="s-auth"><span class="item-text">Fresh signup — new account can access the app and create a project immediately</span></label>
+        <label class="item"><input type="checkbox" data-section="s-auth"><span class="item-text">Return login — existing account with projects loads them correctly</span></label>
+        <label class="item"><input type="checkbox" data-section="s-auth"><span class="item-text">Invalid credentials — clear error message, no crash, retry works</span></label>
+        <label class="item"><input type="checkbox" data-section="s-auth"><span class="item-text">Sign out — clears session, redirects to home, sign-back-in restores data</span></label>
+        <label class="item"><input type="checkbox" data-section="s-auth"><span class="item-text">Expired/stale session — open app after extended time away; graceful re-auth prompt (no crash)</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 5. Project Types ── -->
+  <div class="section" id="s-types">
+    <div class="section-header" onclick="toggleSection('s-types')">
+      <span class="section-badge badge-qa">Needs QA</span>
+      <span class="section-title">5 · Project Types (5 enabled at launch)</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-types-bar" style="width:0%;background:var(--accent)"></div></div>
+        <span class="section-count" id="s-types-count" style="color:var(--accent)">0 / 20</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Novel (baseline)</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Act / Chapter / Scene labels appear throughout the manuscript sidebar</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">All worldbuilding sections load (characters, locations, lore, timeline, history)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">DOCX export works and uses correct labels</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">5 disabled types (Play, Screenplay, TV Series, Comic, Video Game) show "Soon" and cannot be selected</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Novella</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Create project — Part / Chapter / Scene labels in the manuscript sidebar</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Default sections are lighter (no heavy worldbuilding sections by default)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">DOCX export works</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Short Story</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Create project — Part / Section / Scene labels in the manuscript sidebar</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Default sections match compact set</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">DOCX export works</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">D&amp;D Campaign</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Create project — Story Arc / Session / Encounter labels in the manuscript sidebar</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Map section appears in the project (distinct from Novel)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Factions section visible</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">DOCX export works with correct structural labels</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">TTRPG Campaign</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Create project — Story Arc / Session / Encounter labels (same as D&amp;D)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">Labels are system-agnostic (no D&amp;D-specific terminology in UI)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-types"><span class="item-text">DOCX export works</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 6. Dashboard ── -->
+  <div class="section" id="s-dash">
+    <div class="section-header" onclick="toggleSection('s-dash')">
+      <span class="section-badge badge-qa">Needs QA</span>
+      <span class="section-title">6 · Dashboard</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-dash-bar" style="width:0%;background:var(--accent)"></div></div>
+        <span class="section-count" id="s-dash-count" style="color:var(--accent)">0 / 7</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="items">
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Empty account — hero empty state shows with New Project and Import with AI CTAs</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Single project — auto-activates on load without user clicking anything</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Many projects — series filter on Status Queue filters correctly</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Tile click opens project; star button toggles active/focus — they don't do the same thing</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Create project → fills in correctly; Edit project modal prompts "Discard changes?" when dirty</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Delete project → project removed; no related records (acts, scenes, characters) left behind</span></label>
+        <label class="item"><input type="checkbox" data-section="s-dash"><span class="item-text">Rename a project → name updates everywhere (header, card, status queue)</span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7. Manuscript Editor ── -->
+  <div class="section" id="s-ms">
+    <div class="section-header" onclick="toggleSection('s-ms')">
+      <span class="section-badge badge-qa">Needs QA</span>
+      <span class="section-title">7 · Manuscript Editor</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-ms-bar" style="width:0%;background:var(--accent)"></div></div>
+        <span class="section-count" id="s-ms-count" style="color:var(--accent)">0 / 10</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Structure operations</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Add, rename, reorder, and delete acts — structure persists after refresh</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Add, rename, reorder, move, and delete chapters — persists after refresh</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Add, rename, reorder, move, and delete scenes — persists after refresh</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Split scene (/scene command) — splits content correctly into two scenes</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Editor stability</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Long scene (2000+ words) — no lag, cursor doesn't jump</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Paste a large block of text — editor handles it without freezing</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Bold (Ctrl+B), italic (Ctrl+I), underline (Ctrl+U) — wrap and unwrap selected text correctly</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Word count updates correctly after paste, delete, and scene moves</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Scene metadata</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">POV and Location fields save and persist after refresh</span></label>
+          <label class="item"><input type="checkbox" data-section="s-ms"><span class="item-text">Status cycle (Draft → Writing → Done → Revision) updates the dot colour in the sidebar tree</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 8. Responsive Layout ── -->
+  <div class="section" id="s-resp">
+    <div class="section-header" onclick="toggleSection('s-resp')">
+      <span class="section-badge badge-blocker">Blocker</span>
+      <span class="section-title">8 · Responsive Layout (mobile &amp; tablet)</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-resp-bar" style="width:0%;background:var(--red)"></div></div>
+        <span class="section-count" id="s-resp-count" style="color:var(--red)">0 / 8</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Mobile (375px)</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Dashboard project cards render without overlap; all 3 card buttons are tappable</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Manuscript: writing area is full width; sidebar becomes bottom tab bar at ≤640px</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Write button is visible and reachable in the top navigation</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Account/Settings page — all controls visible, nothing clipped</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Tablet (768px)</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Dashboard layout reflows correctly — no horizontal scroll</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Manuscript sidebar shows as right panel (not bottom tab bar)</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Edit modals (project, series) fit on screen; Save/Cancel buttons visible without scrolling</span></label>
+          <label class="item"><input type="checkbox" data-section="s-resp"><span class="item-text">Map builder disabled state shows gracefully (not broken layout)</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 9. Conditional MVP ── -->
+  <div class="section" id="s-cond">
+    <div class="section-header" onclick="toggleSection('s-cond')">
+      <span class="section-badge badge-high">High risk</span>
+      <span class="section-title">9 · Conditional MVP (modals, search, links)</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-cond-bar" style="width:0%;background:var(--orange)"></div></div>
+        <span class="section-count" id="s-cond-count" style="color:var(--orange)">0 / 9</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="subsection">
+        <div class="subsection-label">Modals &amp; overlays</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Create Project, Edit Project, Edit Series — open, close (X and click-outside), dirty-check on close</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Delete confirm modals — appear on delete; cancel does nothing; confirm removes the record</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">AI Import modal — all 4 phases (upload, analyzing, preview, created) complete without error</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Search &amp; filtering</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Characters search (10+ records) — finds by name and keyword; clears correctly</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Locations search — finds by name and category</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Lore search + category filter — finds by title; filtering by category shows correct subset</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Timeline — events display in chronological order; search finds by title</span></label>
+        </div>
+      </div>
+      <div class="subsection">
+        <div class="subsection-label">Internal linking</div>
+        <div class="items">
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Link a character to a lore entry — link appears; delete the character — lore entry has no broken link</span></label>
+          <label class="item"><input type="checkbox" data-section="s-cond"><span class="item-text">Timeline event linked to a world-history entry — link preserved after page refresh</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 10. Landing Page ── -->
+  <div class="section" id="s-land">
+    <div class="section-header" onclick="toggleSection('s-land')">
+      <span class="section-badge badge-polish">Polish</span>
+      <span class="section-title">10 · Landing Page &amp; Pricing</span>
+      <div class="section-progress-wrap">
+        <div class="section-bar-track"><div class="section-bar-fill" id="s-land-bar" style="width:0%;background:#94a3b8"></div></div>
+        <span class="section-count" id="s-land-count" style="color:#94a3b8">0 / 5</span>
+      </div>
+      <span class="section-chevron">▾</span>
+    </div>
+    <div class="section-body">
+      <div class="items">
+        <label class="item"><input type="checkbox" data-section="s-land"><span class="item-text">Landing page copy mentions tabletop campaigns (D&amp;D, TTRPG) alongside novels</span></label>
+        <label class="item"><input type="checkbox" data-section="s-land"><span class="item-text">Pricing CTA is clearly visible above the fold; clicking routes to /pricing</span></label>
+        <label class="item"><input type="checkbox" data-section="s-land"><span class="item-text">All 4 paid plans show correct prices (£149 / £249 / £399 / £10/mo)</span></label>
+        <label class="item"><input type="checkbox" data-section="s-land"><span class="item-text">Checkout flow completes end-to-end (test mode) — Stripe success redirects correctly</span></label>
+        <label class="item"><input type="checkbox" data-section="s-land"><span class="item-text">Privacy Policy, Terms, Cookie Policy pages load and are readable</span></label>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const STORAGE_KEY = 'yow-qa-tracker-v1'
+
+  // ── Persist & load ────────────────────────────────────────────────────────────
+
+  function saveState() {
+    const state = {}
+    document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
+      state[i] = cb.checked
+    })
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }
+
+  function loadState() {
+    try {
+      const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+      document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
+        if (state[i]) {
+          cb.checked = true
+          cb.closest('.item')?.classList.add('done')
+        }
+      })
+    } catch {}
+  }
+
+  function resetAll() {
+    if (!confirm('Reset all checks? This cannot be undone.')) return
+    localStorage.removeItem(STORAGE_KEY)
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = false
+      cb.closest('.item')?.classList.remove('done')
+    })
+    updateAll()
+  }
+
+  // ── Progress calculation ──────────────────────────────────────────────────────
+
+  function updateSection(sectionId) {
+    const boxes = document.querySelectorAll(`input[data-section="${sectionId}"]`)
+    const total = boxes.length
+    const done  = [...boxes].filter(b => b.checked).length
+    const pct   = total ? Math.round((done / total) * 100) : 0
+
+    const bar   = document.getElementById(`${sectionId}-bar`)
+    const count = document.getElementById(`${sectionId}-count`)
+    if (bar)   bar.style.width = pct + '%'
+    if (count) count.textContent = `${done} / ${total}`
+  }
+
+  function updateTotal() {
+    const all   = document.querySelectorAll('input[type="checkbox"]')
+    const done  = [...all].filter(b => b.checked).length
+    const total = all.length
+    const pct   = total ? Math.round((done / total) * 100) : 0
+
+    document.getElementById('total-bar').style.width = pct + '%'
+    document.getElementById('total-label').textContent = pct + '%'
+
+    const banner = document.getElementById('done-banner')
+    banner.style.display = done === total && total > 0 ? 'block' : 'none'
+  }
+
+  function updateAll() {
+    const sections = [...new Set([...document.querySelectorAll('input[data-section]')].map(b => b.dataset.section))]
+    sections.forEach(updateSection)
+    updateTotal()
+  }
+
+  // ── Section toggle ────────────────────────────────────────────────────────────
+
+  function toggleSection(id) {
+    document.getElementById(id).classList.toggle('collapsed')
+  }
+
+  // ── Event wiring ──────────────────────────────────────────────────────────────
+
+  document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      cb.closest('.item')?.classList.toggle('done', cb.checked)
+      updateAll()
+      saveState()
+    })
+  })
+
+  // ── Date ─────────────────────────────────────────────────────────────────────
+
+  const d = new Date()
+  document.getElementById('date-label').textContent =
+    d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+
+  loadState()
+  updateAll()
+</script>
+</body>
+</html>

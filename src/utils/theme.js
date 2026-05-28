@@ -1,28 +1,150 @@
+// ─── Theme Registry ────────────────────────────────────────────────────────────
+//
+// Each theme has:
+//   swatches  – six preview colours shown in the theme picker
+//   atmos     – atmosphere tokens that drive gradients, textures, and shadows
+//
+// The heavy lifting happens in index.css via [data-theme="..."] blocks which
+// override both primitive and atmosphere CSS vars, letting every derived
+// studio token (--studio-wood, --studio-paper, etc.) adapt automatically.
+//
+
 export const BUILT_IN_THEMES = [
-  { id: 'atelier',     label: 'Atelier',     description: 'Dark forest studio', swatches: { bgMain: '#0e1512', bgNav: '#141c16', textMain: '#dce8d7', textMuted: '#6b856d', accent: '#8fcb9e', border: '#1e2c20' } },
-  { id: 'scriptorium', label: 'Scriptorium', description: 'Warm dark desk',     swatches: { bgMain: '#14100c', bgNav: '#241b13', textMain: '#f4ead9', textMuted: '#b8a58f', accent: '#c89445', border: '#3c3023' } },
-  { id: 'vellum',      label: 'Vellum',      description: 'Soft paper mode',    swatches: { bgMain: '#f3ead9', bgNav: '#e6d8bf', textMain: '#221b14', textMuted: '#71624e', accent: '#8a3f2d', border: '#c9b89e' } },
+  {
+    id: 'tropical',
+    label: 'Tropical',
+    description: 'Deep rainforest dusk — coral accent & dark teal',
+    radiusUnit: 9,
+    visualStrength: 1.25,
+    glowIntensity: 8,
+    glowPos: '85% 8%',
+    swatches: {
+      bgMain: '#0d282e', bgNav: '#133840', textMain: '#e2f0ee',
+      textMuted: '#7ab8b4', accent: '#e8724e', border: '#1e4a50',
+    },
+  },
+  {
+    id: 'sage-modern',
+    label: 'Sage Modern',
+    description: 'Natural light studio — sage green & soft white',
+    radiusUnit: 6,
+    visualStrength: 0.75,
+    glowIntensity: 4,
+    glowPos: '80% 90%',
+    swatches: {
+      bgMain: '#f5f8f3', bgNav: '#eaeee6', textMain: '#1e2922',
+      textMuted: '#5a7060', accent: '#4a8c68', border: '#ced8ca',
+    },
+  },
+  {
+    id: 'industrial-loft',
+    label: 'Industrial Loft',
+    description: 'Concrete & steel — amber & dark slate',
+    radiusUnit: 3,
+    visualStrength: 1.15,
+    glowIntensity: 2,
+    glowPos: '50% 50%',
+    swatches: {
+      bgMain: '#141720', bgNav: '#1c2028', textMain: '#dce0e8',
+      textMuted: '#6a7282', accent: '#d08820', border: '#282c38',
+    },
+  },
+  {
+    id: 'caramel-latte',
+    label: 'Caramel Latte',
+    description: 'Warm café afternoon — caramel & cream',
+    radiusUnit: 10,
+    visualStrength: 0.9,
+    glowIntensity: 5,
+    glowPos: '80% 90%',
+    swatches: {
+      bgMain: '#fef8f0', bgNav: '#f4e8d8', textMain: '#28200c',
+      textMuted: '#7a6840', accent: '#b87830', border: '#e0c8a0',
+    },
+  },
+  {
+    id: 'ocean-depth',
+    label: 'Ocean Depth',
+    description: 'Bioluminescent deep sea — teal & midnight navy',
+    radiusUnit: 5,
+    visualStrength: 1.45,
+    glowIntensity: 7,
+    glowPos: '88% 12%',
+    swatches: {
+      bgMain: '#07151c', bgNav: '#0e2432', textMain: '#d4eef8',
+      textMuted: '#4888a8', accent: '#189ab0', border: '#143848',
+    },
+  },
+  {
+    id: 'pearl-minimal',
+    label: 'Pearl Minimal',
+    description: 'Clean blank page — cool grey-blue & white',
+    radiusUnit: 5,
+    visualStrength: 0.55,
+    glowIntensity: 0,
+    glowPos: '50% 50%',
+    swatches: {
+      bgMain: '#fafaf9', bgNav: '#f0f2f1', textMain: '#1c1f23',
+      textMuted: '#656e77', accent: '#7a8a9c', border: '#e2e6ea',
+    },
+  },
 ]
 
-export const QUICK_PALETTES = [
-  { id: 'highcontrast', label: 'High Contrast', swatches: { bgMain: '#000000', bgNav: '#101010', textMain: '#ffffff', textMuted: '#d7d7d7', accent: '#ffdd33', border: '#7a7a7a' } },
-  { id: 'nord',      label: 'Nord',      swatches: { bgMain: '#2e3440', bgNav: '#3b4252', textMain: '#eceff4', textMuted: '#d8dee9', accent: '#88c0d0', border: '#4c566a' } },
-  { id: 'rosepine',  label: 'Rose Pine', swatches: { bgMain: '#191724', bgNav: '#1f1d2e', textMain: '#e0def4', textMuted: '#908caa', accent: '#ebbcba', border: '#403d52' } },
-  { id: 'gruvbox',   label: 'Gruvbox',   swatches: { bgMain: '#282828', bgNav: '#1d2021', textMain: '#ebdbb2', textMuted: '#bdae93', accent: '#fabd2f', border: '#504945' } },
-]
+export const QUICK_PALETTES = []
 
 export const DEFAULT_THEME = BUILT_IN_THEMES[0].id
 export const DEFAULT_CUSTOM_COLORS = BUILT_IN_THEMES[0].swatches
+export const DEFAULT_THEME_TUNING = {
+  radiusUnit: BUILT_IN_THEMES[0].radiusUnit,
+  visualStrength: 1,
+}
 
-const THEME_CSS_VARS = ['--bg-main', '--bg-nav', '--text-main', '--text-muted', '--accent', '--border', '--bg-hover', '--accent-fade', '--logo-filter']
+const ALL_CSS_VARS = [
+  '--bg-main', '--bg-nav', '--bg-hover', '--text-main', '--text-muted',
+  '--accent', '--accent-fade', '--border', '--logo-filter', '--accent2',
+  '--atmos-warm', '--atmos-cool', '--atmos-paper', '--atmos-paper-line',
+  '--atmos-wood', '--atmos-cork', '--atmos-spine-tint',
+  '--atmos-glow-pos', '--atmos-glow-size', '--atmos-glow-intensity',
+  '--shadow-sm', '--shadow-md', '--shadow-lg', '--shadow-overlay',
+  '--shadow-soft', '--shadow-modal', '--radius-unit', '--font-serif',
+]
+
 const THEME_OPTIONS = [...BUILT_IN_THEMES, ...QUICK_PALETTES]
-const THEME_IDS = new Set(THEME_OPTIONS.map(theme => theme.id))
+const THEME_IDS = new Set(THEME_OPTIONS.map(t => t.id))
 
 export const normalizeThemeChoice = (theme) => (
   THEME_IDS.has(theme) || theme === 'custom' ? theme : DEFAULT_THEME
 )
 
 export const loadThemeChoice = () => normalizeThemeChoice(localStorage.getItem('nf-theme'))
+
+export const getThemeOption = (theme) => THEME_OPTIONS.find(option => option.id === normalizeThemeChoice(theme))
+
+export const getThemeColors = (theme, customColors = {}) => {
+  const normalized = normalizeThemeChoice(theme)
+  if (normalized === 'custom') return { ...DEFAULT_CUSTOM_COLORS, ...customColors }
+  return getThemeOption(normalized)?.swatches || DEFAULT_CUSTOM_COLORS
+}
+
+export const getThemeTuning = (theme, fallback = DEFAULT_THEME_TUNING) => {
+  const option = getThemeOption(theme)
+  if (!option) return fallback
+  return {
+    radiusUnit: option.radiusUnit ?? fallback.radiusUnit,
+    visualStrength: option.visualStrength ?? fallback.visualStrength,
+  }
+}
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+export const loadThemeTuning = () => {
+  const radiusUnit = Number(localStorage.getItem('nf-radius-unit'))
+  const visualStrength = Number(localStorage.getItem('nf-visual-strength'))
+  return {
+    radiusUnit: Number.isFinite(radiusUnit) ? clamp(radiusUnit, 2, 16) : DEFAULT_THEME_TUNING.radiusUnit,
+    visualStrength: Number.isFinite(visualStrength) ? clamp(visualStrength, 0.45, 1.7) : DEFAULT_THEME_TUNING.visualStrength,
+  }
+}
 
 const hexToRgb = (hex) => {
   if (!hex || typeof hex !== 'string') return null
@@ -46,6 +168,33 @@ const logoFilterForBackground = (hex) => {
   return luminance > 0.56 ? 'brightness(0)' : 'none'
 }
 
+export const applyThemeTuning = (tuning = {}, colors = DEFAULT_CUSTOM_COLORS) => {
+  const root = document.documentElement
+  const radiusUnit = clamp(Number(tuning.radiusUnit) || DEFAULT_THEME_TUNING.radiusUnit, 2, 16)
+  const visualStrength = clamp(Number(tuning.visualStrength) || DEFAULT_THEME_TUNING.visualStrength, 0.45, 1.7)
+  const bg = hexToRgb(colors.bgMain)
+  const isLight = bg ? (0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b) / 255 > 0.58 : false
+  const base = isLight ? 0.075 : 0.22
+  const shadowTone = isLight ? '20,24,28' : '0,0,0'
+
+  root.style.setProperty('--radius-unit', `${radiusUnit}px`)
+  root.style.setProperty('--accent-fade', rgbaFromHex(colors.accent, clamp(0.08 + visualStrength * 0.08, 0.08, 0.24)))
+  root.style.setProperty('--bg-hover', rgbaFromHex(colors.textMain, clamp(0.025 + visualStrength * 0.035, 0.03, 0.09)))
+  root.style.setProperty('--atmos-glow-intensity', `${Math.round(visualStrength * 7)}%`)
+  root.style.setProperty('--shadow-sm', `0 2px 8px rgba(${shadowTone},${clamp(base * visualStrength, 0.04, 0.45)})`)
+  root.style.setProperty('--shadow-md', `0 10px 28px rgba(${shadowTone},${clamp((base + 0.08) * visualStrength, 0.08, 0.6)})`)
+  root.style.setProperty('--shadow-lg', `0 24px 62px rgba(${shadowTone},${clamp((base + 0.16) * visualStrength, 0.12, 0.72)})`)
+  root.style.setProperty('--shadow-overlay', `0 30px 80px rgba(${shadowTone},${clamp((base + 0.26) * visualStrength, 0.18, 0.82)})`)
+}
+
+export const saveThemeTuning = (tuning, colors) => {
+  localStorage.setItem('nf-radius-unit', String(tuning.radiusUnit))
+  localStorage.setItem('nf-visual-strength', String(tuning.visualStrength))
+  applyThemeTuning(tuning, colors)
+}
+
+// Applied only for quick palettes / custom — built-in themes are fully driven
+// by CSS [data-theme] blocks in index.css.
 const setThemeVars = (root, colors) => {
   root.style.setProperty('--bg-main', colors.bgMain)
   root.style.setProperty('--bg-nav', colors.bgNav)
@@ -54,7 +203,7 @@ const setThemeVars = (root, colors) => {
   root.style.setProperty('--accent', colors.accent)
   root.style.setProperty('--border', colors.border)
   root.style.setProperty('--bg-hover', rgbaFromHex(colors.textMain, 0.06))
-  root.style.setProperty('--accent-fade', rgbaFromHex(colors.accent, 0.18))
+  root.style.setProperty('--accent-fade', rgbaFromHex(colors.accent, 0.16))
   root.style.setProperty('--logo-filter', logoFilterForBackground(colors.bgNav))
 }
 
@@ -75,7 +224,8 @@ export const applyThemeToDocument = (theme, customColors = {}) => {
     return normalized
   }
 
-  THEME_CSS_VARS.forEach(variable => root.style.removeProperty(variable))
+  // Built-in theme — remove any inline overrides and let the CSS block handle everything
+  ALL_CSS_VARS.forEach(variable => root.style.removeProperty(variable))
   root.setAttribute('data-theme', normalized)
   return normalized
 }

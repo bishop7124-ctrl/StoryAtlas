@@ -26,8 +26,17 @@ export function StudioFrame({
       <header className="studio-spine" aria-label="Studio navigation">
         <div className="studio-brand" title={`${projectTitle} - ${projectType}`}>
           <div className="studio-brand-mark"><YOWLogo /></div>
+          <div className="studio-brand-mobile-label" aria-hidden="true">
+            <span>YOW</span>
+            <span className="beta-watermark">Beta</span>
+          </div>
           <div className="studio-brand-text">
-            <span className="studio-kicker">Your Own World</span>
+            <div className="studio-brand-name-stack" aria-label="Your Own World">
+              <span><strong>Y</strong>our</span>
+              <span><strong>O</strong>wn</span>
+              <span><strong>W</strong>orld</span>
+            </div>
+            <span className="beta-watermark" aria-label="Beta">Beta</span>
             <span className="studio-brand-sep">·</span>
             <h1>{projectTitle}</h1>
           </div>
@@ -38,6 +47,12 @@ export function StudioFrame({
           )}
         </div>
 
+        {primaryAction && (
+          <div className="studio-mobile-primary-action">
+            {primaryAction}
+          </div>
+        )}
+
         <nav className="studio-room-list" aria-label="Workspace">
           {rooms.map(room => (
             <button
@@ -45,7 +60,9 @@ export function StudioFrame({
               type="button"
               onClick={() => onOpenRoom(room)}
               className={cx('studio-room', activeRoomId === room.id && 'is-current')}
+              aria-label={`Open ${room.label}`}
               aria-current={activeRoomId === room.id ? true : undefined}
+              title={room.description ? `${room.label}: ${room.description}` : room.label}
             >
               <span className="studio-room-tab">{room.icon}</span>
               <span className="studio-room-copy">
@@ -136,7 +153,51 @@ export function StudioBoard({ children, className = '', variant = 'desk' }) {
 }
 
 export function StudioSplit({ children, variant = 'notebook' }) {
-  return <div className={cx('studio-split', `studio-split-${variant}`)}>{children}</div>
+  const [mobileIndexCollapsed, setMobileIndexCollapsed] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 860px)')
+    const handleChange = () => {
+      if (!media.matches) setMobileIndexCollapsed(false)
+    }
+    handleChange()
+    media.addEventListener('change', handleChange)
+    return () => media.removeEventListener('change', handleChange)
+  }, [])
+
+  useEffect(() => {
+    const handleReset = () => setMobileIndexCollapsed(false)
+    window.addEventListener('studio-index-reset', handleReset)
+    window.addEventListener('popstate', handleReset)
+    return () => {
+      window.removeEventListener('studio-index-reset', handleReset)
+      window.removeEventListener('popstate', handleReset)
+    }
+  }, [])
+
+  const handleClickCapture = (event) => {
+    if (!window.matchMedia('(max-width: 860px)').matches) return
+    if (event.target.closest?.('.studio-index .studio-record')) setMobileIndexCollapsed(true)
+  }
+
+  return (
+    <div
+      className={cx('studio-split', `studio-split-${variant}`, mobileIndexCollapsed && 'is-mobile-index-collapsed')}
+      onClickCapture={handleClickCapture}
+    >
+      {mobileIndexCollapsed && (
+        <button
+          type="button"
+          className="studio-mobile-index-toggle"
+          aria-expanded="false"
+          onClick={() => setMobileIndexCollapsed(false)}
+        >
+          Browse list
+        </button>
+      )}
+      {children}
+    </div>
+  )
 }
 
 export function StudioIndex({ eyebrow, title, tools, children, variant = 'index' }) {

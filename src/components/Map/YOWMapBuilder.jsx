@@ -14,8 +14,9 @@ const OBJECT_TYPES = {
   stamp: { label: 'Stamp', icon: '✦', fill: '#8f6a33', stroke: '#312719' },
   label: { label: 'Label', icon: 'T', fill: '#f7e7ba', stroke: '#262118' },
   location: { label: 'Location', icon: '⌖', fill: '#d6b45f', stroke: '#6f5524' },
-  region: { label: 'Region', icon: '□', fill: LAND_FILL, stroke: LAND_STROKE },
+  region: { label: 'Region', icon: '□', fill: '#7b5fb8', stroke: '#4f3a83' },
   river: { label: 'River', icon: '~', fill: 'transparent', stroke: '#3c93b8' },
+  mountain: { label: 'Mountain', icon: '△', fill: 'transparent', stroke: '#77746d' },
   road: { label: 'Road', icon: '—', fill: 'transparent', stroke: '#8b6743' },
   border: { label: 'Border', icon: '⋯', fill: 'transparent', stroke: '#9b5ab8' },
   shape: { label: 'Land', icon: '▰', fill: LAND_FILL, stroke: LAND_STROKE },
@@ -27,6 +28,7 @@ const TOOLBAR_MODES = [
   { id: 'zoom', label: 'Zoom', icon: '+' },
   { id: 'region', label: 'Region', icon: '□' },
   { id: 'river', label: 'River', icon: '~' },
+  { id: 'mountain', label: 'Mountain', icon: '△' },
   { id: 'road', label: 'Road', icon: '—' },
   { id: 'border', label: 'Border', icon: '⋯' },
   { id: 'shape', label: 'Land', icon: '▰' },
@@ -35,10 +37,16 @@ const TOOLBAR_MODES = [
   { id: 'location', label: 'Location', icon: '⌖' },
 ]
 
-const POINT_DRAW_TOOLS = new Set(['region', 'river', 'road', 'border'])
-const LINE_OBJECT_TYPES = new Set(['river', 'road', 'border'])
+const POINT_DRAW_TOOLS = new Set(['region', 'river', 'mountain', 'road', 'border'])
+const LINE_OBJECT_TYPES = new Set(['river', 'mountain', 'road', 'border'])
 const CONTENT_OBJECT_TYPES = new Set(['marker', 'stamp', 'label', 'location'])
 const SNAP_SIZES = [20, 40, 80]
+
+const STYLE_PRESET_OPTIONS = [
+  { value: 'parchment', label: 'Parchment' },
+  { value: 'ink', label: 'Ink' },
+  { value: 'atlas', label: 'Atlas' },
+]
 
 const MAP_TYPE_OPTIONS = [
   { value: 'world', label: 'World' },
@@ -54,11 +62,13 @@ const STAMP_LIBRARY = [
   { id: 'city', name: 'City', icon: '●', category: 'Settlements', mapTypes: ['world', 'region', 'local'], size: 86, fill: '#b9854e', stroke: '#4c3320', keywords: 'settlement place urban' },
   { id: 'capital', name: 'Capital', icon: '★', category: 'Settlements', mapTypes: ['world', 'region'], size: 96, fill: '#c89a4b', stroke: '#4a2e16', keywords: 'kingdom seat city crown' },
   { id: 'town', name: 'Town', icon: '○', category: 'Settlements', mapTypes: ['region', 'local'], size: 70, fill: '#bd875a', stroke: '#4b321f', keywords: 'village settlement' },
+  { id: 'building', name: 'Building', icon: '▥', category: 'Structure', mapTypes: ['local'], size: 78, fill: '#9f7650', stroke: '#3d2a1c', keywords: 'house shop neighborhood town' },
   { id: 'kingdom', name: 'Kingdom', icon: '♛', category: 'Political', mapTypes: ['world'], size: 128, fill: '#a85f61', stroke: '#4a2325', keywords: 'realm country empire' },
   { id: 'castle', name: 'Castle', icon: '▣', category: 'Landmarks', mapTypes: ['world', 'region', 'local'], size: 92, fill: '#8f8574', stroke: '#352d25', keywords: 'fort keep citadel' },
   { id: 'ruins', name: 'Ruins', icon: '⌁', category: 'Landmarks', mapTypes: ['world', 'region', 'local'], size: 86, fill: '#92745b', stroke: '#3f3026', keywords: 'ancient broken landmark' },
   { id: 'walls', name: 'Walls', icon: '▤', category: 'Structure', mapTypes: ['interior'], size: 120, fill: '#8a7b68', stroke: '#3d342b', keywords: 'room stone barrier' },
   { id: 'door', name: 'Door', icon: '▯', category: 'Structure', mapTypes: ['interior', 'local'], size: 70, fill: '#8b5a33', stroke: '#3d2414', keywords: 'entry exit gate' },
+  { id: 'window', name: 'Window', icon: '▦', category: 'Structure', mapTypes: ['interior'], size: 58, fill: '#6f98a4', stroke: '#263b42', keywords: 'glass opening interior' },
   { id: 'table', name: 'Table', icon: '▭', category: 'Furniture', mapTypes: ['interior'], size: 90, fill: '#7a4f30', stroke: '#382213', keywords: 'desk furniture dining' },
   { id: 'chair', name: 'Chair', icon: '┘', category: 'Furniture', mapTypes: ['interior'], size: 58, fill: '#7b5435', stroke: '#3a2415', keywords: 'seat furniture' },
   { id: 'bed', name: 'Bed', icon: '▰', category: 'Furniture', mapTypes: ['interior'], size: 108, fill: '#926d65', stroke: '#3d2727', keywords: 'sleep furniture' },
@@ -71,6 +81,63 @@ const DEFAULT_CATEGORIES_BY_MAP_TYPE = {
   region: ['Terrain', 'Nature', 'Settlements', 'Landmarks'],
   local: ['Nature', 'Settlements', 'Landmarks', 'Structure'],
   interior: ['Structure', 'Furniture'],
+}
+
+const MAP_TYPE_TOOLSETS = {
+  world: {
+    label: 'World Map',
+    purpose: 'Large-scale geography and realms',
+    tools: [
+      { id: 'landmasses', mode: 'shape', label: 'Landmasses', icon: '▰' },
+      { id: 'regions', mode: 'region', label: 'Kingdoms', icon: '□' },
+      { id: 'borders', mode: 'border', label: 'Borders', icon: '⋯' },
+      { id: 'waters', mode: 'river', label: 'Rivers & seas', icon: '~' },
+      { id: 'mountains', mode: 'mountain', label: 'Mountains', icon: '△' },
+      { id: 'terrain', mode: 'stamp', label: 'Forests & stamps', icon: '✦' },
+      { id: 'cities', mode: 'location', label: 'Cities', icon: '⌖' },
+      { id: 'labels', mode: 'label', label: 'Labels', icon: 'T' },
+    ],
+  },
+  region: {
+    label: 'Region Map',
+    purpose: 'Kingdoms, provinces, routes, and landmarks',
+    tools: [
+      { id: 'provinces', mode: 'region', label: 'Provinces', icon: '□' },
+      { id: 'roads', mode: 'road', label: 'Roads', icon: '—' },
+      { id: 'rivers', mode: 'river', label: 'Rivers', icon: '~' },
+      { id: 'mountains', mode: 'mountain', label: 'Mountains', icon: '△' },
+      { id: 'towns', mode: 'location', label: 'Towns', icon: '⌖' },
+      { id: 'landmarks', mode: 'stamp', label: 'Landmarks', icon: '✦' },
+      { id: 'borders', mode: 'border', label: 'Borders', icon: '⋯' },
+      { id: 'labels', mode: 'label', label: 'Labels', icon: 'T' },
+    ],
+  },
+  local: {
+    label: 'Local Map',
+    purpose: 'Towns, islands, camps, battlefields, and neighborhoods',
+    tools: [
+      { id: 'buildings', mode: 'stamp', label: 'Buildings', icon: '▥' },
+      { id: 'paths', mode: 'road', label: 'Paths', icon: '—' },
+      { id: 'terrain-zones', mode: 'region', label: 'Terrain zones', icon: '□' },
+      { id: 'landmarks', mode: 'stamp', label: 'Landmarks', icon: '✦' },
+      { id: 'poi', mode: 'location', label: 'Points of interest', icon: '⌖' },
+      { id: 'labels', mode: 'label', label: 'Labels', icon: 'T' },
+      { id: 'decor', mode: 'stamp', label: 'Decorative stamps', icon: '✦' },
+    ],
+  },
+  interior: {
+    label: 'Interior Map',
+    purpose: 'Rooms, buildings, dungeons, and interiors',
+    tools: [
+      { id: 'rooms', mode: 'shape', label: 'Rooms', icon: '▰' },
+      { id: 'walls', mode: 'border', label: 'Walls', icon: '▤' },
+      { id: 'doors', mode: 'stamp', label: 'Doors', icon: '▯' },
+      { id: 'windows', mode: 'stamp', label: 'Windows', icon: '▦' },
+      { id: 'furniture', mode: 'stamp', label: 'Furniture', icon: '▭' },
+      { id: 'objects', mode: 'stamp', label: 'Interior objects', icon: '▣' },
+      { id: 'labels', mode: 'label', label: 'Labels', icon: 'T' },
+    ],
+  },
 }
 
 function uid(prefix = 'obj') {
@@ -250,10 +317,10 @@ function createObject(type, index = 0) {
       text: type === 'label' ? 'New Label' : base.label,
       fill: base.fill,
       stroke: base.stroke,
-      opacity: 1,
+      opacity: type === 'region' ? 0.32 : 1,
       fontSize: type === 'label' ? 34 : undefined,
       curvedLabel: type === 'label',
-      lineThickness: type === 'river' ? 12 : type === 'road' ? 7 : type === 'border' ? 5 : 2,
+      lineThickness: type === 'river' ? 12 : type === 'mountain' ? 16 : type === 'road' ? 7 : type === 'border' ? 5 : 2,
       dashed: type === 'road' || type === 'border',
       shapeKind: type === 'shape' ? 'polygon' : 'rectangle',
       points: isLine ? [{ x: -0.5, y: 0 }, { x: 0.5, y: 0 }] : null,
@@ -663,79 +730,6 @@ function isLandObject(object) {
   return object?.type === 'region' || object?.type === 'shape' || kind === 'polygon'
 }
 
-function objectWorldFaces(object) {
-  const faces = objectLocalFaces(object)
-  if (faces.length) {
-    return faces.map(face => face.map(point => localToMap(point, object)))
-  }
-  return [objectCorners(object)]
-}
-
-function faceBounds(face) {
-  return {
-    left: Math.min(...face.map(point => point.x)),
-    right: Math.max(...face.map(point => point.x)),
-    top: Math.min(...face.map(point => point.y)),
-    bottom: Math.max(...face.map(point => point.y)),
-  }
-}
-
-function boundsOverlap(a, b) {
-  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top
-}
-
-function objectsOverlap(a, b) {
-  const facesA = objectWorldFaces(a)
-  const facesB = objectWorldFaces(b)
-  return facesA.some(faceA => {
-    const boundsA = faceBounds(faceA)
-    return facesB.some(faceB => boundsOverlap(boundsA, faceBounds(faceB)))
-  })
-}
-
-function mergeLandObjectIntoList(current, object) {
-  if (!isLandObject(object)) return { objects: [...current, object], selectedId: object.id }
-  const overlapping = current.filter(item => isLandObject(item) && !item.locked && objectsOverlap(item, object))
-  if (!overlapping.length) return { objects: [...current, object], selectedId: object.id }
-
-  const target = overlapping[0]
-  const absorbedIds = new Set(overlapping.slice(1).map(item => item.id))
-  const worldFaces = [
-    ...objectWorldFaces(target),
-    ...objectWorldFaces(object),
-    ...overlapping.slice(1).flatMap(item => objectWorldFaces(item)),
-  ]
-  const bounds = faceBounds(worldFaces.flat())
-  const mergedWidth = Math.max(MIN_SIZE, bounds.right - bounds.left)
-  const mergedHeight = Math.max(MIN_SIZE, bounds.bottom - bounds.top)
-  const mergedBase = {
-    ...target,
-    x: (bounds.left + bounds.right) / 2,
-    y: (bounds.top + bounds.bottom) / 2,
-    width: mergedWidth,
-    height: mergedHeight,
-    rotation: 0,
-  }
-  const normalizedFaces = worldFaces.map(face => face.map(point => localToNormalized(toLocal(point, mergedBase), mergedBase)))
-  const mergedTarget = {
-    ...mergedBase,
-    metadata: {
-      ...target.metadata,
-      fill: target.metadata?.fill || LAND_FILL,
-      stroke: target.metadata?.stroke || LAND_STROKE,
-      points: normalizedFaces[0],
-      faces: normalizedFaces.slice(1),
-    },
-  }
-
-  return {
-    objects: current
-      .filter(item => !absorbedIds.has(item.id))
-      .map(item => item.id === target.id ? mergedTarget : item),
-    selectedId: target.id,
-  }
-}
-
 function selectionBounds(objects) {
   if (!objects.length) return null
   const points = objects.flatMap(objectCorners)
@@ -752,29 +746,41 @@ function selectionBounds(objects) {
   }
 }
 
-function drawGrid(ctx, width, height) {
+function drawGrid(ctx, width, height, stylePreset = 'parchment') {
   ctx.save()
   const paper = ctx.createLinearGradient(0, 0, width, height)
-  paper.addColorStop(0, '#f3e8cc')
-  paper.addColorStop(0.46, '#e8d7af')
-  paper.addColorStop(1, '#d7bd86')
+  if (stylePreset === 'ink') {
+    paper.addColorStop(0, '#f7f4eb')
+    paper.addColorStop(0.48, '#e6e0d2')
+    paper.addColorStop(1, '#c8c0ae')
+  } else if (stylePreset === 'atlas') {
+    paper.addColorStop(0, '#dbe6de')
+    paper.addColorStop(0.46, '#c5d6cf')
+    paper.addColorStop(1, '#a7bfb9')
+  } else {
+    paper.addColorStop(0, '#f3e8cc')
+    paper.addColorStop(0.46, '#e8d7af')
+    paper.addColorStop(1, '#d7bd86')
+  }
   ctx.fillStyle = paper
   ctx.fillRect(0, 0, width, height)
 
-  ctx.globalAlpha = 0.24
+  ctx.globalAlpha = stylePreset === 'ink' ? 0.12 : 0.24
   for (let index = 0; index < 520; index += 1) {
     const seed = index * 97
     const x = seededNoise(seed, 1) * width
     const y = seededNoise(seed, 2) * height
     const r = 1 + seededNoise(seed, 3) * 5
-    ctx.fillStyle = seededNoise(seed, 4) > 0.5 ? '#8b6a36' : '#fff7df'
+    ctx.fillStyle = stylePreset === 'atlas'
+      ? (seededNoise(seed, 4) > 0.5 ? '#5f8078' : '#eff8f1')
+      : seededNoise(seed, 4) > 0.5 ? '#8b6a36' : '#fff7df'
     ctx.beginPath()
     ctx.arc(x, y, r, 0, Math.PI * 2)
     ctx.fill()
   }
 
   ctx.globalAlpha = 1
-  ctx.strokeStyle = 'rgba(73, 59, 38, 0.08)'
+  ctx.strokeStyle = stylePreset === 'atlas' ? 'rgba(39, 74, 70, 0.12)' : 'rgba(73, 59, 38, 0.08)'
   ctx.lineWidth = 1
   for (let x = 0; x <= width; x += 80) {
     ctx.beginPath()
@@ -790,13 +796,13 @@ function drawGrid(ctx, width, height) {
   }
   const vignette = ctx.createRadialGradient(width / 2, height / 2, width * 0.15, width / 2, height / 2, width * 0.7)
   vignette.addColorStop(0, 'rgba(255,255,255,0)')
-  vignette.addColorStop(1, 'rgba(88,58,24,0.22)')
+  vignette.addColorStop(1, stylePreset === 'atlas' ? 'rgba(26,67,68,0.18)' : stylePreset === 'ink' ? 'rgba(48,45,40,0.18)' : 'rgba(88,58,24,0.22)')
   ctx.fillStyle = vignette
   ctx.fillRect(0, 0, width, height)
   ctx.restore()
 }
 
-function drawObject(ctx, object, selected) {
+function drawObject(ctx, object, selected, options = {}) {
   if (object.visible === false) return
   const meta = object.metadata || {}
   const type = OBJECT_TYPES[object.type] || OBJECT_TYPES.region
@@ -812,20 +818,84 @@ function drawObject(ctx, object, selected) {
   ctx.lineCap = 'round'
   if (meta.dashed) ctx.setLineDash([Math.max(8, (meta.lineThickness || 4) * 2.2), Math.max(6, (meta.lineThickness || 4) * 1.4)])
 
+  const cleanEdges = options.mapType === 'interior'
+
   if (object.type === 'marker' || object.type === 'stamp' || object.type === 'location') {
     drawFantasyMarker(ctx, object, selected)
   } else if (object.type === 'label') {
     drawFantasyLabel(ctx, object)
   } else if (LINE_OBJECT_TYPES.has(object.type)) {
-    drawStyledLineObject(ctx, object, selected)
+    drawStyledLineObject(ctx, object, selected, { cleanEdges })
   } else if ((object.type === 'region' || meta.shapeKind === 'polygon') && objectLocalFaces(object).length) {
-    drawOrganicPolygonObject(ctx, object, selected)
+    cleanEdges ? drawCleanPolygonObject(ctx, object, selected) : drawOrganicPolygonObject(ctx, object, selected)
   } else if (object.type === 'shape' && meta.shapeKind === 'circle') {
-    drawOrganicEllipseObject(ctx, object, selected)
+    cleanEdges ? drawCleanEllipseObject(ctx, object, selected) : drawOrganicEllipseObject(ctx, object, selected)
   } else {
-    drawOrganicRectObject(ctx, object, selected)
+    cleanEdges ? drawCleanRectObject(ctx, object, selected) : drawOrganicRectObject(ctx, object, selected)
   }
   ctx.restore()
+}
+
+function drawCleanPolygonObject(ctx, object, selected) {
+  const meta = object.metadata || {}
+  const faces = objectLocalFaces(object)
+  if (!faces.length) return
+  const fill = meta.fill || OBJECT_TYPES[object.type]?.fill || LAND_FILL
+  const stroke = selected ? '#1677ff' : meta.stroke || '#5e4a28'
+
+  ctx.save()
+  if (fill !== 'transparent') {
+    ctx.fillStyle = colorWithAlpha(fill, object.type === 'region' ? 0.34 : 0.72)
+    faces.forEach(points => {
+      drawStraightPath(ctx, points, true)
+      ctx.fill()
+    })
+  }
+  ctx.strokeStyle = colorWithAlpha(stroke, selected ? 1 : 0.9)
+  ctx.lineWidth = selected ? Math.max(4, meta.lineThickness || 2) : Math.max(2, meta.lineThickness || 2)
+  ctx.setLineDash(meta.dashed ? [10, 7] : [])
+  faces.forEach(points => {
+    drawStraightPath(ctx, points, true)
+    ctx.stroke()
+  })
+  ctx.restore()
+}
+
+function drawCleanEllipseObject(ctx, object, selected) {
+  const meta = object.metadata || {}
+  const fill = meta.fill || OBJECT_TYPES[object.type]?.fill || LAND_FILL
+  const stroke = selected ? '#1677ff' : meta.stroke || '#5e4a28'
+  ctx.save()
+  ctx.beginPath()
+  ctx.ellipse(0, 0, object.width / 2, object.height / 2, 0, 0, Math.PI * 2)
+  if (fill !== 'transparent') {
+    ctx.fillStyle = colorWithAlpha(fill, 0.72)
+    ctx.fill()
+  }
+  ctx.strokeStyle = colorWithAlpha(stroke, selected ? 1 : 0.9)
+  ctx.lineWidth = selected ? Math.max(4, meta.lineThickness || 2) : Math.max(2, meta.lineThickness || 2)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawCleanRectObject(ctx, object, selected) {
+  const points = [
+    { x: -object.width / 2, y: -object.height / 2 },
+    { x: object.width / 2, y: -object.height / 2 },
+    { x: object.width / 2, y: object.height / 2 },
+    { x: -object.width / 2, y: object.height / 2 },
+  ]
+  drawCleanPolygonObject(ctx, { ...object, metadata: { ...object.metadata, points: points.map(point => localToNormalized(point, object)), shapeKind: 'polygon' } }, selected)
+}
+
+function drawStraightPath(ctx, points, closed = false) {
+  if (!points.length) return
+  ctx.beginPath()
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y)
+    else ctx.lineTo(point.x, point.y)
+  })
+  if (closed) ctx.closePath()
 }
 
 function drawOrganicPolygonObject(ctx, object, selected) {
@@ -937,22 +1007,24 @@ function drawInteriorTexture(ctx, object, seed) {
   ctx.restore()
 }
 
-function drawStyledLineObject(ctx, object, selected) {
+function drawStyledLineObject(ctx, object, selected, options = {}) {
   const meta = object.metadata || {}
   const seed = hashString(object.id)
   const basePoints = objectLocalPoints(object)
   if (basePoints.length < 2) return
-  const points = organicPoints(basePoints, seed, {
+  const points = options.cleanEdges ? basePoints : organicPoints(basePoints, seed, {
     closed: false,
-    amplitude: object.type === 'river' ? 14 : 7,
-    spacing: object.type === 'river' ? 42 : 34,
+    amplitude: object.type === 'mountain' ? 34 : object.type === 'river' ? 14 : 7,
+    spacing: object.type === 'mountain' ? 26 : object.type === 'river' ? 42 : 34,
   })
   const stroke = selected ? '#1677ff' : meta.stroke || OBJECT_TYPES[object.type]?.stroke || '#4a2e18'
   const thickness = Math.max(1, meta.lineThickness || 6)
 
   ctx.save()
   ctx.setLineDash([])
-  if (object.type === 'river') {
+  if (object.type === 'mountain') {
+    drawJaggedMountainPath(ctx, points, thickness, selected ? '#1677ff' : stroke, seed)
+  } else if (object.type === 'river') {
     drawTaperedPath(ctx, points, thickness, colorWithAlpha('#183d55', 0.22), seed, 2.4)
     drawTaperedPath(ctx, points, thickness, colorWithAlpha(stroke, selected ? 0.95 : 0.72), seed, 1.35)
     drawTaperedPath(ctx, points, thickness * 0.38, colorWithAlpha('#d9f4ff', selected ? 0.5 : 0.32), seed, 0.8)
@@ -960,21 +1032,60 @@ function drawStyledLineObject(ctx, object, selected) {
     ctx.strokeStyle = colorWithAlpha('#2c1d11', selected ? 0.42 : 0.22)
     ctx.lineWidth = thickness + 3
     if (meta.dashed || object.type === 'border') ctx.setLineDash([thickness * 2.8, thickness * 1.7])
-    drawSmoothPath(ctx, points, false)
+    options.cleanEdges ? drawStraightPath(ctx, points, false) : drawSmoothPath(ctx, points, false)
     ctx.stroke()
     ctx.strokeStyle = colorWithAlpha(stroke, selected ? 1 : 0.8)
     ctx.lineWidth = thickness
     ctx.setLineDash(meta.dashed || object.type === 'border' ? [thickness * 2.5, thickness * 1.6] : [])
-    drawSmoothPath(ctx, points, false)
+    options.cleanEdges ? drawStraightPath(ctx, points, false) : drawSmoothPath(ctx, points, false)
     ctx.stroke()
     if (object.type === 'road') {
       ctx.strokeStyle = colorWithAlpha('#f3ddb5', 0.35)
       ctx.lineWidth = Math.max(1, thickness * 0.32)
       ctx.setLineDash([])
-      drawSmoothPath(ctx, points, false)
+      options.cleanEdges ? drawStraightPath(ctx, points, false) : drawSmoothPath(ctx, points, false)
       ctx.stroke()
     }
   }
+  ctx.restore()
+}
+
+function drawJaggedMountainPath(ctx, points, baseWidth, stroke, seed) {
+  if (points.length < 2) return
+  ctx.save()
+  ctx.lineCap = 'butt'
+  ctx.lineJoin = 'miter'
+  ctx.strokeStyle = colorWithAlpha('#2f302e', 0.24)
+  ctx.lineWidth = Math.max(4, baseWidth * 0.75)
+  drawStraightPath(ctx, points, false)
+  ctx.stroke()
+
+  ctx.strokeStyle = colorWithAlpha(stroke, 0.95)
+  ctx.lineWidth = Math.max(2, baseWidth * 0.42)
+  drawStraightPath(ctx, points, false)
+  ctx.stroke()
+
+  const tickSpacing = Math.max(18, baseWidth * 1.35)
+  points.slice(1).forEach((point, index) => {
+    const prev = points[index]
+    const dx = point.x - prev.x
+    const dy = point.y - prev.y
+    const distance = Math.max(1, Math.hypot(dx, dy))
+    const steps = Math.max(1, Math.floor(distance / tickSpacing))
+    const nx = -dy / distance
+    const ny = dx / distance
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / (steps + 1)
+      const x = prev.x + dx * t
+      const y = prev.y + dy * t
+      const side = seededNoise(seed, index * 100 + step) > 0.5 ? 1 : -1
+      const height = baseWidth * (0.75 + seededNoise(seed, index * 100 + step + 40) * 1.35)
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + nx * height * side, y + ny * height * side)
+      ctx.stroke()
+    }
+  })
   ctx.restore()
 }
 
@@ -1407,6 +1518,9 @@ export default function MapBuilder({ store }) {
   const primarySelection = selectedObjects[0] || null
   const layerObjects = useMemo(() => [...objects].sort((a, b) => b.zIndex - a.zIndex), [objects])
   const activeMapType = normalizeMapType(activeMap?.mapType || activeMap?.metadata?.mapType || mapType || 'region')
+  const activeTypeConfig = MAP_TYPE_TOOLSETS[activeMapType] || MAP_TYPE_TOOLSETS.region
+  const activeStylePreset = activeMap?.metadata?.stylePreset || 'parchment'
+  const activeToolIds = useMemo(() => new Set(activeTypeConfig.tools.map(tool => tool.mode)), [activeTypeConfig])
   const selectedStamp = STAMP_LIBRARY.find(stamp => stamp.id === selectedStampId) || STAMP_LIBRARY[0]
   const defaultCategories = DEFAULT_CATEGORIES_BY_MAP_TYPE[activeMapType] || DEFAULT_CATEGORIES_BY_MAP_TYPE.region
   const stampCategories = useMemo(() => {
@@ -1416,6 +1530,7 @@ export default function MapBuilder({ store }) {
   const filteredStamps = useMemo(() => {
     const query = stampSearch.trim().toLowerCase()
     return STAMP_LIBRARY.filter(stamp => {
+      const allowedForMapType = stamp.mapTypes.includes(activeMapType)
       const inDefault = defaultCategories.includes(stamp.category) || stamp.mapTypes.includes(activeMapType)
       const categoryMatch = stampCategory === 'All'
         || (stampCategory === 'Default' && inDefault)
@@ -1423,7 +1538,7 @@ export default function MapBuilder({ store }) {
         || (stampCategory === 'Recent' && recentStamps.includes(stamp.id))
         || stamp.category === stampCategory
       const searchMatch = !query || `${stamp.name} ${stamp.category} ${stamp.keywords}`.toLowerCase().includes(query)
-      return categoryMatch && searchMatch
+      return allowedForMapType && categoryMatch && searchMatch
     }).sort((a, b) => {
       const aDefault = defaultCategories.includes(a.category) || a.mapTypes.includes(activeMapType)
       const bDefault = defaultCategories.includes(b.category) || b.mapTypes.includes(activeMapType)
@@ -1460,8 +1575,18 @@ export default function MapBuilder({ store }) {
   }, [activeMap?.id, activeMap?.mapType, activeMap?.metadata?.mapType])
 
   useEffect(() => {
+    if (!['select', 'pan', 'zoom'].includes(mode) && !activeToolIds.has(mode)) {
+      const timer = window.setTimeout(() => {
+        setMode('select')
+        setDraft(null)
+      }, 0)
+      return () => window.clearTimeout(timer)
+    }
+  }, [activeToolIds, mode])
+
+  useEffect(() => {
     requestRender()
-  }, [visibleObjects, selectedIds]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleObjects, selectedIds, activeMapType, activeStylePreset]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!activeMap) return
@@ -1576,9 +1701,9 @@ export default function MapBuilder({ store }) {
     ctx.shadowColor = 'rgba(0,0,0,.26)'
     ctx.shadowBlur = 38 / viewRef.current.zoom
     ctx.shadowOffsetY = 14 / viewRef.current.zoom
-    drawGrid(ctx, MAP_W, MAP_H)
+    drawGrid(ctx, MAP_W, MAP_H, activeStylePreset)
     ctx.shadowColor = 'transparent'
-    visibleObjects.forEach(object => drawObject(ctx, object, selectedIdsRef.current.includes(object.id)))
+    visibleObjects.forEach(object => drawObject(ctx, object, selectedIdsRef.current.includes(object.id), { mapType: activeMapType, stylePreset: activeStylePreset }))
     drawDraft(ctx, draftRef.current, viewRef.current.zoom)
     drawSelection(ctx, objectsRef.current.filter(object => selectedIdsRef.current.includes(object.id)), viewRef.current.zoom)
     ctx.restore()
@@ -1665,16 +1790,11 @@ export default function MapBuilder({ store }) {
   }
 
   function placeObjectAtPoint(object) {
-    let selectedId = object.id
     updateObjects(current => {
       const placed = object.type === 'shape' ? moveLandToBase(object, current) : object
-      const merged = placed.type === 'shape'
-        ? { objects: [...current, placed], selectedId: placed.id }
-        : mergeLandObjectIntoList(current, placed)
-      selectedId = merged.selectedId
-      return merged.objects
+      return [...current, placed]
     })
-    setSelectedIds([selectedId])
+    setSelectedIds([object.id])
   }
 
   function placeStampAt(point, stamp = selectedStamp) {
@@ -1926,22 +2046,29 @@ export default function MapBuilder({ store }) {
 
   function startOrExtendPointDraft(point, tool, shouldComplete = false) {
     const defaults = {
-      region: { closed: true, fill: LAND_FILL, stroke: LAND_STROKE, lineThickness: 3, dashed: false },
+      region: { closed: true, fill: OBJECT_TYPES.region.fill, stroke: OBJECT_TYPES.region.stroke, opacity: 0.32, lineThickness: 3, dashed: false },
       river: { closed: false, fill: 'transparent', stroke: '#3c93b8', lineThickness, dashed: false },
+      mountain: { closed: false, fill: 'transparent', stroke: OBJECT_TYPES.mountain.stroke, lineThickness: Math.max(lineThickness, 16), dashed: false },
       road: { closed: false, fill: 'transparent', stroke: '#8b6743', lineThickness, dashed: dashedLines },
       border: { closed: false, fill: 'transparent', stroke: '#9b5ab8', lineThickness, dashed: dashedLines },
       shapePolygon: { closed: true, fill: LAND_FILL, stroke: LAND_STROKE, lineThickness: 2, dashed: false },
     }
     setDraft(current => {
       const sameTool = current?.kind === tool
+      const firstPoint = sameTool ? current.points[0] : null
       const lastPoint = sameTool ? current.points[current.points.length - 1] : null
-      const closesOnLast = Boolean(lastPoint)
+      const minPoints = tool === 'region' || tool === 'shapePolygon' ? 3 : 2
+      const closesOnOrigin = Boolean(firstPoint)
+        && Math.hypot(point.x - firstPoint.x, point.y - firstPoint.y) <= Math.max(10, 16 / viewRef.current.zoom)
+        && current.points.length >= minPoints
+      const finishesOpenLine = Boolean(lastPoint)
+        && !defaults[tool]?.closed
         && Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) <= Math.max(10, 16 / viewRef.current.zoom)
-        && current.points.length >= (tool === 'region' || tool === 'shapePolygon' ? 3 : 2)
+        && current.points.length >= minPoints
       const next = sameTool
-        ? { ...current, points: shouldComplete || closesOnLast ? current.points : [...current.points, point], preview: point }
+        ? { ...current, points: shouldComplete || closesOnOrigin || finishesOpenLine ? current.points : [...current.points, point], preview: point, closed: closesOnOrigin ? true : current.closed }
         : { kind: tool, points: [point], preview: point, ...defaults[tool] }
-      if ((shouldComplete || closesOnLast) && next.points.length >= (tool === 'region' || tool === 'shapePolygon' ? 3 : 2)) {
+      if ((shouldComplete || closesOnOrigin || finishesOpenLine) && next.points.length >= minPoints) {
         setTimeout(() => completeDraft(next), 0)
       }
       return next
@@ -1958,7 +2085,7 @@ export default function MapBuilder({ store }) {
       text: '',
       fill: source.fill,
       stroke: source.stroke,
-      opacity: 1,
+      opacity: source.opacity ?? 1,
       lineThickness: source.lineThickness,
       dashed: source.dashed,
       shapeKind: source.kind === 'region' || source.kind === 'shapePolygon' ? 'polygon' : undefined,
@@ -1970,9 +2097,7 @@ export default function MapBuilder({ store }) {
         selectedId = placed.id
         return [...current, placed]
       }
-      const merged = mergeLandObjectIntoList(current, object)
-      selectedId = merged.selectedId
-      return merged.objects
+      return [...current, object]
     })
     setSelectedIds([selectedId])
     setDraft(null)
@@ -1990,11 +2115,8 @@ export default function MapBuilder({ store }) {
     let selectedId = object.id
     updateObjects(current => {
       const placed = object.type === 'shape' ? moveLandToBase(object, current) : object
-      const merged = placed.type === 'shape'
-        ? { objects: [...current, placed], selectedId: placed.id }
-        : mergeLandObjectIntoList(current, placed)
-      selectedId = merged.selectedId
-      return merged.objects
+      selectedId = placed.id
+      return [...current, placed]
     })
     setSelectedIds([selectedId])
     if (type === 'stamp') noteStampUsed(selectedStamp?.id)
@@ -2051,6 +2173,12 @@ export default function MapBuilder({ store }) {
     setStampCategory('Default')
   }
 
+  function updateStylePreset(nextPreset) {
+    updateActiveMapData(() => ({
+      metadata: { ...(activeMap?.metadata || {}), stylePreset: nextPreset },
+    }))
+  }
+
   function moveLayer(direction) {
     if (!selectedIds.length) return
     const selected = new Set(selectedIds)
@@ -2089,6 +2217,8 @@ export default function MapBuilder({ store }) {
 
   function selectLayerObject(event, object) {
     event.stopPropagation()
+    setMode('select')
+    setDraft(null)
     const additive = event.metaKey || event.ctrlKey
     if (additive) {
       setSelectedIds(current => current.includes(object.id) ? current.filter(id => id !== object.id) : [...current, object.id])
@@ -2177,56 +2307,74 @@ export default function MapBuilder({ store }) {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, height: isCompact ? 'auto' : 'calc(100vh - 168px)', maxHeight: isCompact ? undefined : 'calc(100vh - 168px)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', background: 'var(--surface)', color: 'var(--text)' }}>
-      <div className="studio-topbar map-builder-topbar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', minWidth: 0, flexWrap: 'wrap' }}>
-        <strong style={{ fontFamily: 'var(--font-serif)', fontSize: 16, flexShrink: 0 }}>Map Builder</strong>
-        <span style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface2)' }}>
-          {TOOLBAR_MODES.find(item => item.id === mode)?.label || 'Select'}
-        </span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginLeft: isCompact ? 0 : 'auto', flexShrink: 0, flexWrap: 'wrap' }}>
+    <div style={{ flex: 1, minHeight: 0, height: isCompact ? '100%' : 'min(100%, calc(100dvh - 190px))', maxHeight: isCompact ? '100%' : 'calc(100dvh - 190px)', overflow: 'hidden', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', background: 'var(--surface)', color: 'var(--text)', position: 'relative', zIndex: 1 }}>
+      <div className="studio-topbar map-builder-topbar" style={{ display: 'grid', gridTemplateColumns: isCompact ? '1fr' : 'minmax(170px, 260px) minmax(320px, 1fr) auto', alignItems: 'end', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)', minWidth: 0, position: 'relative', zIndex: 8, overflow: 'visible' }}>
+        <div style={{ display: 'grid', gap: 2, minWidth: 0 }}>
+          <strong style={{ fontFamily: 'var(--font-serif)', fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeMap?.name || 'Map Builder'}</strong>
+          <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTypeConfig.label} · {TOOLBAR_MODES.find(item => item.id === mode)?.label || 'Select'}</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isCompact ? '1fr' : 'minmax(130px, 1fr) minmax(126px, .75fr) minmax(126px, .75fr)', gap: 8, minWidth: 0 }}>
+          <SelectInput
+            label="Map"
+            value={activeMap?.id || ''}
+            options={(project.maps || []).map(map => ({ value: map.id, label: map.name || 'Untitled Map' }))}
+            onChange={value => selectMap(value)}
+          />
+          <SelectInput
+            label="Type"
+            value={activeMap ? activeMapType : mapType}
+            options={MAP_TYPE_OPTIONS}
+            onChange={value => activeMap ? updateMapType(value) : setMapType(value)}
+          />
+          <SelectInput
+            label="Style"
+            value={activeStylePreset}
+            options={STYLE_PRESET_OPTIONS}
+            onChange={updateStylePreset}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: isCompact ? 'flex-start' : 'flex-end', flexWrap: 'wrap', minWidth: 0 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('select')} title="Select">↖</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('pan')} title="Pan">✥</button>
           <button className="btn btn-secondary btn-sm" onClick={() => zoomViewportCenter(0.86)} title="Zoom out">−</button>
-          <span style={{ minWidth: 48, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{Math.round(view.zoom * 100)}%</span>
+          <span style={{ minWidth: 44, textAlign: 'center', fontSize: 12, color: 'var(--muted)' }}>{Math.round(view.zoom * 100)}%</span>
           <button className="btn btn-secondary btn-sm" onClick={() => zoomViewportCenter(1.16)} title="Zoom in">+</button>
           <button className="btn btn-secondary btn-sm" onClick={fitCanvasToViewport}>Fit</button>
-          <button className="btn btn-secondary btn-sm" onClick={downloadJson}>Export JSON</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()}>Import JSON</button>
+          <button className="btn btn-secondary btn-sm" onClick={downloadJson}>Export</button>
           <input ref={fileInputRef} type="file" accept="application/json,.json" onChange={event => importJson(event.target.files?.[0])} style={{ display: 'none' }} />
           {jsonStatus && <span style={{ fontSize: 12, color: jsonStatus === 'Invalid JSON' ? '#d86b70' : 'var(--accent)' }}>{jsonStatus}</span>}
         </div>
       </div>
 
-      <div style={{ minHeight: 0, display: 'grid', gridTemplateColumns: isCompact ? '1fr' : 'minmax(152px, 190px) minmax(0, 1fr) minmax(240px, 300px)', gridTemplateRows: isCompact ? 'auto minmax(420px, 1fr) auto' : '1fr' }}>
-        <aside style={{ borderRight: isCompact ? 'none' : '1px solid var(--border)', borderBottom: isCompact ? '1px solid var(--border)' : 'none', background: 'color-mix(in srgb, var(--surface) 94%, #000)', padding: 10, overflowY: 'auto', display: 'flex', flexDirection: isCompact ? 'row' : 'column', gap: 12, flexWrap: isCompact ? 'wrap' : 'nowrap' }}>
-          <form onSubmit={handleCreateMap} style={{ display: 'flex', gap: 6 }}>
-            <input
-              value={newMapName}
-              onChange={event => setNewMapName(event.target.value)}
-              placeholder="New map"
-              style={{ minWidth: 0, flex: 1, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit' }}
-            />
-            <button className="btn btn-primary btn-sm" type="submit">+</button>
-          </form>
-          <SelectInput
-            label="Map type"
-            value={activeMap ? activeMapType : mapType}
-            options={MAP_TYPE_OPTIONS}
-            onChange={value => activeMap ? updateMapType(value) : setMapType(value)}
-          />
-
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 150 : 0 }}>
-            <PanelTitle>Draw</PanelTitle>
-            {['region', 'river', 'road', 'border', 'shape'].map(toolId => (
+      <div style={{ minHeight: 0, display: 'grid', gridTemplateColumns: isCompact ? '1fr' : 'minmax(150px, 176px) minmax(0, 1fr) minmax(238px, 284px)', gridTemplateRows: isCompact ? 'minmax(320px, 1fr) auto auto' : 'minmax(0, 1fr)', overflowX: 'visible', overflowY: isCompact ? 'auto' : 'visible', paddingBottom: isCompact ? 12 : 0 }}>
+        <aside style={{ order: isCompact ? 2 : undefined, borderRight: isCompact ? 'none' : '1px solid var(--border)', borderBottom: isCompact ? '1px solid var(--border)' : 'none', background: 'color-mix(in srgb, var(--surface) 96%, #000)', padding: 10, overflowY: 'auto', display: 'flex', flexDirection: isCompact ? 'row' : 'column', gap: 10, flexWrap: isCompact ? 'wrap' : 'nowrap', minHeight: 0 }}>
+          {!activeMap && (
+            <form onSubmit={handleCreateMap} style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 220 : 0 }}>
+              <PanelTitle>New Map</PanelTitle>
+              <input
+                value={newMapName}
+                onChange={event => setNewMapName(event.target.value)}
+                placeholder="Map name"
+                style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit' }}
+              />
+              <button className="btn btn-primary btn-sm" type="submit">Create map</button>
+            </form>
+          )}
+          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 180 : 0 }}>
+            <PanelTitle>{activeTypeConfig.label}</PanelTitle>
+            <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.35, marginBottom: 2 }}>{activeTypeConfig.purpose}</div>
+            {activeTypeConfig.tools.map(tool => (
               <button
-                key={toolId}
+                key={tool.id}
                 className="btn btn-secondary btn-sm"
-                onClick={() => selectEditorMode(toolId)}
-                style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, background: mode === toolId ? 'var(--accent)' : undefined, color: mode === toolId ? '#fff' : undefined }}
+                onClick={() => selectEditorMode(tool.mode)}
+                style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, minHeight: 34, background: mode === tool.mode ? 'var(--accent)' : undefined, color: mode === tool.mode ? '#fff' : undefined }}
               >
-                <span style={{ width: 16 }}>{TOOLBAR_MODES.find(item => item.id === toolId)?.icon}</span>
-                <span>{TOOLBAR_MODES.find(item => item.id === toolId)?.label}</span>
+                <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{tool.icon}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.label}</span>
               </button>
             ))}
-            {(mode === 'river' || mode === 'road' || mode === 'border') && (
+            {(mode === 'river' || mode === 'mountain' || mode === 'road' || mode === 'border') && (
               <>
                 <NumberInput label="Thickness" value={lineThickness} min={1} onChange={setLineThickness} />
                 {(mode === 'road' || mode === 'border') && <CheckboxInput label="Dashed" checked={dashedLines} onChange={setDashedLines} />}
@@ -2252,53 +2400,48 @@ export default function MapBuilder({ store }) {
             ) : null}
           </section>
 
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: isCompact ? 220 : 0 }}>
-            <PanelTitle>Stamps</PanelTitle>
-            <input
-              value={stampSearch}
-              onChange={event => setStampSearch(event.target.value)}
-              placeholder="Search stamps"
-              style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
-            />
-            <select
-              value={stampCategory}
-              onChange={event => setStampCategory(event.target.value)}
-              style={{ border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
-            >
-              {stampCategories.map(category => <option key={category} value={category}>{category}</option>)}
-            </select>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))', gap: 6 }}>
-              {filteredStamps.slice(0, 24).map(stamp => (
-                <button
-                  key={stamp.id}
-                  className="btn btn-secondary btn-sm"
-                  draggable
-                  onDragStart={event => event.dataTransfer.setData('application/x-yow-stamp', stamp.id)}
-                  onClick={() => { setSelectedStampId(stamp.id); selectEditorMode('stamp') }}
-                  title={`${stamp.name} (${stamp.category})`}
-                  style={{ minHeight: 62, padding: 6, display: 'grid', gap: 3, justifyItems: 'center', borderColor: selectedStampId === stamp.id ? 'var(--accent)' : undefined, background: selectedStampId === stamp.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface2))' : undefined }}
-                >
-                  <span style={{ fontSize: 20, color: stamp.fill }}>{stamp.icon}</span>
-                  <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>{stamp.name}</span>
-                </button>
-              ))}
+          <details open={mode === 'stamp'} style={{ minWidth: isCompact ? 240 : 0 }}>
+            <summary style={{ cursor: 'pointer' }}><PanelTitle>Stamps</PanelTitle></summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 8 }}>
+              <input
+                value={stampSearch}
+                onChange={event => setStampSearch(event.target.value)}
+                placeholder="Search stamps"
+                style={{ minWidth: 0, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+              />
+              <select
+                value={stampCategory}
+                onChange={event => setStampCategory(event.target.value)}
+                style={{ border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit', fontSize: 12 }}
+              >
+                {stampCategories.map(category => <option key={category} value={category}>{category}</option>)}
+              </select>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))', gap: 6 }}>
+                {filteredStamps.slice(0, 18).map(stamp => (
+                  <button
+                    key={stamp.id}
+                    className="btn btn-secondary btn-sm"
+                    draggable
+                    onDragStart={event => event.dataTransfer.setData('application/x-yow-stamp', stamp.id)}
+                    onClick={() => { setSelectedStampId(stamp.id); selectEditorMode('stamp') }}
+                    title={`${stamp.name} (${stamp.category})`}
+                    style={{ minHeight: 58, padding: 6, display: 'grid', gap: 3, justifyItems: 'center', borderColor: selectedStampId === stamp.id ? 'var(--accent)' : undefined, background: selectedStampId === stamp.id ? 'color-mix(in srgb, var(--accent) 16%, var(--surface2))' : undefined }}
+                  >
+                    <span style={{ fontSize: 19, color: stamp.fill }}>{stamp.icon}</span>
+                    <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>{stamp.name}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => selectEditorMode('stamp')} style={{ flex: 1 }}>Place</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => toggleFavoriteStamp(selectedStampId)} title="Favourite stamp">{favoriteStamps.includes(selectedStampId) ? '★' : '☆'}</button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="btn btn-primary btn-sm" onClick={() => selectEditorMode('stamp')} style={{ flex: 1 }}>Place</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => toggleFavoriteStamp(selectedStampId)} title="Favourite stamp">{favoriteStamps.includes(selectedStampId) ? '★' : '☆'}</button>
-            </div>
-          </section>
+          </details>
 
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 190 : 0 }}>
-            <PanelTitle>Content</PanelTitle>
-            <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('label')} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, background: mode === 'label' ? 'var(--accent)' : undefined, color: mode === 'label' ? '#fff' : undefined }}>
-              <span style={{ width: 16 }}>T</span>
-              <span>Place label</span>
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => selectEditorMode('location')} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8, background: mode === 'location' ? 'var(--accent)' : undefined, color: mode === 'location' ? '#fff' : undefined }}>
-              <span style={{ width: 16 }}>⌖</span>
-              <span>Place location</span>
-            </button>
+          <details open={mode === 'location'} style={{ minWidth: isCompact ? 220 : 0 }}>
+            <summary style={{ cursor: 'pointer' }}><PanelTitle>Placement Options</PanelTitle></summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
             {mode === 'location' && (
               <>
                 <input
@@ -2327,57 +2470,8 @@ export default function MapBuilder({ store }) {
                 {SNAP_SIZES.map(size => <option key={size} value={size}>{size}px</option>)}
               </select>
             </div>
-          </section>
-
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: isCompact ? 150 : 0 }}>
-            <PanelTitle>Objects</PanelTitle>
-            {['marker', 'shape', 'region', 'river', 'road', 'border'].map(type => {
-              const item = OBJECT_TYPES[type]
-              return (
-              <button key={type} className="btn btn-secondary btn-sm" onClick={() => addObject(type)} style={{ justifyContent: 'flex-start', display: 'flex', gap: 8 }}>
-                <span style={{ width: 16 }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-              )
-            })}
-          </section>
-
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6, minHeight: 0, minWidth: isCompact ? 180 : 0 }}>
-            <PanelTitle>Maps</PanelTitle>
-            {(project.maps || []).map(map => {
-              const active = map.id === project.activeMapId
-              return (
-                <div key={map.id} style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
-                  {renamingId === map.id ? (
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={event => setRenameValue(event.target.value)}
-                      onBlur={() => finishRename(map)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter') finishRename(map)
-                        if (event.key === 'Escape') setRenamingId(null)
-                      }}
-                      style={{ flex: 1, minWidth: 0, border: '1px solid var(--accent)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontFamily: 'inherit' }}
-                    />
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => selectMap(map.id)}
-                        onDoubleClick={() => { setRenamingId(map.id); setRenameValue(map.name || '') }}
-                        style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 7, border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`, background: active ? 'var(--accent)' : 'var(--surface2)', color: active ? '#fff' : 'var(--muted)', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', fontFamily: 'inherit' }}
-                      >
-                        {map.name || 'Untitled Map'}
-                      </button>
-                      {(project.maps || []).length > 1 && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => deleteMap(map.id)} title="Delete map">×</button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )
-            })}
-          </section>
+            </div>
+          </details>
         </aside>
 
         <main
@@ -2389,12 +2483,12 @@ export default function MapBuilder({ store }) {
           onWheel={handleWheel}
           onDragOver={event => event.preventDefault()}
           onDrop={handleDrop}
-          style={{ minWidth: 0, minHeight: isCompact ? 420 : 0, position: 'relative', overflow: 'hidden', touchAction: 'none', cursor: mode === 'pan' ? 'grab' : mode === 'zoom' ? 'zoom-in' : 'default' }}
+          style={{ order: isCompact ? 1 : undefined, minWidth: 0, minHeight: isCompact ? 320 : 0, position: 'relative', overflow: 'hidden', touchAction: 'none', cursor: mode === 'pan' ? 'grab' : mode === 'zoom' ? 'zoom-in' : 'default', zIndex: 1 }}
         >
           {activeMap ? (
             <>
               <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-              <div style={{ position: 'absolute', left: 14, bottom: 14, display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px', borderRadius: 8, background: 'rgba(0,0,0,.5)', color: '#fff', fontSize: 12, pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', left: 14, top: 14, display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px', borderRadius: 8, background: 'rgba(0,0,0,.5)', color: '#fff', fontSize: 12, pointerEvents: 'none' }}>
                 <span>{MAP_W} × {MAP_H}</span>
                 <span>{objects.length} objects</span>
                 <span>{selectedIds.length} selected</span>
@@ -2407,11 +2501,12 @@ export default function MapBuilder({ store }) {
           )}
         </main>
 
-        <aside style={{ borderLeft: isCompact ? 'none' : '1px solid var(--border)', borderTop: isCompact ? '1px solid var(--border)' : 'none', background: 'color-mix(in srgb, var(--surface) 94%, #000)', padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <aside style={{ order: isCompact ? 3 : undefined, borderLeft: isCompact ? 'none' : '1px solid var(--border)', borderTop: isCompact ? '1px solid var(--border)' : 'none', background: 'color-mix(in srgb, var(--surface) 96%, #000)', padding: 10, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <PanelTitle>Properties</PanelTitle>
             {primarySelection ? (
               <>
+                {selectedIds.length > 1 && <div style={{ color: 'var(--muted)', fontSize: 12 }}>{selectedIds.length} objects selected. Changes apply to the selection.</div>}
                 <PropertyInput label="Name" value={objectDisplayName(primarySelection)} onChange={value => patchSelected({ metadata: { name: value } })} />
                 <PropertyInput label="Text" value={primarySelection.metadata?.text || ''} onChange={value => patchSelected({ metadata: { text: value } })} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -2469,7 +2564,7 @@ export default function MapBuilder({ store }) {
                   <button className="btn btn-secondary btn-sm" onClick={() => patchSelected({ locked: !primarySelection.locked })}>{primarySelection.locked ? 'Unlock' : 'Lock'}</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => patchSelected({ visible: primarySelection.visible === false })}>{primarySelection.visible === false ? 'Show' : 'Hide'}</button>
                   <button className="btn btn-secondary btn-sm" onClick={duplicateSelectedObjects}>Duplicate</button>
-                  {selectedIds.length > 1 && <button className="btn btn-secondary btn-sm" onClick={groupSelectedObjects}>Group</button>}
+                  {selectedIds.length > 1 && <button className="btn btn-secondary btn-sm" onClick={groupSelectedObjects}>Group selected</button>}
                   {selectedObjects.some(object => object.metadata?.groupId) && <button className="btn btn-secondary btn-sm" onClick={ungroupSelectedObjects}>Ungroup</button>}
                   <button className="btn btn-secondary btn-sm" onClick={() => moveLayer('front')}>Front</button>
                   <button className="btn btn-secondary btn-sm" onClick={() => moveLayer('back')}>Back</button>
@@ -2481,59 +2576,117 @@ export default function MapBuilder({ store }) {
             )}
           </section>
 
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-              <PanelTitle>Layers</PanelTitle>
-              <div style={{ display: 'flex', gap: 4 }}>
+          <details>
+            <summary style={{ cursor: 'pointer' }}><PanelTitle>Maps & Advanced</PanelTitle></summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+              <form onSubmit={handleCreateMap} style={{ display: 'flex', gap: 6 }}>
+                <input
+                  value={newMapName}
+                  onChange={event => setNewMapName(event.target.value)}
+                  placeholder="New map"
+                  style={{ minWidth: 0, flex: 1, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '7px 8px', fontFamily: 'inherit' }}
+                />
+                <button className="btn btn-primary btn-sm" type="submit">+</button>
+              </form>
+              {(project.maps || []).map(map => {
+                const active = map.id === project.activeMapId
+                return (
+                  <div key={map.id} style={{ display: 'flex', gap: 3, alignItems: 'stretch' }}>
+                    {renamingId === map.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={event => setRenameValue(event.target.value)}
+                        onBlur={() => finishRename(map)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter') finishRename(map)
+                          if (event.key === 'Escape') setRenamingId(null)
+                        }}
+                        style={{ flex: 1, minWidth: 0, border: '1px solid var(--accent)', background: 'var(--surface2)', color: 'var(--text)', borderRadius: 7, padding: '6px 8px', fontFamily: 'inherit' }}
+                      />
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => selectMap(map.id)}
+                          onDoubleClick={() => { setRenamingId(map.id); setRenameValue(map.name || '') }}
+                          style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 7, border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`, background: active ? 'var(--accent)' : 'var(--surface2)', color: active ? '#fff' : 'var(--muted)', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', fontFamily: 'inherit' }}
+                        >
+                          {map.name || 'Untitled Map'}
+                        </button>
+                        {(project.maps || []).length > 1 && (
+                          <button className="btn btn-secondary btn-sm" onClick={() => deleteMap(map.id)} title="Delete map">×</button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current?.click()}>Import JSON</button>
+                {['marker', 'shape', 'region', 'river', 'mountain', 'road', 'border'].map(type => {
+                  const item = OBJECT_TYPES[type]
+                  return (
+                    <button key={type} className="btn btn-secondary btn-sm" onClick={() => addObject(type)} title={`Add ${item.label}`}>
+                      {item.icon}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </details>
+
+          <details>
+            <summary style={{ cursor: 'pointer' }}><PanelTitle>Layers</PanelTitle></summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 4 }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds(objects.filter(object => !object.locked).map(object => object.id))} title="Select all layers">All</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => setSelectedIds([])} title="Clear layer selection">None</button>
               </div>
-            </div>
-            <div style={{ color: 'var(--muted)', fontSize: 11, lineHeight: 1.35 }}>Top layers are drawn last. Click a selected layer again to deselect it.</div>
-            {layerObjects.map((object, index) => {
-              const selected = selectedIds.includes(object.id)
-              const isTop = index === 0
-              const isBottom = index === layerObjects.length - 1
-              return (
-                <div
-                  key={object.id}
-                  onClick={event => selectLayerObject(event, object)}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 1fr) auto',
-                    gap: 6,
-                    alignItems: 'center',
-                    padding: 7,
-                    borderRadius: 7,
-                    border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
-                    background: selected ? 'color-mix(in srgb, var(--accent) 14%, var(--surface2))' : 'var(--surface2)',
-                    cursor: object.locked ? 'default' : 'pointer',
-                  }}
-                >
-                  <button
+              {layerObjects.map((object, index) => {
+                const selected = selectedIds.includes(object.id)
+                const isTop = index === 0
+                const isBottom = index === layerObjects.length - 1
+                return (
+                  <div
+                    key={object.id}
                     onClick={event => selectLayerObject(event, object)}
-                    title={selected ? 'Deselect layer' : 'Select layer'}
-                    style={{ minWidth: 0, textAlign: 'left', background: 'none', border: 'none', color: selected ? 'var(--text-main)' : 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', overflow: 'hidden', padding: 0 }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      gap: 6,
+                      alignItems: 'center',
+                      padding: 7,
+                      borderRadius: 7,
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                      background: selected ? 'color-mix(in srgb, var(--accent) 14%, var(--surface2))' : 'var(--surface2)',
+                      cursor: object.locked ? 'default' : 'pointer',
+                    }}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                      <span style={{ width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--surface) 70%, #000)', color: selected ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>{OBJECT_TYPES[object.type]?.icon || '□'}</span>
-                      <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{objectDisplayName(object)}</span>
-                        <span style={{ color: 'var(--faint)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>{objectTypeLabel(object)}{object.metadata?.groupId ? ' · group' : ''}</span>
+                    <button
+                      onClick={event => selectLayerObject(event, object)}
+                      title={selected ? 'Deselect layer' : 'Select layer'}
+                      style={{ minWidth: 0, textAlign: 'left', background: 'none', border: 'none', color: selected ? 'var(--text-main)' : 'var(--muted)', fontFamily: 'inherit', cursor: 'pointer', overflow: 'hidden', padding: 0 }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                        <span style={{ width: 18, height: 18, borderRadius: 5, display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--surface) 70%, #000)', color: selected ? 'var(--accent)' : 'var(--muted)', flexShrink: 0 }}>{OBJECT_TYPES[object.type]?.icon || '□'}</span>
+                        <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }}>{objectDisplayName(object)}</span>
+                          <span style={{ color: 'var(--faint)', fontSize: 10, textTransform: 'uppercase' }}>{objectTypeLabel(object)}{object.metadata?.groupId ? ' · group' : ''}</span>
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 28px)', gap: 4 }}>
-                    <button className="btn btn-secondary btn-sm" disabled={isTop || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, 1) }} title="Move up">↑</button>
-                    <button className="btn btn-secondary btn-sm" disabled={isBottom || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, -1) }} title="Move down">↓</button>
-                    <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleVisibility(object.id) }} title={object.visible === false ? 'Show' : 'Hide'}>{object.visible === false ? '○' : '●'}</button>
-                    <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleLock(object.id) }} title={object.locked ? 'Unlock' : 'Lock'}>{object.locked ? 'L' : 'U'}</button>
+                    </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 28px)', gap: 4 }}>
+                      <button className="btn btn-secondary btn-sm" disabled={isTop || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, 1) }} title="Move up">↑</button>
+                      <button className="btn btn-secondary btn-sm" disabled={isBottom || object.locked} onClick={event => { event.stopPropagation(); moveLayerObject(object.id, -1) }} title="Move down">↓</button>
+                      <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleVisibility(object.id) }} title={object.visible === false ? 'Show' : 'Hide'}>{object.visible === false ? '○' : '●'}</button>
+                      <button className="btn btn-secondary btn-sm" onClick={event => { event.stopPropagation(); toggleLock(object.id) }} title={object.locked ? 'Unlock' : 'Lock'}>{object.locked ? 'L' : 'U'}</button>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-            {!objects.length && <div style={{ color: 'var(--muted)', fontSize: 13 }}>No objects yet.</div>}
-          </section>
+                )
+              })}
+              {!objects.length && <div style={{ color: 'var(--muted)', fontSize: 13 }}>No objects yet.</div>}
+            </div>
+          </details>
         </aside>
       </div>
     </div>

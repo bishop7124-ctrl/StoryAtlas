@@ -9,9 +9,14 @@ import {
   DEFAULT_CUSTOM_COLORS,
   QUICK_PALETTES,
   applyThemeToDocument,
+  applyThemeTuning,
+  getThemeColors,
+  getThemeTuning,
   loadThemeChoice,
+  loadThemeTuning,
   rgbaFromHex,
   saveThemeChoice,
+  saveThemeTuning,
 } from '../../utils/theme'
 
 const FONT_OPTIONS = [
@@ -44,6 +49,92 @@ function applyFontChoice(fontChoice) {
   const font = FONT_OPTIONS.find(option => option.id === fontChoice) || FONT_OPTIONS[0]
   localStorage.setItem('nf-font', font.id)
   document.documentElement.style.setProperty('--font', font.value)
+}
+
+const getLuminance = (hex) => {
+  if (!hex) return 0
+  const clean = hex.replace('#', '')
+  if (clean.length !== 6) return 0
+  const v = parseInt(clean, 16)
+  if (isNaN(v)) return 0
+  return (0.2126 * ((v >> 16) & 255) + 0.7152 * ((v >> 8) & 255) + 0.0722 * (v & 255)) / 255
+}
+
+function ThemeChoiceButton({ theme: p, active, onClick }) {
+  return (
+    <button type="button" className={`theme-choice-button${active ? ' is-active' : ''}`} onClick={onClick}>
+      <span className="theme-choice-swatches" aria-hidden="true">
+        {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map((c, i) => (
+          <span key={`${c}-${i}`} style={{ background: c }} />
+        ))}
+      </span>
+      <span className="theme-choice-copy">
+        <span>{p.label}</span>
+        <small>{p.description}</small>
+      </span>
+      {active && <span className="theme-choice-active">Selected</span>}
+    </button>
+  )
+}
+
+function ThemeLivePreview({ colors, radiusUnit, visualStrength, label }) {
+  const r = Number(radiusUnit) || 7
+  const strength = Number(visualStrength) || 1
+  const shadow = `0 ${Math.round(18 * strength)}px ${Math.round(48 * strength)}px rgba(0,0,0,${Math.min(0.55, 0.16 * strength)})`
+  const previewVars = {
+    '--preview-bg': colors.bgMain,
+    '--preview-panel': colors.bgNav,
+    '--preview-text': colors.textMain,
+    '--preview-muted': colors.textMuted,
+    '--preview-accent': colors.accent,
+    '--preview-border': colors.border,
+    '--preview-accent-fade': rgbaFromHex(colors.accent, Math.min(0.28, 0.1 + strength * 0.07)),
+    '--preview-radius': `${r}px`,
+    '--preview-radius-sm': `${Math.max(3, r * 0.65)}px`,
+    '--preview-radius-lg': `${r * 2.4}px`,
+    '--preview-shadow': shadow,
+  }
+
+  return (
+    <aside className="theme-live-preview" style={previewVars}>
+      <div className="theme-live-preview-shell">
+        <div className="theme-live-topbar">
+          <div>
+            <span className="theme-live-kicker">{label}</span>
+            <strong>Your Own World</strong>
+          </div>
+          <button type="button">New</button>
+        </div>
+        <div className="theme-live-body">
+          <nav className="theme-live-sidebar">
+            {['Library', 'Manuscript', 'Characters', 'Timeline'].map((item, i) => (
+              <span key={item} className={i === 1 ? 'is-active' : ''}>{item}</span>
+            ))}
+          </nav>
+          <main className="theme-live-main">
+            <section className="theme-live-card">
+              <div className="theme-live-card-head">
+                <div>
+                  <small>Chapter 12</small>
+                  <strong>The Last Door</strong>
+                </div>
+                <span>Draft</span>
+              </div>
+              <p>Marin pressed the brass key into the lock and listened as the house remembered her name.</p>
+              <div className="theme-live-actions">
+                <button type="button">Continue</button>
+                <button type="button">Notes</button>
+              </div>
+            </section>
+            <div className="theme-live-grid">
+              <div><strong>24</strong><span>Scenes</span></div>
+              <div><strong>8.4k</strong><span>Words</span></div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 function PreferencesPanel() {
@@ -138,14 +229,27 @@ function AppearancePanel({ user, updateProfile }) {
   const [theme, setTheme] = useState(loadThemeChoice)
   const [fontChoice, setFontChoice] = useState(() => localStorage.getItem('nf-font') || 'system')
   const [customColors, setCustomColors] = useState(loadCustomColors)
+  const [themeTuning, setThemeTuning] = useState(loadThemeTuning)
   const [savedPresets, setSavedPresets] = useState(loadSavedPresets)
   const [savePresetName, setSavePresetName] = useState('')
   const [profileSaved, setProfileSaved] = useState(false)
 
   const themeOptions = [...BUILT_IN_THEMES, ...QUICK_PALETTES]
-  const effectiveColors = theme === 'custom'
-    ? { ...DEFAULT_CUSTOM_COLORS, ...customColors }
-    : themeOptions.find(t => t.id === theme)?.swatches || DEFAULT_CUSTOM_COLORS
+  const selectedThemeOption = themeOptions.find(t => t.id === theme)
+  const effectiveColors = useMemo(() => getThemeColors(theme, customColors), [theme, customColors])
+  const effectiveRadius = themeTuning.radiusUnit || selectedThemeOption?.radiusUnit || 7
+  const effectiveStrength = themeTuning.visualStrength || 1
+  const groupedThemes = useMemo(() => {
+    const builtIns = BUILT_IN_THEMES.reduce((groups, option) => {
+      const key = getLuminance(option.swatches.bgMain) > 0.55 ? 'Light' : 'Dark'
+      groups[key].push(option)
+      return groups
+    }, { Dark: [], Light: [] })
+    return [
+      { label: 'Dark themes', options: builtIns.Dark },
+      { label: 'Light themes', options: builtIns.Light },
+    ]
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('nf-saved-presets', JSON.stringify(savedPresets))
@@ -153,31 +257,43 @@ function AppearancePanel({ user, updateProfile }) {
 
   useEffect(() => {
     const appliedTheme = applyThemeToDocument(theme, customColors)
+    applyThemeTuning(themeTuning, getThemeColors(appliedTheme, customColors))
     localStorage.setItem('nf-theme', appliedTheme)
-  }, [theme, customColors])
+  }, [theme, customColors, themeTuning])
 
   useEffect(() => {
     localStorage.setItem('nf-custom-colors', JSON.stringify(customColors))
   }, [customColors])
 
   useEffect(() => {
+    saveThemeTuning(themeTuning, effectiveColors)
+  }, [themeTuning, effectiveColors])
+
+  useEffect(() => {
     applyFontChoice(fontChoice)
   }, [fontChoice])
 
-  const applyPalette = (swatches) => {
+  const applyPalette = (swatches, tuning) => {
     setCustomColors(swatches)
+    if (tuning) setThemeTuning(tuning)
     setTheme('custom')
   }
 
   const applyThemePreset = (id) => {
     const appliedTheme = saveThemeChoice(id, customColors)
+    setThemeTuning(getThemeTuning(appliedTheme, themeTuning))
     setTheme(appliedTheme)
   }
 
   const handleSavePreset = () => {
     const name = savePresetName.trim()
     if (!name) return
-    setSavedPresets(prev => [...prev, { id: `saved-${Date.now()}`, label: name, swatches: { ...effectiveColors } }])
+    setSavedPresets(prev => [...prev, {
+      id: `saved-${Date.now()}`,
+      label: name,
+      swatches: { ...effectiveColors },
+      tuning: { ...themeTuning },
+    }])
     setSavePresetName('')
   }
 
@@ -198,6 +314,7 @@ function AppearancePanel({ user, updateProfile }) {
 
   const saveAppearanceToProfile = async () => {
     const appliedTheme = saveThemeChoice(theme, customColors)
+    saveThemeTuning(themeTuning, getThemeColors(appliedTheme, customColors))
     setTheme(appliedTheme)
 
     try {
@@ -205,6 +322,8 @@ function AppearancePanel({ user, updateProfile }) {
         ...(user.user_metadata || {}),
         theme: appliedTheme,
         custom_theme_colors: appliedTheme === 'custom' ? { ...customColors } : undefined,
+        theme_radius_unit: themeTuning.radiusUnit,
+        theme_visual_strength: themeTuning.visualStrength,
       })
       setProfileSaved(true)
       setTimeout(() => setProfileSaved(false), 2200)
@@ -234,145 +353,163 @@ function AppearancePanel({ user, updateProfile }) {
       </div>
 
       <div className="account-appearance-editor">
-        <div className="account-appearance-section account-theme-library">
-          <p className="eyebrow mb-3">Themes</p>
-          <div className="account-theme-list">
-            {themeOptions.map(p => (
-              <button key={p.id} onClick={() => applyThemePreset(p.id)}
-                className={`account-theme-option${theme === p.id ? ' is-active' : ''}`}>
-                <div className="account-theme-option-top">
-                  <span>{p.label}</span>
-                  {theme === p.id && <span>Active</span>}
+        <div className="account-appearance-main">
+          <div className="account-appearance-section account-theme-library">
+            <p className="eyebrow mb-4">Theme</p>
+            <div className="account-theme-groups">
+              {groupedThemes.map(group => (
+                <div key={group.label} className="account-theme-group">
+                  <p className="account-theme-group-title">{group.label}</p>
+                  <div className="account-theme-list">
+                    {group.options.map(p => (
+                      <ThemeChoiceButton
+                        key={p.id}
+                        theme={p}
+                        active={theme === p.id}
+                        onClick={() => applyThemePreset(p.id)}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="account-theme-swatches">
-                  {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
-                    <span key={c} className="account-theme-swatch" style={{ background: c }} />
+              ))}
+            </div>
+
+            {savedPresets.length > 0 && (
+              <>
+                <p className="eyebrow mb-2" style={{ marginTop: 20 }}>My presets</p>
+                <div className="account-theme-list account-saved-preset-list">
+                  {savedPresets.map((p, i) => (
+                    <div key={p.id} className="account-saved-preset">
+                      <button onClick={() => applyPalette(p.swatches, p.tuning)} className="account-saved-preset-main">
+                        <div className="flex items-center gap-2">
+                          <div className="account-theme-swatches">
+                            {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
+                              <span key={c} className="account-theme-swatch is-small" style={{ background: c }} />
+                            ))}
+                          </div>
+                          <span>{p.label}</span>
+                        </div>
+                      </button>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => handleMovePreset(p.id, -1)} disabled={i === 0} style={btnStyle(i > 0)} title="Move up">▲</button>
+                        <button onClick={() => handleMovePreset(p.id, 1)} disabled={i === savedPresets.length - 1} style={btnStyle(i < savedPresets.length - 1)} title="Move down">▼</button>
+                        <button onClick={() => handleDeletePreset(p.id)} style={{ ...btnStyle(true), color: 'var(--text-muted)', marginLeft: 2 }} title="Delete">×</button>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </button>
-            ))}
-          </div>
-
-          <p className="eyebrow mb-2">My presets</p>
-          {savedPresets.length === 0 && (
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>No saved presets yet.</p>
-          )}
-          <div className="account-theme-list account-saved-preset-list">
-            {savedPresets.map((p, i) => (
-              <div key={p.id} className="account-saved-preset">
-                <button onClick={() => applyPalette(p.swatches)}
-                  className="account-saved-preset-main">
-                  <div className="flex items-center gap-2">
-                    <div className="account-theme-swatches">
-                      {[p.swatches.bgMain, p.swatches.bgNav, p.swatches.accent, p.swatches.textMain].map(c => (
-                        <span key={c} className="account-theme-swatch is-small" style={{ background: c }} />
-                      ))}
-                    </div>
-                    <span>{p.label}</span>
-                  </div>
-                </button>
-                <div className="flex items-center gap-0.5">
-                  <button onClick={() => handleMovePreset(p.id, -1)} disabled={i === 0}
-                    style={btnStyle(i > 0)} title="Move up">▲</button>
-                  <button onClick={() => handleMovePreset(p.id, 1)} disabled={i === savedPresets.length - 1}
-                    style={btnStyle(i < savedPresets.length - 1)} title="Move down">▼</button>
-                  <button onClick={() => handleDeletePreset(p.id)}
-                    style={{ ...btnStyle(true), color: 'var(--text-muted)', marginLeft: 2 }} title="Delete">×</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="account-preset-save">
-            <input
-              value={savePresetName}
-              onChange={e => setSavePresetName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
-              placeholder="Preset name..."
-              className="account-appearance-input"
-            />
-            <button onClick={handleSavePreset} disabled={!savePresetName.trim()}
-              className="account-mini-button">
-              Save
-            </button>
-          </div>
-        </div>
-
-        <div className="account-appearance-section account-color-section">
-          <p className="eyebrow mb-5">Custom colors</p>
-          <div className="account-color-grid">
-            {CUSTOM_COLOR_FIELDS.map(({ key, label }) => {
-              const val = effectiveColors[key] || '#888888'
-              return (
-                <div key={key} className="account-color-field">
-                  <p>{label}</p>
-                  <div className="account-color-control">
-                    <input type="color" value={val}
-                      onChange={e => { setCustomColors(p => ({ ...p, [key]: e.target.value })); setTheme('custom') }}
-                      className="account-color-picker"
-                    />
-                    <input value={val}
-                      onChange={e => { setCustomColors(p => ({ ...p, [key]: e.target.value })); setTheme('custom') }}
-                      className="account-appearance-input account-color-hex"
-                    />
-                    <div className="account-color-preview" style={{ background: val }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div style={{ marginTop: 32, maxWidth: 560 }}>
-            <p className="eyebrow mb-4">Atmosphere</p>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Accent glow</span>
-              </div>
-              <input type="range" min={0.08} max={0.4} step={0.01}
-                defaultValue={0.18}
-                onChange={e => {
-                  const alpha = Number(e.target.value)
-                  const hex = effectiveColors.accent || '#888'
-                  document.documentElement.style.setProperty('--accent-fade', rgbaFromHex(hex, alpha))
-                }}
-                style={{ width: '100%', accentColor: 'var(--accent)' }}
+              </>
+            )}
+            <div className="account-preset-save" style={{ marginTop: savedPresets.length > 0 ? 8 : 16 }}>
+              <input
+                value={savePresetName}
+                onChange={e => setSavePresetName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                placeholder="Save current as preset..."
+                className="account-appearance-input"
               />
+              <button onClick={handleSavePreset} disabled={!savePresetName.trim()} className="account-mini-button">Save</button>
+            </div>
+          </div>
+
+          <div className="account-appearance-section account-color-section">
+            <p className="eyebrow mb-5">Custom colours</p>
+            <div className="account-color-grid">
+              {CUSTOM_COLOR_FIELDS.map(({ key, label }) => {
+                const val = effectiveColors[key] || '#888888'
+                return (
+                  <div key={key} className="account-color-field">
+                    <p>{label}</p>
+                    <div className="account-color-control">
+                      <input type="color" value={val}
+                        onChange={e => {
+                          const v = e.target.value
+                          setCustomColors(() => {
+                            const base = theme !== 'custom'
+                              ? { ...(themeOptions.find(t => t.id === theme)?.swatches || DEFAULT_CUSTOM_COLORS) }
+                              : { ...effectiveColors }
+                            return { ...base, [key]: v }
+                          })
+                          setTheme('custom')
+                        }}
+                        className="account-color-picker"
+                      />
+                      <input value={val}
+                        onChange={e => {
+                          const v = e.target.value
+                          setCustomColors(() => {
+                            const base = theme !== 'custom'
+                              ? { ...(themeOptions.find(t => t.id === theme)?.swatches || DEFAULT_CUSTOM_COLORS) }
+                              : { ...effectiveColors }
+                            return { ...base, [key]: v }
+                          })
+                          setTheme('custom')
+                        }}
+                        className="account-appearance-input account-color-hex"
+                      />
+                      <div className="account-color-preview" style={{ background: val }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="account-tuning-grid">
+              <div className="account-range-field">
+                <div>
+                  <span>Corner roundness</span>
+                  <strong>{Math.round(effectiveRadius)}px</strong>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={16}
+                  step={1}
+                  value={effectiveRadius}
+                  onChange={e => setThemeTuning(prev => ({ ...prev, radiusUnit: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="account-range-field">
+                <div>
+                  <span>Colour &amp; shadow strength</span>
+                  <strong>{Math.round(effectiveStrength * 100)}%</strong>
+                </div>
+                <input
+                  type="range"
+                  min={0.45}
+                  max={1.7}
+                  step={0.05}
+                  value={effectiveStrength}
+                  onChange={e => setThemeTuning(prev => ({ ...prev, visualStrength: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="account-appearance-section account-display-section">
+            <p className="eyebrow mb-3">Font family</p>
+            <div className="account-choice-list">
+              {FONT_OPTIONS.map(opt => (
+                <button key={opt.id} onClick={() => setFontChoice(opt.id)}
+                  className={`account-choice-button${fontChoice === opt.id ? ' is-active' : ''}`}
+                  style={{
+                    fontFamily: opt.value,
+                  }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>The quick brown fox</div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="account-appearance-section account-display-section">
-          <p className="eyebrow mb-3">Font family</p>
-          <div className="account-choice-list">
-            {FONT_OPTIONS.map(opt => (
-              <button key={opt.id} onClick={() => setFontChoice(opt.id)}
-                className={`account-choice-button${fontChoice === opt.id ? ' is-active' : ''}`}
-                style={{
-                  fontFamily: opt.value,
-                }}>
-                <div style={{ fontSize: 12, fontWeight: 700 }}>{opt.label}</div>
-                <div style={{ fontSize: 10, marginTop: 2, opacity: 0.6 }}>The quick brown fox</div>
-              </button>
-            ))}
-          </div>
-
-          <p className="eyebrow mb-3">Preview</p>
-          <div className="account-theme-preview">
-            <div className="account-theme-preview-head" style={{ background: effectiveColors.bgNav || 'var(--bg-nav)' }}>
-              <span style={{ color: effectiveColors.accent }}>Your Own World</span>
-            </div>
-            <div className="account-theme-preview-body" style={{ background: effectiveColors.bgMain || 'var(--bg-main)' }}>
-              <div style={{ background: effectiveColors.bgNav, color: effectiveColors.textMain }}>
-                Panel surface
-              </div>
-              <div style={{ background: effectiveColors.accent, color: effectiveColors.bgMain, fontWeight: 700 }}>
-                Accent button
-              </div>
-              <span style={{ color: effectiveColors.textMuted }}>Muted text sample</span>
-              <span style={{ color: effectiveColors.textMain }}>Primary text sample</span>
-            </div>
-          </div>
+        <ThemeLivePreview
+          colors={effectiveColors}
+          radiusUnit={effectiveRadius}
+          visualStrength={effectiveStrength}
+          label={theme === 'custom' ? 'Custom theme' : selectedThemeOption?.label || 'Theme'}
+        />
         </div>
-      </div>
     </section>
   )
 }

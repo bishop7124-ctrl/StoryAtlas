@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { OFFLINE_MODE } from './offlineMock'
 
 const PROJECT_FIELDS = [
   'characters', 'factions', 'locations', 'timeline',
@@ -7,6 +8,7 @@ const PROJECT_FIELDS = [
 ]
 
 export async function loadUserData(userId) {
+  if (OFFLINE_MODE) return { _savedAt: 0 }
   const [{ data: appData }, { data: projectRows }, { data: scenesData }] = await Promise.all([
     supabase.from('user_data').select('data').eq('user_id', userId).maybeSingle(),
     supabase.from('project_data').select('project_id, data').eq('user_id', userId),
@@ -43,6 +45,7 @@ export async function loadUserData(userId) {
   }
 
   return {
+    _savedAt:      ud._savedAt      ?? 0,
     novels:        ud.novels        ?? [],
     series:        ud.series        ?? [],
     activeNovelId: ud.activeNovelId ?? null,
@@ -52,6 +55,7 @@ export async function loadUserData(userId) {
 }
 
 export async function saveAppData(userId, data) {
+  if (OFFLINE_MODE) return
   // Group project-scoped arrays by novelId into per-project blobs
   const projectBlobs = {}
   for (const field of PROJECT_FIELDS) {
@@ -66,6 +70,7 @@ export async function saveAppData(userId, data) {
   }
 
   const userData = {
+    _savedAt:      Date.now(),
     novels:        data.novels        ?? [],
     series:        data.series        ?? [],
     activeNovelId: data.activeNovelId ?? null,
@@ -80,13 +85,16 @@ export async function saveAppData(userId, data) {
 }
 
 export async function saveSceneDoc(userId, scene) {
+  if (OFFLINE_MODE) return
   await supabase.from('scenes').upsert({ user_id: userId, scene_id: scene.id, data: scene })
 }
 
 export async function deleteSceneDoc(userId, sceneId) {
+  if (OFFLINE_MODE) return
   await supabase.from('scenes').delete().eq('user_id', userId).eq('scene_id', sceneId)
 }
 
 export async function deleteProjectData(userId, projectId) {
+  if (OFFLINE_MODE) return
   await supabase.from('project_data').delete().eq('user_id', userId).eq('project_id', projectId)
 }

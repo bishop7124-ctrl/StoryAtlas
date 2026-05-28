@@ -167,7 +167,10 @@ async function streamOpenAI({ apiKey, model, baseUrl, extraHeaders, systemPrompt
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+import { OFFLINE_MODE, mockStreamMessage } from './offlineMock'
+
 export function streamMessage({ provider, apiKey, model, baseUrl, systemPrompt, messages, onChunk, onDone, onError, jsonMode, maxTokens }) {
+  if (OFFLINE_MODE)         return mockStreamMessage({ onChunk, onDone, onError })
   if (!apiKey)              return onError('No API key configured.')
   if (provider === 'anthropic')   return streamAnthropic({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, maxTokens })
   if (provider === 'google')      return streamGoogle({ apiKey, model, systemPrompt, messages, onChunk, onDone, onError, jsonMode, maxTokens })

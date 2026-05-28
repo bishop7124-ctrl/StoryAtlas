@@ -1,32 +1,109 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { getProjectType } from '../../constants/projectTypes'
+import WritingSidebar from './WritingSidebar'
+import TemplateModal from './TemplateModal'
+import AISuggestionPanel from './AISuggestionPanel'
 
-function useDebounce(callback, delay) {
+// ─── Debounce hook ────────────────────────────────────────────────────────────
+
+function useDebouncedCallback(callback, delay) {
   const timeoutRef = useRef(null)
-  return useCallback((...args) => {
+  const argsRef = useRef(null)
+  const callbackRef = useRef(callback)
+
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
+
+  const cancel = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    timeoutRef.current = setTimeout(() => callback(...args), delay)
-  }, [callback, delay])
+    timeoutRef.current = null
+    argsRef.current = null
+  }, [])
+
+  const flush = useCallback(() => {
+    if (!timeoutRef.current || !argsRef.current) return
+    clearTimeout(timeoutRef.current)
+    timeoutRef.current = null
+    const args = argsRef.current
+    argsRef.current = null
+    callbackRef.current(...args)
+  }, [])
+
+  const schedule = useCallback((...args) => {
+    argsRef.current = args
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null
+      const latestArgs = argsRef.current
+      argsRef.current = null
+      if (latestArgs) callbackRef.current(...latestArgs)
+    }, delay)
+  }, [delay])
+
+  useEffect(() => flush, [flush])
+
+  return useMemo(() => ({ schedule, flush, cancel }), [schedule, flush, cancel])
 }
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36)
+const countWords = value => {
+  if (!value || typeof value !== 'string') return 0
+  return value.trim().match(/\S+/g)?.length || 0
+}
+const dateKey = value => {
+  const date = new Date(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function persistSceneDraftToLocalStorage(scene, content) {
+  if (!scene?.id) return
+  try {
+    const now = Date.now()
+    const today = dateKey(now)
+    localStorage.setItem('nf_localWriteAt', String(now))
+    const scenes = JSON.parse(localStorage.getItem('nf_scenes') || '[]')
+    if (!Array.isArray(scenes)) return
+
+    const nextScenes = scenes.map(item => {
+      if (item.id !== scene.id) return item
+      const history = Array.isArray(item.wordHistory) ? [...item.wordHistory] : []
+      const entry = { date: today, words: countWords(content), timestamp: now }
+      const lastIndex = history.findLastIndex(day => day.date === today)
+      const wordHistory = lastIndex >= 0
+        ? history.map((day, index) => index === lastIndex ? entry : day)
+        : [...history, entry].slice(-120)
+      return { ...item, content, lastModified: now, wordHistory }
+    })
+
+    if (!nextScenes.some(item => item.id === scene.id)) {
+      nextScenes.push({ ...scene, content, lastModified: now, wordHistory: [{ date: today, words: countWords(content), timestamp: now }] })
+    }
+    localStorage.setItem('nf_scenes', JSON.stringify(nextScenes))
+  } catch (error) {
+    console.warn('Could not save latest scene draft before leaving the page.', error)
+  }
+}
 
 // ─── Format settings ──────────────────────────────────────────────────────────
 
 const FONTS = [
-  { label: 'Georgia', value: 'Georgia, "Times New Roman", serif' },
+  { label: 'Georgia',  value: 'Georgia, "Times New Roman", serif' },
   { label: 'Palatino', value: '"Palatino Linotype", Palatino, serif' },
-  { label: 'Times', value: '"Times New Roman", Times, serif' },
+  { label: 'Times',    value: '"Times New Roman", Times, serif' },
   { label: 'Garamond', value: 'Garamond, "EB Garamond", serif' },
-  { label: 'Courier', value: '"Courier New", Courier, monospace' },
-  { label: 'Sans', value: 'system-ui, -apple-system, sans-serif' },
+  { label: 'Courier',  value: '"Courier New", Courier, monospace' },
+  { label: 'Sans',     value: 'system-ui, -apple-system, sans-serif' },
 ]
 
 const LINE_SPACINGS = [
   { label: '1.5', value: 1.5 },
   { label: '1.75', value: 1.75 },
-  { label: '2.0', value: 2 },
-  { label: '2.5', value: 2.5 },
+  { label: '2.0',  value: 2 },
+  { label: '2.5',  value: 2.5 },
 ]
 
 const INDENT_SIZES = [2, 4, 6, 8]
@@ -45,6 +122,20 @@ function loadFormat() {
     const s = localStorage.getItem('nf-format-settings')
     return s ? { ...DEFAULT_FORMAT, ...JSON.parse(s) } : DEFAULT_FORMAT
   } catch { return DEFAULT_FORMAT }
+}
+
+// ─── Scene statuses ───────────────────────────────────────────────────────────
+
+const SCENE_STATUSES = [
+  { value: 'draft',    label: 'Draft',    color: 'var(--text-muted)' },
+  { value: 'writing',  label: 'Writing',  color: '#60a5fa' },
+  { value: 'complete', label: 'Done',     color: '#4ade80' },
+  { value: 'revision', label: 'Revision', color: '#fb923c' },
+]
+
+const nextStatus = (current) => {
+  const idx = SCENE_STATUSES.findIndex(s => s.value === current)
+  return SCENE_STATUSES[(idx + 1) % SCENE_STATUSES.length].value
 }
 
 // ─── Export ──────────────────────────────────────────────────────────────────
@@ -69,9 +160,7 @@ async function exportToDocx(novel, acts, chapters, scenes, chapterGlobalNumbers)
     const actChapters = chapters.filter(c => c.actId === act.id).sort((a, b) => a.order - b.order)
     if (!actChapters.length) return
 
-    if (!firstAct) {
-      children.push(new Paragraph({ children: [new PageBreak()] }))
-    }
+    if (!firstAct) children.push(new Paragraph({ children: [new PageBreak()] }))
     firstAct = false
 
     children.push(
@@ -88,9 +177,7 @@ async function exportToDocx(novel, acts, chapters, scenes, chapterGlobalNumbers)
       const isDefault = !chap.title || chap.title.toLowerCase().startsWith(l2)
       const chapTitle = isDefault ? `Chapter ${num}` : `Chapter ${num}: ${chap.title}`
 
-      if (chapIndex > 0) {
-        children.push(new Paragraph({ children: [new PageBreak()] }))
-      }
+      if (chapIndex > 0) children.push(new Paragraph({ children: [new PageBreak()] }))
 
       children.push(
         new Paragraph({
@@ -132,10 +219,7 @@ async function exportToDocx(novel, acts, chapters, scenes, chapterGlobalNumbers)
     })
   })
 
-  const doc = new Document({
-    sections: [{ properties: {}, children }],
-  })
-
+  const doc = new Document({ sections: [{ properties: {}, children }] })
   const blob = await Packer.toBlob(doc)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -176,18 +260,12 @@ function renderInlineMarkdown(text, keyPrefix = '') {
   if (!text) return []
   const parts = []
   const re = /(\*\*(.+?)\*\*|\*(.+?)\*|_(.+?)_)/g
-  let last = 0
-  let m
-  let idx = 0
+  let last = 0, m, idx = 0
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(text.slice(last, m.index))
-    if (m[0].startsWith('**')) {
-      parts.push(<strong key={`${keyPrefix}-b${idx}`}>{m[2]}</strong>)
-    } else if (m[0].startsWith('*')) {
-      parts.push(<em key={`${keyPrefix}-i${idx}`}>{m[3]}</em>)
-    } else {
-      parts.push(<u key={`${keyPrefix}-u${idx}`}>{m[4]}</u>)
-    }
+    if (m[0].startsWith('**')) parts.push(<strong key={`${keyPrefix}-b${idx}`}>{m[2]}</strong>)
+    else if (m[0].startsWith('*')) parts.push(<em key={`${keyPrefix}-i${idx}`}>{m[3]}</em>)
+    else parts.push(<u key={`${keyPrefix}-u${idx}`}>{m[4]}</u>)
     last = m.index + m[0].length
     idx++
   }
@@ -235,6 +313,8 @@ function parseSegments(content, entityNames, entityMap) {
   return segs
 }
 
+// ─── Content preview ──────────────────────────────────────────────────────────
+
 const ContentPreview = ({ content, entityMap, onEntityClick, onNoteClick, isBullets }) => {
   const entityNames = useMemo(
     () => Object.keys(entityMap).sort((a, b) => b.length - a.length),
@@ -269,6 +349,69 @@ const ContentPreview = ({ content, entityMap, onEntityClick, onNoteClick, isBull
   )
 }
 
+// ─── Scene metadata bar ───────────────────────────────────────────────────────
+
+const SceneMetaBar = ({ scene, onUpdate, characterNames, locationNames }) => {
+  const status = scene.status || 'draft'
+  const statusCfg = SCENE_STATUSES.find(s => s.value === status) ?? SCENE_STATUSES[0]
+
+  return (
+    <div className="ms-scene-meta font-sans">
+      {/* Status chip */}
+      <button
+        className="ms-meta-chip ms-meta-status"
+        onClick={() => onUpdate({ status: nextStatus(status) })}
+        title={`Status: ${statusCfg.label} (click to change)`}
+        style={{ '--dot-color': statusCfg.color }}
+      >
+        <span className="ms-meta-dot" />
+        {statusCfg.label}
+      </button>
+
+      {/* POV */}
+      <label className="ms-meta-field" title="Point of view character">
+        <span className="ms-meta-label">POV</span>
+        <input
+          className="ms-meta-input"
+          value={scene.pov || ''}
+          onChange={e => onUpdate({ pov: e.target.value })}
+          placeholder="—"
+          list={`pov-list-${scene.id}`}
+        />
+        {characterNames?.length > 0 && (
+          <datalist id={`pov-list-${scene.id}`}>
+            {characterNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+        )}
+      </label>
+
+      {/* Location */}
+      <label className="ms-meta-field" title="Scene location">
+        <span className="ms-meta-label">Location</span>
+        <input
+          className="ms-meta-input"
+          value={scene.locationTag || ''}
+          onChange={e => onUpdate({ locationTag: e.target.value })}
+          placeholder="—"
+          list={`loc-list-${scene.id}`}
+        />
+        {locationNames?.length > 0 && (
+          <datalist id={`loc-list-${scene.id}`}>
+            {locationNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+        )}
+      </label>
+
+      {/* Word count for this scene */}
+      {scene.content?.trim() && (
+        <span className="ms-meta-words">
+          {scene.content.trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ─── Scene editor ─────────────────────────────────────────────────────────────
 
 const SceneEditor = ({
@@ -277,22 +420,34 @@ const SceneEditor = ({
   innerRef, onFocus: onFocusExternal,
   entityMap, onEntityClick,
   onOpenNotes, onNoteClick,
-  formatSettings,
+  formatSettings, characterNames, locationNames,
+  onPersistDraft,
 }) => {
   const [localContent, setLocalContent] = useState(scene.content || '')
   const [focused, setFocused] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const textareaRef = useRef(null)
   const wrapperRef = useRef(null)
+  const localContentRef = useRef(localContent)
   const isBullets = scene.textMode === 'bullets'
+
+  const hasMetadata = !!(scene.pov || scene.locationTag || (scene.status && scene.status !== 'draft'))
 
   useEffect(() => {
     if (!innerRef) return
     innerRef({
       focus: () => { setFocused(true); setTimeout(() => textareaRef.current?.focus(), 0) },
       scrollIntoView: opts => wrapperRef.current?.scrollIntoView(opts),
+      appendContent: (text) => {
+        const cur = localContentRef.current ?? ''
+        const next = cur.trimEnd() + (cur.trim() ? '\n\n' : '') + text
+        localContentRef.current = next
+        persistSceneDraftToLocalStorage(scene, next)
+        setLocalContent(next)
+        debouncedUpdate.schedule(next)
+      },
     })
-  }, [innerRef])
+  }, [innerRef]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (focused) return undefined
@@ -300,18 +455,72 @@ const SceneEditor = ({
     return () => window.cancelAnimationFrame(sync)
   }, [scene.content, focused])
 
+  // Auto-resize + scroll to keep cursor near vertical centre while typing
   useEffect(() => {
-    if (focused && textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+    if (!focused || !textareaRef.current) return
+    const ta = textareaRef.current
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+
+    const scrollEl = ta.closest('.ms-scroll-container')
+    if (!scrollEl) return
+
+    const scrollElRect = scrollEl.getBoundingClientRect()
+    const taRect = ta.getBoundingClientRect()
+
+    // Approximate cursor position within textarea
+    const text = ta.value.substring(0, ta.selectionEnd)
+    const lineCount = Math.max(text.split('\n').length, 1)
+    const totalLines = Math.max(ta.value.split('\n').length, 1)
+    const cursorRatio = lineCount / totalLines
+
+    const taTopInScroll = taRect.top - scrollElRect.top + scrollEl.scrollTop
+    const cursorYInScroll = taTopInScroll + taRect.height * cursorRatio
+
+    // Centre of scroll container
+    const targetScroll = cursorYInScroll - scrollEl.clientHeight * 0.42
+
+    // Only scroll if cursor is outside a comfortable zone (avoid constant jumping)
+    const cursorVisibleY = taRect.top + taRect.height * cursorRatio - scrollElRect.top
+    const topZone = scrollEl.clientHeight * 0.25
+    const bottomZone = scrollEl.clientHeight * 0.75
+    if (cursorVisibleY < topZone || cursorVisibleY > bottomZone) {
+      scrollEl.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' })
     }
   }, [localContent, focused])
 
-  const debouncedUpdate = useDebounce(text => onUpdate(scene.id, text), 400)
+  const debouncedUpdate = useDebouncedCallback(text => onUpdate(scene.id, text), 400)
+
+  useEffect(() => {
+    localContentRef.current = localContent
+  }, [localContent])
+
+  useEffect(() => {
+    if (!focused) return undefined
+    const flushDraft = () => {
+      onPersistDraft(scene, localContentRef.current)
+      debouncedUpdate.flush()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraft()
+    }
+    window.addEventListener('pagehide', flushDraft)
+    window.addEventListener('beforeunload', flushDraft)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flushDraft)
+      window.removeEventListener('beforeunload', flushDraft)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      flushDraft()
+    }
+  }, [focused, scene, debouncedUpdate, onPersistDraft])
 
   const handleChange = e => {
-    setLocalContent(e.target.value)
-    debouncedUpdate(e.target.value)
+    const nextContent = e.target.value
+    localContentRef.current = nextContent
+    onPersistDraft(scene, nextContent)
+    setLocalContent(nextContent)
+    debouncedUpdate.schedule(nextContent)
   }
 
   const wrapSelection = useCallback((syntax) => {
@@ -320,23 +529,19 @@ const SceneEditor = ({
     const start = ta.selectionStart
     const end = ta.selectionEnd
     const selected = localContent.slice(start, end)
-    const wrapped = selected
-      ? `${syntax}${selected}${syntax}`
-      : `${syntax}${syntax}`
+    const wrapped = selected ? `${syntax}${selected}${syntax}` : `${syntax}${syntax}`
     const newContent = localContent.slice(0, start) + wrapped + localContent.slice(end)
+    localContentRef.current = newContent
+    onPersistDraft(scene, newContent)
     setLocalContent(newContent)
-    debouncedUpdate(newContent)
+    debouncedUpdate.schedule(newContent)
     setTimeout(() => {
       if (!ta) return
-      if (selected) {
-        ta.selectionStart = start + syntax.length
-        ta.selectionEnd = start + syntax.length + selected.length
-      } else {
-        ta.selectionStart = ta.selectionEnd = start + syntax.length
-      }
+      if (selected) { ta.selectionStart = start + syntax.length; ta.selectionEnd = start + syntax.length + selected.length }
+      else { ta.selectionStart = ta.selectionEnd = start + syntax.length }
       ta.focus()
     }, 0)
-  }, [localContent, debouncedUpdate])
+  }, [localContent, debouncedUpdate, onPersistDraft, scene])
 
   const handleKeyDown = e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'b') { e.preventDefault(); wrapSelection('**'); return }
@@ -345,9 +550,12 @@ const SceneEditor = ({
 
     if (e.key === 'Enter' && localContent.includes('/scene')) {
       e.preventDefault()
+      debouncedUpdate.cancel()
       const pos = e.target.selectionStart
       const before = localContent.slice(0, pos).replace('/scene', '').trim()
       const after = localContent.slice(pos).replace('/scene', '').trim()
+      localContentRef.current = before
+      onPersistDraft(scene, before)
       setLocalContent(before)
       onSplit(scene.id, scene.chapterId, before, after)
       return
@@ -359,8 +567,10 @@ const SceneEditor = ({
       const end = e.target.selectionEnd
       const insertion = '\n' + ' '.repeat(formatSettings.indentSize)
       const nextContent = localContent.slice(0, start) + insertion + localContent.slice(end)
+      localContentRef.current = nextContent
+      onPersistDraft(scene, nextContent)
       setLocalContent(nextContent)
-      debouncedUpdate(nextContent)
+      debouncedUpdate.schedule(nextContent)
       window.setTimeout(() => {
         if (!textareaRef.current) return
         textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + insertion.length
@@ -376,13 +586,15 @@ const SceneEditor = ({
       const start = ta.selectionStart
       const end = ta.selectionEnd
       const newContent = localContent.slice(0, start) + marker + localContent.slice(end)
+      localContentRef.current = newContent
+      onPersistDraft(scene, newContent)
       setLocalContent(newContent)
-      debouncedUpdate(newContent)
+      debouncedUpdate.schedule(newContent)
       setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + marker.length; ta.focus() }, 0)
     }
     onUpdateScene(scene.id, { notes: [...(scene.notes || []), { id: uid(), seq: nextSeq, text: '' }] })
     onOpenNotes()
-  }, [scene.notes, scene.id, localContent, debouncedUpdate, onUpdateScene, onOpenNotes])
+  }, [scene, localContent, debouncedUpdate, onPersistDraft, onUpdateScene, onOpenNotes])
 
   const activate = () => { setFocused(true); setTimeout(() => textareaRef.current?.focus(), 0) }
 
@@ -398,60 +610,61 @@ const SceneEditor = ({
   }
 
   return (
-    <div ref={wrapperRef} className="relative group/scene">
-      <div className="flex items-center gap-3 mb-2 opacity-0 group-hover/scene:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
-        {editingTitle ? (
-          <InlineInput
-            value={scene.title && scene.title !== 'Scene' ? scene.title : ''}
-            placeholder={`Scene ${sceneIndex + 1}`}
-            onSave={t => { onUpdateScene(scene.id, { title: t || 'Scene' }); setEditingTitle(false) }}
-            className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] w-40"
+    <div ref={wrapperRef} className="relative group/scene" id={`ms-scene-${scene.id}`}>
+      {/* Scene header — title + controls */}
+      <div className={`ms-scene-header ${focused || hasMetadata ? 'is-visible' : ''}`}>
+        <div className="ms-scene-header-row">
+          {editingTitle ? (
+            <InlineInput
+              value={scene.title && scene.title !== 'Scene' ? scene.title : ''}
+              placeholder={`Scene ${sceneIndex + 1}`}
+              onSave={t => { onUpdateScene(scene.id, { title: t || 'Scene' }); setEditingTitle(false) }}
+              className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] w-40"
+            />
+          ) : (
+            <button
+              onClick={() => setEditingTitle(true)}
+              className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+              title="Click to rename scene"
+            >
+              {displayTitle}
+            </button>
+          )}
+
+          <div className="flex-1 h-px bg-[var(--border)]" />
+
+          <div className="flex rounded overflow-hidden border border-[var(--border)] text-[9px] font-bold uppercase tracking-wider">
+            <button
+              onClick={() => onUpdateScene(scene.id, { textMode: 'prose' })}
+              className={`px-2 py-0.5 transition-colors ${!isBullets ? 'bg-[var(--accent)] text-[var(--bg-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
+            >Prose</button>
+            <button
+              onClick={() => onUpdateScene(scene.id, { textMode: 'bullets' })}
+              className={`px-2 py-0.5 transition-colors ${isBullets ? 'bg-[var(--accent)] text-[var(--bg-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
+            >Bullets</button>
+          </div>
+
+          <div className="flex items-center gap-0.5 border border-[var(--border)] rounded overflow-hidden">
+            <button onMouseDown={e => { e.preventDefault(); wrapSelection('**') }} className="px-2 py-0.5 text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors" title="Bold (Ctrl+B)">B</button>
+            <button onMouseDown={e => { e.preventDefault(); wrapSelection('*') }} className="px-2 py-0.5 text-[11px] italic text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors" title="Italic (Ctrl+I)">I</button>
+            <button onMouseDown={e => { e.preventDefault(); wrapSelection('_') }} className="px-2 py-0.5 text-[11px] underline text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors" title="Underline (Ctrl+U)">U</button>
+          </div>
+
+          <button
+            onClick={handleAddNote}
+            className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+          >+ Note</button>
+        </div>
+
+        {/* Scene metadata row */}
+        {(focused || hasMetadata) && (
+          <SceneMetaBar
+            scene={scene}
+            onUpdate={data => onUpdateScene(scene.id, data)}
+            characterNames={characterNames}
+            locationNames={locationNames}
           />
-        ) : (
-          <button
-            onClick={() => setEditingTitle(true)}
-            className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
-            title="Click to rename scene"
-          >
-            {displayTitle}
-          </button>
         )}
-
-        <div className="flex-1 h-px bg-[var(--border)]" />
-
-        <div className="flex rounded overflow-hidden border border-[var(--border)] text-[9px] font-bold uppercase tracking-wider">
-          <button
-            onClick={() => onUpdateScene(scene.id, { textMode: 'prose' })}
-            className={`px-2 py-0.5 transition-colors ${!isBullets ? 'bg-[var(--accent)] text-[var(--bg-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
-          >Prose</button>
-          <button
-            onClick={() => onUpdateScene(scene.id, { textMode: 'bullets' })}
-            className={`px-2 py-0.5 transition-colors ${isBullets ? 'bg-[var(--accent)] text-[var(--bg-main)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}
-          >Bullets</button>
-        </div>
-
-        <div className="flex items-center gap-0.5 border border-[var(--border)] rounded overflow-hidden">
-          <button
-            onMouseDown={e => { e.preventDefault(); wrapSelection('**') }}
-            className="px-2 py-0.5 text-[11px] font-bold text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
-            title="Bold (Ctrl+B)"
-          >B</button>
-          <button
-            onMouseDown={e => { e.preventDefault(); wrapSelection('*') }}
-            className="px-2 py-0.5 text-[11px] italic text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
-            title="Italic (Ctrl+I)"
-          >I</button>
-          <button
-            onMouseDown={e => { e.preventDefault(); wrapSelection('_') }}
-            className="px-2 py-0.5 text-[11px] underline text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-fade)] transition-colors"
-            title="Underline (Ctrl+U)"
-          >U</button>
-        </div>
-
-        <button
-          onClick={handleAddNote}
-          className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
-        >+ Note</button>
       </div>
 
       {focused ? (
@@ -459,7 +672,7 @@ const SceneEditor = ({
           ref={textareaRef}
           value={localContent}
           onFocus={() => { setFocused(true); onFocusExternal() }}
-          onBlur={() => setFocused(false)}
+          onBlur={() => { onPersistDraft(scene, localContentRef.current); debouncedUpdate.flush(); setFocused(false) }}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={isBullets ? 'One item per line…' : 'Begin writing here…'}
@@ -502,9 +715,7 @@ const FormatSettingsPanel = ({ settings, onChange, onClose }) => {
   const panelRef = useRef(null)
 
   useEffect(() => {
-    const handler = e => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose()
-    }
+    const handler = e => { if (panelRef.current && !panelRef.current.contains(e.target)) onClose() }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
@@ -512,131 +723,70 @@ const FormatSettingsPanel = ({ settings, onChange, onClose }) => {
   const set = (key, value) => onChange({ ...settings, [key]: value })
 
   return (
-    <div
-      ref={panelRef}
-      className="ms-format-panel font-sans"
-      onMouseDown={e => e.stopPropagation()}
-    >
+    <div ref={panelRef} className="ms-format-panel font-sans" onMouseDown={e => e.stopPropagation()}>
       <div className="ms-format-panel-header">
         <span>Format</span>
         <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] leading-none">✕</button>
       </div>
 
-      {/* Font family */}
       <div className="ms-format-section">
         <div className="ms-format-label">Font</div>
         <div className="ms-format-row flex-wrap gap-1">
           {FONTS.map(f => (
-            <button
-              key={f.label}
-              onClick={() => set('fontFamily', f.value)}
-              className={`ms-format-chip ${settings.fontFamily === f.value ? 'active' : ''}`}
-              style={{ fontFamily: f.value }}
-            >
-              {f.label}
-            </button>
+            <button key={f.label} onClick={() => set('fontFamily', f.value)} className={`ms-format-chip ${settings.fontFamily === f.value ? 'active' : ''}`} style={{ fontFamily: f.value }}>{f.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Font size */}
       <div className="ms-format-section">
         <div className="ms-format-label">Size</div>
         <div className="ms-format-row items-center gap-2">
-          <button
-            onClick={() => set('fontSize', Math.max(12, settings.fontSize - 1))}
-            className="ms-format-chip w-7 flex items-center justify-center text-base leading-none"
-            disabled={settings.fontSize <= 12}
-          >−</button>
+          <button onClick={() => set('fontSize', Math.max(12, settings.fontSize - 1))} className="ms-format-chip w-7 flex items-center justify-center text-base leading-none" disabled={settings.fontSize <= 12}>−</button>
           <span className="text-[var(--text-main)] text-sm w-8 text-center tabular-nums">{settings.fontSize}px</span>
-          <button
-            onClick={() => set('fontSize', Math.min(30, settings.fontSize + 1))}
-            className="ms-format-chip w-7 flex items-center justify-center text-base leading-none"
-            disabled={settings.fontSize >= 30}
-          >+</button>
+          <button onClick={() => set('fontSize', Math.min(30, settings.fontSize + 1))} className="ms-format-chip w-7 flex items-center justify-center text-base leading-none" disabled={settings.fontSize >= 30}>+</button>
           <div className="flex-1" />
-          <input
-            type="range"
-            min={12}
-            max={30}
-            value={settings.fontSize}
-            onChange={e => set('fontSize', Number(e.target.value))}
-            className="ms-range w-24"
-          />
+          <input type="range" min={12} max={30} value={settings.fontSize} onChange={e => set('fontSize', Number(e.target.value))} className="ms-range w-24" />
         </div>
       </div>
 
-      {/* Line spacing */}
       <div className="ms-format-section">
         <div className="ms-format-label">Spacing</div>
         <div className="ms-format-row gap-1">
           {LINE_SPACINGS.map(s => (
-            <button
-              key={s.label}
-              onClick={() => set('lineHeight', s.value)}
-              className={`ms-format-chip ${settings.lineHeight === s.value ? 'active' : ''}`}
-            >
-              {s.label}
-            </button>
+            <button key={s.label} onClick={() => set('lineHeight', s.value)} className={`ms-format-chip ${settings.lineHeight === s.value ? 'active' : ''}`}>{s.label}</button>
           ))}
         </div>
       </div>
 
-      {/* Text alignment */}
       <div className="ms-format-section">
         <div className="ms-format-label">Alignment</div>
         <div className="ms-format-row gap-1">
-          {[
-            { label: 'Left', value: 'left' },
-            { label: 'Center', value: 'center' },
-            { label: 'Justify', value: 'justify' },
-          ].map(a => (
-            <button
-              key={a.value}
-              onClick={() => set('textAlign', a.value)}
-              className={`ms-format-chip gap-1 ${settings.textAlign === a.value ? 'active' : ''}`}
-            >
-              <AlignIcon type={a.value} />
-              <span>{a.label}</span>
+          {[{ label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Justify', value: 'justify' }].map(a => (
+            <button key={a.value} onClick={() => set('textAlign', a.value)} className={`ms-format-chip gap-1 ${settings.textAlign === a.value ? 'active' : ''}`}>
+              <AlignIcon type={a.value} /><span>{a.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Indent */}
       <div className="ms-format-section">
         <div className="ms-format-label flex items-center gap-2">
           <span>Indent on Enter</span>
-          <button
-            onClick={() => set('autoIndent', !settings.autoIndent)}
-            className={`ms-toggle ${settings.autoIndent ? 'active' : ''}`}
-            title={settings.autoIndent ? 'Disable auto-indent' : 'Enable auto-indent'}
-          >
+          <button onClick={() => set('autoIndent', !settings.autoIndent)} className={`ms-toggle ${settings.autoIndent ? 'active' : ''}`} title={settings.autoIndent ? 'Disable' : 'Enable'}>
             <span className="ms-toggle-thumb" />
           </button>
         </div>
         {settings.autoIndent && (
           <div className="ms-format-row gap-1 mt-1">
             {INDENT_SIZES.map(n => (
-              <button
-                key={n}
-                onClick={() => set('indentSize', n)}
-                className={`ms-format-chip ${settings.indentSize === n ? 'active' : ''}`}
-              >
-                {n} spaces
-              </button>
+              <button key={n} onClick={() => set('indentSize', n)} className={`ms-format-chip ${settings.indentSize === n ? 'active' : ''}`}>{n} spaces</button>
             ))}
           </div>
         )}
       </div>
 
       <div className="ms-format-section border-t border-[var(--border)] pt-2 mt-1">
-        <button
-          onClick={() => onChange(DEFAULT_FORMAT)}
-          className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
-        >
-          Reset to defaults
-        </button>
+        <button onClick={() => onChange(DEFAULT_FORMAT)} className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">Reset to defaults</button>
       </div>
     </div>
   )
@@ -645,26 +795,20 @@ const FormatSettingsPanel = ({ settings, onChange, onClose }) => {
 const AlignIcon = ({ type }) => {
   if (type === 'left') return (
     <svg width="12" height="10" viewBox="0 0 12 10" fill="currentColor">
-      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/>
-      <rect x="0" y="3" width="9" height="1.5" rx="0.75"/>
-      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/>
-      <rect x="0" y="9" width="7" height="1.5" rx="0.75"/>
+      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/><rect x="0" y="3" width="9" height="1.5" rx="0.75"/>
+      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/><rect x="0" y="9" width="7" height="1.5" rx="0.75"/>
     </svg>
   )
   if (type === 'center') return (
     <svg width="12" height="10" viewBox="0 0 12 10" fill="currentColor">
-      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/>
-      <rect x="1.5" y="3" width="9" height="1.5" rx="0.75"/>
-      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/>
-      <rect x="2.5" y="9" width="7" height="1.5" rx="0.75"/>
+      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/><rect x="1.5" y="3" width="9" height="1.5" rx="0.75"/>
+      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/><rect x="2.5" y="9" width="7" height="1.5" rx="0.75"/>
     </svg>
   )
   return (
     <svg width="12" height="10" viewBox="0 0 12 10" fill="currentColor">
-      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/>
-      <rect x="0" y="3" width="12" height="1.5" rx="0.75"/>
-      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/>
-      <rect x="0" y="9" width="12" height="1.5" rx="0.75"/>
+      <rect x="0" y="0" width="12" height="1.5" rx="0.75"/><rect x="0" y="3" width="12" height="1.5" rx="0.75"/>
+      <rect x="0" y="6" width="12" height="1.5" rx="0.75"/><rect x="0" y="9" width="12" height="1.5" rx="0.75"/>
     </svg>
   )
 }
@@ -699,10 +843,7 @@ const NotesPanel = ({ scene, onUpdateScene, onClose, highlightedSeq }) => {
           </p>
         )}
         {notes.map(note => (
-          <div
-            key={note.id}
-            className={`rounded-lg border p-3 transition-colors ${highlightedSeq === note.seq ? 'border-[var(--accent)] bg-[var(--accent-fade)]' : 'border-[var(--border)] bg-[var(--bg-main)]'}`}
-          >
+          <div key={note.id} className={`rounded-lg border p-3 transition-colors ${highlightedSeq === note.seq ? 'border-[var(--accent)] bg-[var(--accent-fade)]' : 'border-[var(--border)] bg-[var(--bg-main)]'}`}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider">Note {note.seq}</span>
               <button onClick={() => deleteNote(note.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs">✕</button>
@@ -721,113 +862,22 @@ const NotesPanel = ({ scene, onUpdateScene, onClose, highlightedSeq }) => {
   )
 }
 
-// ─── Focus controls ───────────────────────────────────────────────────────────
+// ─── Save indicator ───────────────────────────────────────────────────────────
 
-const FocusControls = ({
-  notesOpen, setNotesOpen,
-  activeScene, onExport, exporting,
-  formatOpen, setFormatOpen,
-  formatSettings, onFormatChange,
-}) => (
-  <div className="manuscript-focus-controls font-sans relative">
-    <button
-      onClick={() => setNotesOpen(v => !v)}
-      className={`btn btn-sm ${notesOpen ? 'btn-primary' : 'btn-secondary'}`}
-      title={notesOpen ? 'Close notes' : 'Open notes'}
-    >
-      Notes{activeScene?.notes?.length ? ` (${activeScene.notes.length})` : ''}
-    </button>
-
-    <div className="relative">
-      <button
-        onClick={() => setFormatOpen(v => !v)}
-        className={`btn btn-sm flex items-center gap-1.5 ${formatOpen ? 'btn-primary' : 'btn-secondary'}`}
-        title="Text formatting options"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>
-        </svg>
-        Format
-      </button>
-      {formatOpen && (
-        <FormatSettingsPanel
-          settings={formatSettings}
-          onChange={onFormatChange}
-          onClose={() => setFormatOpen(false)}
-        />
-      )}
-    </div>
-
-    <button
-      onClick={onExport}
-      disabled={exporting}
-      className="btn btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
-      title="Export manuscript as .docx"
-    >
-      {exporting ? (
-        <span className="animate-pulse">Exporting…</span>
-      ) : (
-        <>
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Export .docx
-        </>
-      )}
-    </button>
-  </div>
-)
-
-const OutlineSummary = ({ acts, chapters, scenes, labels, getChapterTitle, totalWordCount, onClose }) => {
-  const sceneExcerpt = (scene) => {
-    const text = (scene.content || '').replace(/\s+/g, ' ').trim()
-    if (!text) return 'Blank scene'
-    return text.length > 110 ? `${text.slice(0, 110)}...` : text
-  }
-
-  return (
-    <div className="manuscript-summary-panel font-sans">
-      <div className="manuscript-panel-head">
-        <div>
-          <p className="eyebrow">Story outline</p>
-          <h3>Summary</h3>
-        </div>
-        <button onClick={onClose} className="manuscript-panel-close">×</button>
-      </div>
-
-      <div className="manuscript-summary-meta">
-        <span>{acts.length} {labels.level1.toLowerCase()}{acts.length === 1 ? '' : 's'}</span>
-        <span>{chapters.length} {labels.level2.toLowerCase()}{chapters.length === 1 ? '' : 's'}</span>
-        <span>{totalWordCount.toLocaleString()} words</span>
-      </div>
-
-      <div className="manuscript-summary-list">
-        {acts.length === 0 && <p className="text-sm text-[var(--text-muted)]">No outline yet.</p>}
-        {acts.map(act => {
-          const actChapters = chapters.filter(c => c.actId === act.id)
-          return (
-            <section key={act.id}>
-              <h4>{act.title}</h4>
-              {act.synopsis && <p>{act.synopsis}</p>}
-              {actChapters.map(chap => {
-                const chapScenes = scenes.filter(s => s.chapterId === chap.id)
-                return (
-                  <div key={chap.id} className="manuscript-summary-chapter">
-                    <strong>{getChapterTitle(chap)}</strong>
-                    {chap.synopsis && <p>{chap.synopsis}</p>}
-                    {chapScenes.slice(0, 4).map(scene => (
-                      <small key={scene.id}>{scene.title && scene.title !== 'Scene' ? `${scene.title}: ` : ''}{sceneExcerpt(scene)}</small>
-                    ))}
-                    {chapScenes.length > 4 && <em>{chapScenes.length - 4} more scenes</em>}
-                  </div>
-                )
-              })}
-            </section>
-          )
-        })}
-      </div>
-    </div>
+const SaveIndicator = ({ state }) => {
+  if (state === 'saving') return (
+    <span className="ms-save-indicator is-saving" title="Saving…">
+      <span className="ms-save-dot" />
+      <span className="ms-save-label">Saving</span>
+    </span>
   )
+  if (state === 'saved') return (
+    <span className="ms-save-indicator is-saved" title="All changes saved">
+      <span className="ms-save-dot" />
+      <span className="ms-save-label">Saved</span>
+    </span>
+  )
+  return null
 }
 
 // ─── Root component ───────────────────────────────────────────────────────────
@@ -835,30 +885,36 @@ const OutlineSummary = ({ acts, chapters, scenes, labels, getChapterTitle, total
 export default function Manuscript({ store }) {
   const {
     acts, chapters, scenes,
-    addAct, addScene,
-    updateSceneContent, updateScene,
+    addAct, addChapter, addScene,
+    updateSceneContent, updateScene, updateAct, updateChapter,
+    deleteAct, deleteChapter, deleteScene,
+    moveAct, moveChapter, moveScene,
     characters, locations,
     setSelectedCharacterId, setSelectedLocationId,
-    activeNovel,
+    activeNovel, updateNovel,
   } = store
 
   const labels = getProjectType(activeNovel?.type).structure
+
   const [activeSceneId, setActiveSceneId] = useState(null)
-  const [outlineOpen, setOutlineOpen] = useState(false)
-  const [notesOpen, setNotesOpen] = useState(false)
+  const [activeSidebarTab, setActiveSidebarTab] = useState('structure') // null | 'structure' | 'goals' | 'progress' | 'notes'
   const [highlightedNoteSeq, setHighlightedNoteSeq] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [formatSettings, setFormatSettings] = useState(loadFormat)
   const [formatOpen, setFormatOpen] = useState(false)
-  const [view, setView] = useState('manuscript')
+  const [fullscreen, setFullscreen] = useState(false)
+  const [saveState, setSaveState] = useState('saved') // 'saving' | 'saved'
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+
+  const containerRef = useRef(null)
+  const saveTimer = useRef(null)
   const editorRefs = useRef({})
 
   const activeScene = scenes.find(s => s.id === activeSceneId) ?? null
 
-  const handleFormatChange = useCallback((next) => {
-    setFormatSettings(next)
-    localStorage.setItem('nf-format-settings', JSON.stringify(next))
-  }, [])
+  // Derived entity lists for autocomplete
+  const characterNames = useMemo(() => characters.map(c => c.name).filter(Boolean), [characters])
+  const locationNames = useMemo(() => locations.map(l => l.name).filter(Boolean), [locations])
 
   const entityMap = useMemo(() => {
     const map = {}
@@ -872,6 +928,36 @@ export default function Manuscript({ store }) {
     return map
   }, [characters, locations])
 
+  // Autosave state tracking — wraps updateSceneContent with UI feedback
+  const handleContentUpdate = useCallback((sceneId, content) => {
+    updateSceneContent(sceneId, content)
+    setSaveState('saving')
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => setSaveState('saved'), 2000)
+  }, [updateSceneContent])
+
+  // Fullscreen management
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await containerRef.current?.requestFullscreen()
+      } else {
+        await document.exitFullscreen()
+      }
+    } catch { /* Safari/iOS may reject */ }
+  }, [])
+
+  useEffect(() => {
+    const handler = () => setFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const handleFormatChange = useCallback((next) => {
+    setFormatSettings(next)
+    localStorage.setItem('nf-format-settings', JSON.stringify(next))
+  }, [])
+
   const handleEntityClick = useCallback(entity => {
     if (entity.section === 'characters') setSelectedCharacterId(entity.id)
     if (entity.section === 'locations') setSelectedLocationId(entity.id)
@@ -882,7 +968,7 @@ export default function Manuscript({ store }) {
     const map = {}
     let count = 1
     acts.forEach(act => {
-      chapters.filter(c => c.actId === act.id).forEach(chap => { map[chap.id] = count++ })
+      chapters.filter(c => c.actId === act.id).sort((a, b) => a.order - b.order).forEach(chap => { map[chap.id] = count++ })
     })
     return map
   }, [acts, chapters])
@@ -894,13 +980,17 @@ export default function Manuscript({ store }) {
     return isDefault ? `${labels.level2} ${num}` : `${labels.level2} ${num}: ${chap.title}`
   }, [chapterGlobalNumbers, labels])
 
+  const totalWordCount = useMemo(() =>
+    scenes.reduce((acc, s) => acc + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0)
+  , [scenes])
+
   const orderedContent = useMemo(() => {
     const result = []
     acts.forEach(act => {
-      const actChapters = chapters.filter(c => c.actId === act.id)
+      const actChapters = chapters.filter(c => c.actId === act.id).sort((a, b) => a.order - b.order)
       result.push({ type: 'act', act, hasChapters: actChapters.length > 0 })
       actChapters.forEach(chap => {
-        const chapScenes = scenes.filter(s => s.chapterId === chap.id)
+        const chapScenes = scenes.filter(s => s.chapterId === chap.id).sort((a, b) => a.order - b.order)
         result.push({ type: 'chapter', chap, hasScenes: chapScenes.length > 0 })
         chapScenes.forEach((scene, idx) => {
           result.push({ type: 'scene', scene, sceneIndex: idx, chapterSceneCount: chapScenes.length, chap })
@@ -909,10 +999,6 @@ export default function Manuscript({ store }) {
     })
     return result
   }, [acts, chapters, scenes])
-
-  const totalWordCount = useMemo(() =>
-    scenes.reduce((acc, s) => acc + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0)
-  , [scenes])
 
   const handleSplitScene = (sceneId, chapterId, before, after) => {
     updateSceneContent(sceneId, before)
@@ -937,6 +1023,55 @@ export default function Manuscript({ store }) {
     setTimeout(() => setHighlightedNoteSeq(null), 2000)
   }
 
+  const handleAppendToScene = useCallback((sceneId, text) => {
+    const ref = editorRefs.current[sceneId]
+    if (ref?.appendContent) {
+      ref.appendContent(text)
+    } else {
+      // Fallback: write directly to store (editor syncs on next blur)
+      const scene = scenes.find(s => s.id === sceneId)
+      if (!scene) return
+      const cur = scene.content?.trimEnd() || ''
+      handleContentUpdate(sceneId, cur + (cur ? '\n\n' : '') + text)
+    }
+  }, [scenes, handleContentUpdate])
+
+  // Writing goals — persisted on activeNovel via updateNovel
+  const activeNovelId = activeNovel?.id
+  const writingGoals = useMemo(() => activeNovel?.writingGoals ?? {}, [activeNovel?.writingGoals])
+
+  const handleUpdateGoals = useCallback((newGoals) => {
+    if (!activeNovelId) return
+    updateNovel(activeNovelId, { writingGoals: newGoals })
+  }, [activeNovelId, updateNovel])
+
+  // Template application
+  const handleApplyTemplate = useCallback(async (template, { withChapters, withScenes }) => {
+    // Create acts sequentially — order matters so we use the template array order
+    for (let ai = 0; ai < template.acts.length; ai++) {
+      const tAct = template.acts[ai]
+      const newAct = addAct(tAct.title)
+      if (tAct.guidance) updateAct(newAct.id, { guidance: tAct.guidance })
+
+      if (withChapters) {
+        for (let ci = 0; ci < tAct.chapters.length; ci++) {
+          const tChap = tAct.chapters[ci]
+          const newChap = addChapter(newAct.id, tChap.title)
+          if (tChap.guidance) updateChapter(newChap.id, { guidance: tChap.guidance })
+
+          if (withScenes) {
+            addScene(newChap.id, labels.level3)
+          }
+        }
+      }
+    }
+
+    // Set manuscript word-count goal from template if no goal yet
+    if (template.targetWords && !writingGoals.manuscript) {
+      handleUpdateGoals({ ...writingGoals, manuscript: template.targetWords })
+    }
+  }, [addAct, addChapter, addScene, updateAct, updateChapter, labels.level3, writingGoals, handleUpdateGoals])
+
   const handleExport = async () => {
     setExporting(true)
     try {
@@ -949,402 +1084,299 @@ export default function Manuscript({ store }) {
     }
   }
 
+  // Navigate from sidebar click
+  const handleSelectScene = useCallback((sceneId) => {
+    setActiveSceneId(sceneId)
+    requestAnimationFrame(() => {
+      document.getElementById(`ms-scene-${sceneId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    setTimeout(() => editorRefs.current[sceneId]?.focus(), 200)
+  }, [])
+
+  const handleSelectChapter = useCallback((chapId) => {
+    requestAnimationFrame(() => {
+      document.getElementById(`ms-chap-${chapId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [])
+
   return (
-    <div className="manuscript-processor flex flex-col h-full bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden font-serif">
-      {/* Top tab bar */}
-      <div className="flex border-b border-[var(--border)] bg-[var(--bg-nav)] font-sans flex-shrink-0">
+    <div ref={containerRef} className={`manuscript-processor flex flex-col h-full bg-[var(--bg-main)] text-[var(--text-main)] overflow-hidden font-serif${fullscreen ? ' is-fullscreen' : ''}`}>
+
+      {/* ── Toolbar ─────────────────────────────────────────── */}
+      <div className="ms-toolbar font-sans flex items-center gap-2 flex-shrink-0 px-3">
+
+        {/* Template picker */}
         <button
-          onClick={() => setView('manuscript')}
-          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors relative ${
-            view === 'manuscript' ? 'text-[var(--accent)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-          }`}
+          onClick={() => setTemplateModalOpen(true)}
+          className="ms-toolbar-btn"
+          title="Choose a structural template"
         >
-          {view === 'manuscript' && (
-            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--accent)]" />
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="0.9" y="0.9" width="3.5" height="3.5" rx="0.8" />
+            <rect x="6.6" y="0.9" width="3.5" height="3.5" rx="0.8" />
+            <rect x="0.9" y="6.6" width="3.5" height="3.5" rx="0.8" />
+            <rect x="6.6" y="6.6" width="3.5" height="3.5" rx="0.8" />
+          </svg>
+          Template
+        </button>
+
+        <div className="w-px h-4 bg-[var(--border)] mx-1" />
+
+        {/* Save state */}
+        <SaveIndicator state={saveState} />
+
+        {/* Word count */}
+        <span className="ms-toolbar-wordcount">
+          {totalWordCount > 0 ? `${totalWordCount.toLocaleString()} words` : 'No content yet'}
+        </span>
+
+        <div className="flex-1" />
+
+        {/* Notes toggle */}
+        <button
+          onClick={() => setActiveSidebarTab(v => v === 'notes' ? null : 'notes')}
+          className={`ms-toolbar-btn${activeSidebarTab === 'notes' ? ' is-active' : ''}`}
+          title="Scene notes"
+        >
+          Notes{activeScene?.notes?.length ? ` (${activeScene.notes.length})` : ''}
+        </button>
+
+        {/* AI assistant */}
+        <button
+          onClick={() => setActiveSidebarTab(v => v === 'ai' ? null : 'ai')}
+          className={`ms-toolbar-btn${activeSidebarTab === 'ai' ? ' is-active' : ''}`}
+          title="AI writing assistant"
+        >
+          AI
+        </button>
+
+        {/* Format */}
+        <div className="relative">
+          <button
+            onClick={() => setFormatOpen(v => !v)}
+            className={`ms-toolbar-btn flex items-center gap-1.5${formatOpen ? ' is-active' : ''}`}
+            title="Text formatting"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" />
+            </svg>
+            Format
+          </button>
+          {formatOpen && (
+            <FormatSettingsPanel
+              settings={formatSettings}
+              onChange={handleFormatChange}
+              onClose={() => setFormatOpen(false)}
+            />
           )}
-          Manuscript
+        </div>
+
+        {/* Export */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="ms-toolbar-btn disabled:opacity-50"
+          title="Export as .docx"
+        >
+          {exporting ? 'Exporting…' : (
+            <span className="flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Export
+            </span>
+          )}
+        </button>
+
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="ms-toolbar-btn"
+          title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+          aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          {fullscreen ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M4.5 1.5H1.5v3M7.5 1.5h3v3M4.5 10.5H1.5v-3M7.5 10.5h3v-3" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3" />
+            </svg>
+          )}
         </button>
       </div>
 
-      {/* Top toolbar — only shown in manuscript view */}
-      {view === 'manuscript' && (
-        <FocusControls
-          notesOpen={notesOpen}
-          setNotesOpen={setNotesOpen}
-          activeScene={activeScene}
-          onExport={handleExport}
-          exporting={exporting}
-          formatOpen={formatOpen}
-          setFormatOpen={setFormatOpen}
-          formatSettings={formatSettings}
-          onFormatChange={handleFormatChange}
-        />
-      )}
+      {/* ── Body: writing area + right sidebar ──────────────── */}
+      <div className="flex flex-1 overflow-hidden">
 
-      <div className="flex flex-1 overflow-hidden relative">
-        {/* Outline summary toggle — small square, upper-left of content */}
-        {view === 'manuscript' && (
-          <button
-            onClick={() => setOutlineOpen(v => !v)}
-            className={`absolute top-3 left-3 z-10 w-7 h-7 flex items-center justify-center rounded border transition-colors font-sans ${
-              outlineOpen
-                ? 'border-[var(--accent)] bg-[var(--accent-fade)] text-[var(--accent)]'
-                : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] bg-[var(--bg-main)]'
-            }`}
-            title="Story summary"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-              <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-          </button>
-        )}
+        {/* Writing area */}
+        <main className="manuscript-page ms-scroll-container workspace-page flex-1 overflow-y-auto scroll-smooth min-w-0">
+          <div className="manuscript-document mx-auto py-16 px-6 md:px-12">
 
-        {/* Manuscript writing view */}
-        {view === 'manuscript' && (
-          <main className="manuscript-page workspace-page flex-1 overflow-y-auto scroll-smooth min-w-0">
-            <div className="manuscript-document mx-auto py-16 px-6 md:px-12">
-
-              {acts.length === 0 && (
-                <div className="empty-state mt-32 font-sans">
-                  <p className="text-lg mb-2 font-semibold">Nothing to write yet.</p>
-                  <p className="text-sm mb-6 opacity-70">Add an {labels.level1} in the outline to get started.</p>
+            {acts.length === 0 && (
+              <div className="empty-state mt-32 font-sans">
+                <p className="text-lg mb-2 font-semibold">Nothing to write yet.</p>
+                <p className="text-sm mb-4 opacity-70">Start from a template or add your first {labels.level1} manually.</p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                  <button
+                    onClick={() => setTemplateModalOpen(true)}
+                    className="btn btn-primary"
+                  >
+                    Choose a template
+                  </button>
                   <button
                     onClick={() => addAct(`${labels.level1} 1`)}
-                    className="btn btn-primary"
-                  >{labels.level1}</button>
+                    className="btn btn-secondary"
+                  >
+                    + {labels.level1}
+                  </button>
                 </div>
-              )}
+              </div>
+            )}
 
-              {orderedContent.map(item => {
-                if (item.type === 'act') {
-                  return (
-                    <div key={`act-${item.act.id}`} className="mt-16 first:mt-0 mb-2">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1 h-px bg-[var(--border)]" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.5em] text-[var(--text-muted)]">
-                          {item.act.title}
-                        </span>
-                        <div className="flex-1 h-px bg-[var(--border)]" />
-                      </div>
-                    </div>
-                  )
-                }
+            {orderedContent.map(item => {
+              if (item.type === 'act') return (
+                <div key={`act-${item.act.id}`} className="mt-16 first:mt-0 mb-2">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 h-px bg-[var(--border)]" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.5em] text-[var(--text-muted)]">
+                      {item.act.title}
+                    </span>
+                    <div className="flex-1 h-px bg-[var(--border)]" />
+                  </div>
+                </div>
+              )
 
-                if (item.type === 'chapter') {
-                  return (
-                    <div key={`chap-${item.chap.id}`} id={`chap-${item.chap.id}`} className="pt-14 pb-8 text-center font-sans">
-                      <h2 className="text-[var(--accent)] text-xs font-black uppercase tracking-[0.5em] mb-1 opacity-80">
-                        {getChapterTitle(item.chap)}
-                      </h2>
-                      {item.chap.title && !item.chap.title.toLowerCase().startsWith(labels.level2.toLowerCase()) && (
-                        <p className="text-[var(--text-muted)] text-sm italic mt-1 opacity-70">{item.chap.title}</p>
-                      )}
-                      <div className="w-8 h-px bg-[var(--border)] mx-auto mt-4 rounded-full" />
-                      {!item.hasScenes && (
-                        <button
-                          onClick={() => handleAddScene(item.chap.id)}
-                          className="manuscript-add-scene mt-6 font-sans"
-                        >+ Add {labels.level3}</button>
-                      )}
-                    </div>
-                  )
-                }
+              if (item.type === 'chapter') return (
+                <div key={`chap-${item.chap.id}`} id={`ms-chap-${item.chap.id}`} className="pt-14 pb-8 text-center font-sans">
+                  <h2 className="text-[var(--accent)] text-xs font-black uppercase tracking-[0.5em] mb-1 opacity-80">
+                    {getChapterTitle(item.chap)}
+                  </h2>
+                  {item.chap.title && !item.chap.title.toLowerCase().startsWith(labels.level2.toLowerCase()) && (
+                    <p className="text-[var(--text-muted)] text-sm italic mt-1 opacity-70">{item.chap.title}</p>
+                  )}
+                  <div className="w-8 h-px bg-[var(--border)] mx-auto mt-4 rounded-full" />
+                  {!item.hasScenes && (
+                    <button onClick={() => handleAddScene(item.chap.id)} className="manuscript-add-scene mt-6 font-sans">
+                      + Add {labels.level3}
+                    </button>
+                  )}
+                </div>
+              )
 
-                if (item.type === 'scene') {
-                  const { scene, sceneIndex, chapterSceneCount, chap } = item
-                  const isLastInChapter = sceneIndex === chapterSceneCount - 1
-
-                  return (
-                    <div key={`scene-${scene.id}`}>
-                      {sceneIndex > 0 && (
-                        <div className="py-10 flex items-center justify-center">
-                          <div className="flex gap-3 items-center opacity-25 hover:opacity-60 transition-opacity">
-                            <div className="w-10 h-px bg-[var(--border)]" />
-                            <div className="flex gap-2">
-                              <div className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
-                              <div className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
-                            </div>
-                            <div className="w-10 h-px bg-[var(--border)]" />
+              if (item.type === 'scene') {
+                const { scene, sceneIndex, chapterSceneCount, chap } = item
+                const isLastInChapter = sceneIndex === chapterSceneCount - 1
+                return (
+                  <div key={`scene-${scene.id}`}>
+                    {sceneIndex > 0 && (
+                      <div className="py-10 flex items-center justify-center">
+                        <div className="flex gap-3 items-center opacity-25 hover:opacity-60 transition-opacity">
+                          <div className="w-10 h-px bg-[var(--border)]" />
+                          <div className="flex gap-2">
+                            <div className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)]" />
+                            <div className="w-1 h-1 rounded-full bg-[var(--text-muted)]" />
                           </div>
+                          <div className="w-10 h-px bg-[var(--border)]" />
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      <SceneEditor
-                        scene={scene}
-                        sceneIndex={sceneIndex}
-                        onUpdate={updateSceneContent}
-                        onUpdateScene={updateScene}
-                        onSplit={handleSplitScene}
-                        innerRef={proxy => { editorRefs.current[scene.id] = proxy }}
-                        onFocus={() => setActiveSceneId(scene.id)}
-                        entityMap={entityMap}
-                        onEntityClick={handleEntityClick}
-                        onOpenNotes={() => setNotesOpen(true)}
-                        onNoteClick={handleNoteClick}
-                        formatSettings={formatSettings}
-                      />
+                    <SceneEditor
+                      scene={scene}
+                      sceneIndex={sceneIndex}
+                      onUpdate={handleContentUpdate}
+                      onUpdateScene={updateScene}
+                      onSplit={handleSplitScene}
+                      innerRef={proxy => { editorRefs.current[scene.id] = proxy }}
+                      onFocus={() => setActiveSceneId(scene.id)}
+                      entityMap={entityMap}
+                      onEntityClick={handleEntityClick}
+                      onOpenNotes={() => setActiveSidebarTab('notes')}
+                      onNoteClick={handleNoteClick}
+                      formatSettings={formatSettings}
+                      characterNames={characterNames}
+                      locationNames={locationNames}
+                      onPersistDraft={persistSceneDraftToLocalStorage}
+                    />
 
-                      {isLastInChapter && (
-                        <div className="mt-10 text-center font-sans">
-                          <button
-                            onClick={() => handleAddScene(chap.id)}
-                            className="manuscript-add-scene"
-                          >+ {labels.level3}</button>
-                        </div>
-                      )}
-                    </div>
-                  )
-                }
+                    {isLastInChapter && (
+                      <div className="mt-10 text-center font-sans">
+                        <button onClick={() => handleAddScene(chap.id)} className="manuscript-add-scene">
+                          + {labels.level3}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              }
 
-                return null
-              })}
+              return null
+            })}
 
-              <div className="h-40" />
-            </div>
-          </main>
-        )}
+            {/* Bottom padding for comfortable scrolling */}
+            <div className="h-[40vh]" />
+          </div>
+        </main>
 
-        {/* Notes sidebar — manuscript view only */}
-        {view === 'manuscript' && (
-          <aside
-            className="studio-rail transition-all duration-300 ease-in-out flex-shrink-0 overflow-hidden font-sans"
-            style={{ width: notesOpen ? 264 : 0 }}
-          >
-            <div className="w-[264px] h-full">
-              <NotesPanel
-                scene={activeScene}
-                onUpdateScene={updateScene}
-                onClose={() => setNotesOpen(false)}
-                highlightedSeq={highlightedNoteSeq}
-              />
-            </div>
-          </aside>
-        )}
-
-      </div>
-
-      {/* Outline summary popup */}
-      {outlineOpen && view === 'manuscript' && (
-        <OutlineSummary
+        {/* Right writing sidebar */}
+        <WritingSidebar
+          activePanelId={activeSidebarTab}
+          onSetPanel={setActiveSidebarTab}
           acts={acts}
           chapters={chapters}
           scenes={scenes}
+          addAct={addAct}
+          addChapter={addChapter}
+          addScene={addScene}
+          updateAct={updateAct}
+          updateChapter={updateChapter}
+          updateScene={updateScene}
+          deleteAct={deleteAct}
+          deleteChapter={deleteChapter}
+          deleteScene={deleteScene}
+          moveAct={moveAct}
+          moveChapter={moveChapter}
+          moveScene={moveScene}
+          activeSceneId={activeSceneId}
+          onSelectScene={handleSelectScene}
+          onSelectChapter={handleSelectChapter}
           labels={labels}
-          getChapterTitle={getChapterTitle}
           totalWordCount={totalWordCount}
-          onClose={() => setOutlineOpen(false)}
+          writingGoals={writingGoals}
+          onUpdateGoals={handleUpdateGoals}
+          notesSlot={
+            <NotesPanel
+              scene={activeScene}
+              onUpdateScene={updateScene}
+              onClose={() => setActiveSidebarTab(null)}
+              highlightedSeq={highlightedNoteSeq}
+            />
+          }
+          aiSlot={
+            <AISuggestionPanel
+              activeScene={activeScene}
+              activeNovel={activeNovel}
+              characters={characters}
+              locations={locations}
+              onAppendToScene={handleAppendToScene}
+            />
+          }
+        />
+      </div>
+
+      {/* Template modal */}
+      {templateModalOpen && (
+        <TemplateModal
+          hasExistingContent={acts.length > 0}
+          onClose={() => setTemplateModalOpen(false)}
+          onApply={handleApplyTemplate}
         />
       )}
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        .ms-textarea {
-          width: 100%;
-          background: transparent;
-          color: var(--text-main);
-          min-height: 2.1em;
-          resize: none;
-          outline: none;
-          border: none;
-          padding: 0;
-          margin: 0;
-          overflow: hidden;
-          white-space: pre-wrap;
-        }
-        .ms-textarea::placeholder {
-          color: var(--text-muted);
-          font-style: italic;
-          opacity: 0.45;
-        }
-        .ms-preview {
-          min-height: 2.1em;
-          color: var(--text-main);
-          white-space: pre-wrap;
-          word-break: break-word;
-          cursor: text;
-        }
-        .ms-placeholder {
-          color: var(--text-muted);
-          font-style: italic;
-          opacity: 0.45;
-        }
-        .ms-bullets {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          color: var(--text-main);
-        }
-        .ms-bullets li {
-          padding-left: 1.4em;
-          position: relative;
-        }
-        .ms-bullets li::before {
-          content: '–';
-          position: absolute;
-          left: 0;
-          color: var(--accent);
-          opacity: 0.6;
-        }
-        .ms-entity {
-          color: var(--accent);
-          text-decoration: underline;
-          text-decoration-style: dotted;
-          text-underline-offset: 3px;
-          cursor: pointer;
-          transition: opacity 0.15s;
-        }
-        .ms-entity:hover { opacity: 0.7; }
-        .ms-note-marker {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 15px;
-          height: 15px;
-          background: var(--accent);
-          color: var(--bg-main);
-          border-radius: 50%;
-          font-size: 9px;
-          font-family: system-ui, sans-serif;
-          font-weight: 700;
-          cursor: pointer;
-          margin: 0 1px;
-          vertical-align: super;
-          transition: opacity 0.15s;
-          line-height: 1;
-        }
-        .ms-note-marker:hover { opacity: 0.7; }
-
-        /* Format settings panel */
-        .ms-format-panel {
-          position: absolute;
-          bottom: calc(100% + 6px);
-          left: 0;
-          z-index: 100;
-          min-width: 300px;
-          background: var(--bg-nav);
-          border: 1px solid var(--border);
-          border-radius: 10px;
-          padding: 12px;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .ms-format-panel-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 10px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: var(--text-muted);
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--border);
-        }
-        .ms-format-section {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-        .ms-format-label {
-          font-size: 9px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .ms-format-row {
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-        }
-        .ms-format-chip {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 3px 9px;
-          border: 1px solid var(--border);
-          border-radius: 5px;
-          font-size: 11px;
-          color: var(--text-muted);
-          background: transparent;
-          cursor: pointer;
-          transition: all 0.12s;
-          white-space: nowrap;
-        }
-        .ms-format-chip:hover {
-          border-color: var(--accent);
-          color: var(--text-main);
-        }
-        .ms-format-chip.active {
-          background: var(--accent);
-          border-color: var(--accent);
-          color: var(--bg-main);
-        }
-        .ms-format-chip:disabled {
-          opacity: 0.35;
-          cursor: not-allowed;
-        }
-        .ms-range {
-          -webkit-appearance: none;
-          appearance: none;
-          height: 3px;
-          background: var(--border);
-          border-radius: 2px;
-          outline: none;
-          cursor: pointer;
-        }
-        .ms-range::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: var(--accent);
-          cursor: pointer;
-        }
-        .ms-range::-moz-range-thumb {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: var(--accent);
-          border: none;
-          cursor: pointer;
-        }
-        /* Toggle switch */
-        .ms-toggle {
-          position: relative;
-          width: 28px;
-          height: 16px;
-          border-radius: 8px;
-          background: var(--border);
-          border: none;
-          cursor: pointer;
-          transition: background 0.2s;
-          flex-shrink: 0;
-        }
-        .ms-toggle.active {
-          background: var(--accent);
-        }
-        .ms-toggle-thumb {
-          position: absolute;
-          top: 2px;
-          left: 2px;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: var(--text-main);
-          transition: transform 0.2s;
-        }
-        .ms-toggle.active .ms-toggle-thumb {
-          transform: translateX(12px);
-        }
-      `}} />
     </div>
   )
 }

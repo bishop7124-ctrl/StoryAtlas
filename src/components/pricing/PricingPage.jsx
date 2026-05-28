@@ -46,7 +46,7 @@ const FEATURE_ROWS = [
 const FAQ_ITEMS = [
   {
     q: 'What does "Lifetime Launch" actually cover?',
-    a: 'Lifetime Launch gives you permanent access to the current launch-era version of Your Own World. You\'ll never be charged again, and the core tool is yours to keep. It does not guarantee access to every future major platform update — that\'s what Premium Plus is for.',
+    a: 'Lifetime Launch gives you permanent access to the fully stacked launch version of Your Own World. You\'ll never be charged again, and the completed launch tool is yours to keep. It does not guarantee access to every future major platform update — that\'s what Premium Plus is for.',
   },
   {
     q: 'What\'s included in "future updates" on Premium Plus?',
@@ -338,7 +338,7 @@ export default function PricingPage({ onGetStarted, onSignIn, user }) {
       '@context': 'https://schema.org',
       '@type': 'Product',
       name: 'Your Own World — Worldbuilding & Writing Software',
-      description: 'All-in-one worldbuilding and writing platform for novelists, fantasy writers, and D&D dungeon masters.',
+      description: 'All-in-one worldbuilding and writing platform for novelists and fantasy writers.',
       brand: { '@type': 'Brand', name: 'Your Own World' },
       offers: PLANS.map(p => ({
         '@type': 'Offer',

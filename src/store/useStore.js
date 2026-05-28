@@ -6,6 +6,15 @@ const load = (key, def) => {
   try { return JSON.parse(localStorage.getItem(key)) ?? def }
   catch { return def }
 }
+const LOCAL_WRITE_AT_KEY = 'nf_localWriteAt'
+const loadLocalWriteAt = () => {
+  try { return Number(localStorage.getItem(LOCAL_WRITE_AT_KEY) || 0) || 0 }
+  catch { return 0 }
+}
+const markLocalWrite = () => {
+  try { localStorage.setItem(LOCAL_WRITE_AT_KEY, String(Date.now())) }
+  catch { /* Ignore metadata writes; the actual content save is handled separately. */ }
+}
 const save = (key, val) => {
   try {
     localStorage.setItem(key, JSON.stringify(val))
@@ -48,10 +57,68 @@ const withSceneContentHistory = (scene, content, now = Date.now()) => {
   return { ...scene, content, lastModified: now, wordHistory }
 }
 
+const getLocalSnapshot = () => ({
+  novels: load('nf_novels', []),
+  characters: load('nf_characters', []),
+  factions: load('nf_factions', []),
+  locations: load('nf_locations', []),
+  timeline: load('nf_timeline', []),
+  worldHistory: load('nf_worldHistory', []),
+  acts: load('nf_acts', []),
+  chapters: load('nf_chapters', []),
+  scenes: load('nf_scenes', []),
+  loreEntries: load('nf_loreEntries', []),
+  ideaEntries: load('nf_ideaEntries', []),
+  maps: load('nf_maps', []),
+  activeMapByNovel: load('nf_activeMapByNovel', {}),
+  whiteboards: load('nf_whiteboards', []),
+  series: load('nf_series', []),
+  storySchedule: load('nf_storySchedule', []),
+  currentYear: load('nf_currentYear', 0),
+  activeNovelId: load('nf_activeNovel', null),
+})
+
+const buildAppDataPayload = (data) => ({
+  novels: data.novels ?? [],
+  characters: data.characters ?? [],
+  factions: data.factions ?? [],
+  locations: data.locations ?? [],
+  timeline: data.timeline ?? [],
+  worldHistory: data.worldHistory ?? [],
+  acts: data.acts ?? [],
+  chapters: data.chapters ?? [],
+  loreEntries: data.loreEntries ?? [],
+  ideaEntries: data.ideaEntries ?? [],
+  maps: data.maps ?? [],
+  activeMapByNovel: data.activeMapByNovel ?? {},
+  whiteboards: data.whiteboards ?? [],
+  series: data.series ?? [],
+  storySchedule: data.storySchedule ?? [],
+  currentYear: data.currentYear ?? 0,
+  activeNovelId: data.activeNovelId ?? null,
+})
+
 // Simple debounce helper: returns a function that delays calling fn by ms
 function debounce(fn, ms) {
   let timer
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms) }
+}
+
+function createKeyedDebounce(fn, ms) {
+  const timers = new Map()
+  const debounced = (key, ...args) => {
+    if (timers.has(key)) clearTimeout(timers.get(key))
+    timers.set(key, setTimeout(() => {
+      timers.delete(key)
+      fn(key, ...args)
+    }, ms))
+  }
+  debounced.cancel = (key) => {
+    if (!timers.has(key)) return
+    clearTimeout(timers.get(key))
+    timers.delete(key)
+  }
+  return debounced
 }
 
 export function useStore(userId = null, options = {}) {
@@ -76,6 +143,17 @@ export function useStore(userId = null, options = {}) {
   const [series, setSeries] = useState(() => load('nf_series', []))
   const [storySchedule, setStorySchedule] = useState(() => load('nf_storySchedule', []))
 
+  const charactersRef = useRef(characters)
+  const locationsRef = useRef(locations)
+  const timelineRef = useRef(timeline)
+  const worldHistoryRef = useRef(worldHistory)
+  const actsRef = useRef(acts)
+  const chaptersRef = useRef(chapters)
+  const scenesRef = useRef(scenes)
+  const loreEntriesRef = useRef(loreEntries)
+  const ideaEntriesRef = useRef(ideaEntries)
+  const storyScheduleRef = useRef(storySchedule)
+
   const [selectedCharacterId, setSelectedCharacterId] = useState(null)
   const [selectedLocationId, setSelectedLocationId] = useState(null)
   const [selectedLoreEntryId, setSelectedLoreEntryId] = useState(null)
@@ -93,25 +171,34 @@ export function useStore(userId = null, options = {}) {
     importing.current = Boolean(userId)
   }, [userId])
 
+  const commitLocal = useCallback((ref, setter, key, updater) => {
+    const next = typeof updater === 'function' ? updater(ref.current) : updater
+    ref.current = next
+    markLocalWrite()
+    save(key, next)
+    setter(next)
+    return next
+  }, [])
+
   // localStorage persistence
   useEffect(() => save('nf_novels', novels), [novels])
   useEffect(() => save('nf_activeNovel', activeNovelId), [activeNovelId])
-  useEffect(() => save('nf_characters', characters), [characters])
+  useEffect(() => { charactersRef.current = characters; save('nf_characters', characters) }, [characters])
   useEffect(() => save('nf_factions', factions), [factions])
-  useEffect(() => save('nf_locations', locations), [locations])
-  useEffect(() => save('nf_timeline', timeline), [timeline])
-  useEffect(() => save('nf_worldHistory', worldHistory), [worldHistory])
+  useEffect(() => { locationsRef.current = locations; save('nf_locations', locations) }, [locations])
+  useEffect(() => { timelineRef.current = timeline; save('nf_timeline', timeline) }, [timeline])
+  useEffect(() => { worldHistoryRef.current = worldHistory; save('nf_worldHistory', worldHistory) }, [worldHistory])
   useEffect(() => save('nf_currentYear', currentYear), [currentYear])
-  useEffect(() => save('nf_acts', acts), [acts])
-  useEffect(() => save('nf_chapters', chapters), [chapters])
-  useEffect(() => save('nf_scenes', scenes), [scenes])
-  useEffect(() => save('nf_loreEntries', loreEntries), [loreEntries])
-  useEffect(() => save('nf_ideaEntries', ideaEntries), [ideaEntries])
+  useEffect(() => { actsRef.current = acts; save('nf_acts', acts) }, [acts])
+  useEffect(() => { chaptersRef.current = chapters; save('nf_chapters', chapters) }, [chapters])
+  useEffect(() => { scenesRef.current = scenes; save('nf_scenes', scenes) }, [scenes])
+  useEffect(() => { loreEntriesRef.current = loreEntries; save('nf_loreEntries', loreEntries) }, [loreEntries])
+  useEffect(() => { ideaEntriesRef.current = ideaEntries; save('nf_ideaEntries', ideaEntries) }, [ideaEntries])
   useEffect(() => save('nf_maps', maps), [maps])
   useEffect(() => save('nf_activeMapByNovel', activeMapByNovel), [activeMapByNovel])
   useEffect(() => save('nf_whiteboards', whiteboards), [whiteboards])
   useEffect(() => save('nf_series', series), [series])
-  useEffect(() => save('nf_storySchedule', storySchedule), [storySchedule])
+  useEffect(() => { storyScheduleRef.current = storySchedule; save('nf_storySchedule', storySchedule) }, [storySchedule])
 
   // Debounced Firestore save for all non-scene data (2s delay)
   const debouncedSaveAppData = useMemo(
@@ -121,19 +208,19 @@ export function useStore(userId = null, options = {}) {
 
   // Debounced Firestore save for individual scenes (1s delay)
   const debouncedSaveScene = useMemo(
-    () => debounce((uid, scene) => saveSceneDoc(uid, scene).catch(console.error), 1000),
+    () => createKeyedDebounce((sceneId, uid, scene) => saveSceneDoc(uid, scene).catch(console.error), 1000),
     []
   )
 
   // Sync non-scene data to Firestore whenever anything changes
   useEffect(() => {
     if (!userId || importing.current || !remoteReady.current) return
-    debouncedSaveAppData(userId, {
+    debouncedSaveAppData(userId, buildAppDataPayload({
       novels, characters, factions, locations, timeline,
       worldHistory, acts, chapters, loreEntries, ideaEntries,
       maps, activeMapByNovel, whiteboards, series, storySchedule,
-      currentYear, activeNovelId
-    })
+      currentYear, activeNovelId,
+    }))
   }, [userId, novels, characters, factions, locations, timeline,
       worldHistory, acts, chapters, loreEntries, ideaEntries, maps, activeMapByNovel, whiteboards, series, storySchedule, currentYear, activeNovelId, debouncedSaveAppData])
 
@@ -141,30 +228,67 @@ export function useStore(userId = null, options = {}) {
   const importData = useCallback((data) => {
     importing.current = true
     remoteReady.current = false
-    setNovels(data.novels ?? [])
-    setCharacters(data.characters ?? [])
-    setFactions(data.factions ?? [])
-    setLocations(data.locations ?? [])
-    setTimeline(data.timeline ?? [])
-    setWorldHistory(data.worldHistory ?? [])
-    setActs(data.acts ?? [])
-    setChapters(data.chapters ?? [])
-    setScenes(data.scenes ?? [])
-    setLoreEntries(data.loreEntries ?? [])
-    setIdeaEntries(data.ideaEntries ?? [])
-    setMaps(data.maps ?? [])
-    setActiveMapByNovel(data.activeMapByNovel ?? {})
-    setWhiteboards(data.whiteboards ?? [])
-    setSeries(data.series ?? [])
-    setStorySchedule(data.storySchedule ?? [])
-    setCurrentYear(data.currentYear ?? 0)
-    setActiveNovelId(data.activeNovelId ?? null)
+    const localWriteAt = loadLocalWriteAt()
+    const remoteSavedAt = Number(data?._savedAt || 0) || 0
+    const shouldPreferLocal = localWriteAt > remoteSavedAt
+    const sourceData = shouldPreferLocal ? getLocalSnapshot() : data
+
+    if (shouldPreferLocal && userId) {
+      const snapshot = getLocalSnapshot()
+      saveAppData(userId, buildAppDataPayload(snapshot)).catch(console.error)
+      ;(snapshot.scenes ?? []).forEach(scene => {
+        saveSceneDoc(userId, scene).catch(console.error)
+      })
+    }
+
+    // Migrate orphan worldHistory entries into timeline so both sections share one store
+    const rawTimeline = sourceData.timeline ?? []
+    const rawHistory = sourceData.worldHistory ?? []
+    const linkedHistoryIds = new Set(rawTimeline.map(e => e.worldHistoryEntryId).filter(Boolean))
+    const orphans = rawHistory.filter(h => !h.timelineEventId && !linkedHistoryIds.has(h.id))
+    const mergedTimeline = orphans.length > 0
+      ? [
+          ...rawTimeline,
+          ...orphans.map(h => ({
+            id: uid(),
+            novelId: h.novelId,
+            createdAt: h.createdAt,
+            title: h.title,
+            date: h.dateRange || '',
+            era: h.era || '',
+            description: h.content || '',
+            category: h.category || '',
+            tags: h.tags || [],
+            linkedCharacters: [],
+            linkedLocations: [],
+          })),
+        ]
+      : rawTimeline
+
+    setNovels(sourceData.novels ?? [])
+    setCharacters(sourceData.characters ?? [])
+    setFactions(sourceData.factions ?? [])
+    setLocations(sourceData.locations ?? [])
+    setTimeline(mergedTimeline)
+    setWorldHistory(rawHistory)
+    setActs(sourceData.acts ?? [])
+    setChapters(sourceData.chapters ?? [])
+    setScenes(sourceData.scenes ?? [])
+    setLoreEntries(sourceData.loreEntries ?? [])
+    setIdeaEntries(sourceData.ideaEntries ?? [])
+    setMaps(sourceData.maps ?? [])
+    setActiveMapByNovel(sourceData.activeMapByNovel ?? {})
+    setWhiteboards(sourceData.whiteboards ?? [])
+    setSeries(sourceData.series ?? [])
+    setStorySchedule(sourceData.storySchedule ?? [])
+    setCurrentYear(sourceData.currentYear ?? 0)
+    setActiveNovelId(sourceData.activeNovelId ?? null)
     // Allow effects to settle before re-enabling Firestore saves
     setTimeout(() => {
       importing.current = false
       remoteReady.current = true
     }, 500)
-  }, [])
+  }, [userId])
 
   const finishRemoteLoad = useCallback(() => {
     importing.current = false
@@ -360,14 +484,16 @@ export function useStore(userId = null, options = {}) {
   }, [activeNovelId])
 
   const addAct = (title) => {
-    const newAct = { id: uid(), novelId: activeNovelId, title, synopsis: '', order: novelActs.length }
-    setActs(prev => [...prev, newAct])
+    const order = actsRef.current.filter(a => a.novelId === activeNovelId).length
+    const newAct = { id: uid(), novelId: activeNovelId, title, synopsis: '', order }
+    commitLocal(actsRef, setActs, 'nf_acts', prev => [...prev, newAct])
     return newAct
   }
 
   const addChapter = (actId, title) => {
-    const newChap = { id: uid(), novelId: activeNovelId, actId, title, synopsis: '', order: novelChapters.length }
-    setChapters(prev => [...prev, newChap])
+    const order = chaptersRef.current.filter(c => c.novelId === activeNovelId).length
+    const newChap = { id: uid(), novelId: activeNovelId, actId, title, synopsis: '', order }
+    commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => [...prev, newChap])
     return newChap
   }
 
@@ -379,16 +505,16 @@ export function useStore(userId = null, options = {}) {
       title,
       synopsis: '',
       content: '',
-      order: novelScenes.length,
+      order: scenesRef.current.filter(s => s.novelId === activeNovelId).length,
       lastModified: Date.now() // eslint-disable-line react-hooks/purity
     }
-    setScenes(prev => [...prev, newScene])
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => [...prev, newScene])
     if (userId) saveSceneDoc(userId, newScene).catch(console.error)
     return newScene
   }
 
   const reorderAct = (id, direction) => {
-    setActs(prev => {
+    commitLocal(actsRef, setActs, 'nf_acts', prev => {
       const scoped = prev.filter(a => a.novelId === activeNovelId).sort((a, b) => a.order - b.order)
       const idx = scoped.findIndex(a => a.id === id)
       const swapIdx = direction === 'up' ? idx - 1 : idx + 1
@@ -404,7 +530,7 @@ export function useStore(userId = null, options = {}) {
   }
 
   const moveAct = useCallback((actId, toIndex) => {
-    setActs(prev => {
+    commitLocal(actsRef, setActs, 'nf_acts', prev => {
       const scoped = prev.filter(a => a.novelId === activeNovelId).sort((a, b) => a.order - b.order)
       const others = prev.filter(a => a.novelId !== activeNovelId)
       const fromIndex = scoped.findIndex(a => a.id === actId)
@@ -415,10 +541,10 @@ export function useStore(userId = null, options = {}) {
       reordered.splice(clampedTo, 0, item)
       return [...others, ...reordered.map((a, i) => ({ ...a, order: i }))]
     })
-  }, [activeNovelId])
+  }, [activeNovelId, commitLocal])
 
   const reorderChapter = (id, direction) => {
-    setChapters(prev => {
+    commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => {
       const chapter = prev.find(c => c.id === id)
       if (!chapter) return prev
       const scoped = prev.filter(c => c.actId === chapter.actId).sort((a, b) => a.order - b.order)
@@ -436,7 +562,7 @@ export function useStore(userId = null, options = {}) {
   }
 
   const moveChapter = useCallback((chapterId, toActId, toIndex) => {
-    setChapters(prev => {
+    commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => {
       const chapter = prev.find(c => c.id === chapterId)
       if (!chapter) return prev
       const updatedChapter = { ...chapter, actId: toActId }
@@ -453,10 +579,10 @@ export function useStore(userId = null, options = {}) {
       const others = prev.filter(c => c.actId !== toActId)
       return [...others, ...reinserted]
     })
-  }, [])
+  }, [commitLocal])
 
   const reorderScene = (id, direction) => {
-    setScenes(prev => {
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
       const scene = prev.find(s => s.id === id)
       if (!scene) return prev
       const scoped = prev.filter(s => s.chapterId === scene.chapterId).sort((a, b) => a.order - b.order)
@@ -474,7 +600,7 @@ export function useStore(userId = null, options = {}) {
   }
 
   const moveScene = useCallback((sceneId, toChapterId, toIndex) => {
-    setScenes(prev => {
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
       const scene = prev.find(s => s.id === sceneId)
       if (!scene) return prev
       const updatedScene = { ...scene, chapterId: toChapterId }
@@ -491,53 +617,64 @@ export function useStore(userId = null, options = {}) {
       const others = prev.filter(s => s.chapterId !== toChapterId)
       return [...others, ...reinserted]
     })
-  }, [])
+  }, [commitLocal])
 
   const updateSceneContent = useCallback((sceneId, content) => {
-    setScenes(prev => prev.map(s => {
-      if (s.id !== sceneId) return s
-      const updated = withSceneContentHistory(s, content)
-      if (userId) debouncedSaveScene(userId, updated)
-      return updated
-    }))
-  }, [userId, debouncedSaveScene])
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
+      return prev.map(s => {
+        if (s.id !== sceneId) return s
+        const updated = withSceneContentHistory(s, content)
+        if (userId) debouncedSaveScene(sceneId, userId, updated)
+        return updated
+      })
+    })
+  }, [userId, debouncedSaveScene, commitLocal])
 
   const deleteAct = (id) => {
-    const chapterIds = chapters.filter(c => c.actId === id).map(c => c.id)
-    const sceneIds = scenes.filter(s => chapterIds.includes(s.chapterId)).map(s => s.id)
-    setActs(prev => prev.filter(a => a.id !== id))
-    setChapters(prev => prev.filter(c => c.actId !== id))
-    setScenes(prev => prev.filter(s => {
-      const keep = !sceneIds.includes(s.id)
-      if (!keep && userId) deleteSceneDoc(userId, s.id).catch(console.error)
-      return keep
-    }))
+    const chapterIds = chaptersRef.current.filter(c => c.actId === id).map(c => c.id)
+    const sceneIds = scenesRef.current.filter(s => chapterIds.includes(s.chapterId)).map(s => s.id)
+    sceneIds.forEach(sceneId => debouncedSaveScene.cancel(sceneId))
+    commitLocal(actsRef, setActs, 'nf_acts', prev => prev.filter(a => a.id !== id))
+    commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => prev.filter(c => c.actId !== id))
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
+      return prev.filter(s => {
+        const keep = !sceneIds.includes(s.id)
+        if (!keep && userId) deleteSceneDoc(userId, s.id).catch(console.error)
+        return keep
+      })
+    })
   }
   const deleteChapter = (id) => {
-    const sceneIds = scenes.filter(s => s.chapterId === id).map(s => s.id)
-    setChapters(prev => prev.filter(c => c.id !== id))
-    setScenes(prev => prev.filter(s => {
-      const keep = !sceneIds.includes(s.id)
-      if (!keep && userId) deleteSceneDoc(userId, s.id).catch(console.error)
-      return keep
-    }))
+    const sceneIds = scenesRef.current.filter(s => s.chapterId === id).map(s => s.id)
+    sceneIds.forEach(sceneId => debouncedSaveScene.cancel(sceneId))
+    commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => prev.filter(c => c.id !== id))
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
+      return prev.filter(s => {
+        const keep = !sceneIds.includes(s.id)
+        if (!keep && userId) deleteSceneDoc(userId, s.id).catch(console.error)
+        return keep
+      })
+    })
   }
   const deleteScene = (id) => {
-    setScenes(prev => prev.filter(s => s.id !== id))
+    debouncedSaveScene.cancel(id)
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => prev.filter(s => s.id !== id))
     if (userId) deleteSceneDoc(userId, id).catch(console.error)
   }
-  const updateAct = (id, data) => setActs(prev => prev.map(a => a.id === id ? { ...a, ...data } : a))
-  const updateChapter = (id, data) => setChapters(prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
+  const updateAct = (id, data) => commitLocal(actsRef, setActs, 'nf_acts', prev => prev.map(a => a.id === id ? { ...a, ...data } : a))
+  const updateChapter = (id, data) => commitLocal(chaptersRef, setChapters, 'nf_chapters', prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
   const updateScene = (id, data) => {
-    setScenes(prev => prev.map(s => {
-      if (s.id !== id) return s
-      const hasContent = Object.prototype.hasOwnProperty.call(data, 'content')
-      const updated = hasContent && data.content !== s.content
-        ? withSceneContentHistory({ ...s, ...data }, data.content)
-        : { ...s, ...data }
-      if (userId) debouncedSaveScene(userId, updated)
-      return updated
-    }))
+    commitLocal(scenesRef, setScenes, 'nf_scenes', prev => {
+      return prev.map(s => {
+        if (s.id !== id) return s
+        const hasContent = Object.prototype.hasOwnProperty.call(data, 'content')
+        const updated = hasContent && data.content !== s.content
+          ? withSceneContentHistory({ ...s, ...data }, data.content)
+          : { ...s, ...data }
+        if (userId) debouncedSaveScene(id, userId, updated)
+        return updated
+      })
+    })
   }
 
   const saveCharacter = (data, id) => {
@@ -545,7 +682,7 @@ export function useStore(userId = null, options = {}) {
     const childIds = data.childIds || []
     const parentIds = data.parentIds || []
     const spouseIds = data.spouseIds || []
-    setCharacters(prev => {
+    commitLocal(charactersRef, setCharacters, 'nf_characters', prev => {
       const next = id
         ? prev.map(c => c.id === id ? { ...c, ...data } : c)
         : [...prev, { id: characterId, novelId: activeNovelId, ...data }]
@@ -593,19 +730,58 @@ export function useStore(userId = null, options = {}) {
     })
     return characterId
   }
-  const deleteCharacter = (id) => setCharacters(prev => prev.filter(c => c.id !== id))
+  const deleteCharacter = (id) => {
+    commitLocal(charactersRef, setCharacters, 'nf_characters', prev => {
+      return prev
+        .filter(c => c.id !== id)
+        .map(c => ({
+          ...c,
+          childIds: (c.childIds || []).filter(childId => childId !== id),
+          parentIds: (c.parentIds || []).filter(parentId => parentId !== id),
+          spouseIds: (c.spouseIds || []).filter(spouseId => spouseId !== id),
+          relationships: (c.relationships || []).filter(rel => rel.characterId !== id),
+        }))
+    })
+    commitLocal(loreEntriesRef, setLoreEntries, 'nf_loreEntries', prev => {
+      return prev.map(entry => ({
+        ...entry,
+        characterIds: (entry.characterIds || []).filter(characterId => characterId !== id),
+      }))
+    })
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => {
+      return prev.map(event => ({
+        ...event,
+        linkedCharacters: (event.linkedCharacters || []).filter(characterId => characterId !== id),
+      }))
+    })
+  }
 
   const saveLocation = (data, id) => {
     if (id) {
-      setLocations(prev => prev.map(l => l.id === id ? { ...l, ...data } : l))
-      return locations.find(l => l.id === id)
+      const updated = { ...(locationsRef.current.find(l => l.id === id) || { id, novelId: activeNovelId }), ...data }
+      commitLocal(locationsRef, setLocations, 'nf_locations', prev => prev.map(l => l.id === id ? { ...l, ...data } : l))
+      return updated
     } else {
       const newLoc = { id: uid(), novelId: activeNovelId, ...data }
-      setLocations(prev => [...prev, newLoc])
+      commitLocal(locationsRef, setLocations, 'nf_locations', prev => [...prev, newLoc])
       return newLoc
     }
   }
-  const deleteLocation = (id) => setLocations(prev => prev.filter(l => l.id !== id))
+  const deleteLocation = (id) => {
+    commitLocal(locationsRef, setLocations, 'nf_locations', prev => prev.filter(l => l.id !== id))
+    commitLocal(loreEntriesRef, setLoreEntries, 'nf_loreEntries', prev => {
+      return prev.map(entry => ({
+        ...entry,
+        locationIds: (entry.locationIds || []).filter(locationId => locationId !== id),
+      }))
+    })
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => {
+      return prev.map(event => ({
+        ...event,
+        linkedLocations: (event.linkedLocations || []).filter(locationId => locationId !== id),
+      }))
+    })
+  }
 
   const addEvent = (data, options = {}) => {
     const eventId = uid()
@@ -613,12 +789,14 @@ export function useStore(userId = null, options = {}) {
     const historyId = data.linkedHistoryEntryId || (shouldCreateHistory ? uid() : null)
     const createdAt = Date.now() // eslint-disable-line react-hooks/purity
     const event = { id: eventId, novelId: activeNovelId, createdAt, ...data, worldHistoryEntryId: historyId }
-    setTimeline(prev => [...prev, event])
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => [...prev, event])
     if (data.linkedHistoryEntryId) {
-      setWorldHistory(prev => prev.map(h => h.id === data.linkedHistoryEntryId
+      commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => {
+        return prev.map(h => h.id === data.linkedHistoryEntryId
         ? { ...h, timelineEventId: eventId }
         : h
-      ))
+        )
+      })
     } else if (shouldCreateHistory) {
       const historyEntry = {
         id: historyId,
@@ -632,53 +810,55 @@ export function useStore(userId = null, options = {}) {
         category: data.category ?? data.type ?? '',
         tags: data.tags ?? [],
       }
-      setWorldHistory(prev => [...prev, historyEntry])
+      commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => [...prev, historyEntry])
     }
     return event
   }
   const updateEvent = (id, data) => {
     const linkedHistoryId = data.linkedHistoryEntryId ?? data.worldHistoryEntryId
-    setTimeline(prev => prev.map(e => e.id === id ? { ...e, ...data, worldHistoryEntryId: linkedHistoryId ?? e.worldHistoryEntryId ?? null } : e))
-    setWorldHistory(prev => prev.map(h => {
-      if (linkedHistoryId && h.timelineEventId === id && h.id !== linkedHistoryId) {
-        return { ...h, timelineEventId: null }
-      }
-      if (h.timelineEventId === id || (linkedHistoryId && h.id === linkedHistoryId)) {
-        return {
-          ...h,
-          timelineEventId: id,
-          title: data.title ?? h.title,
-          era: data.era ?? h.era,
-          dateRange: data.date ?? data.dateRange ?? h.dateRange,
-          content: data.description ?? data.content ?? h.content,
-          category: data.category ?? data.type ?? h.category,
-          tags: data.tags ?? h.tags,
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.map(e => e.id === id ? { ...e, ...data, worldHistoryEntryId: linkedHistoryId ?? e.worldHistoryEntryId ?? null } : e))
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => {
+      return prev.map(h => {
+        if (linkedHistoryId && h.timelineEventId === id && h.id !== linkedHistoryId) {
+          return { ...h, timelineEventId: null }
         }
-      }
-      return h
-    }))
+        if (h.timelineEventId === id || (linkedHistoryId && h.id === linkedHistoryId)) {
+          return {
+            ...h,
+            timelineEventId: id,
+            title: data.title ?? h.title,
+            era: data.era ?? h.era,
+            dateRange: data.date ?? data.dateRange ?? h.dateRange,
+            content: data.description ?? data.content ?? h.content,
+            category: data.category ?? data.type ?? h.category,
+            tags: data.tags ?? h.tags,
+          }
+        }
+        return h
+      })
+    })
   }
   const deleteEvent = (id) => {
-    setTimeline(prev => prev.filter(e => e.id !== id))
-    setWorldHistory(prev => prev.map(h => h.timelineEventId === id ? { ...h, timelineEventId: null } : h))
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.filter(e => e.id !== id))
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.map(h => h.timelineEventId === id ? { ...h, timelineEventId: null } : h))
   }
 
   const addScheduleEvent = (data) => {
     const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), category: 'scene', duration: 1, tags: [], linkedCharacters: [], linkedLocations: [], ...data } // eslint-disable-line react-hooks/purity
-    setStorySchedule(prev => [...prev, entry])
+    commitLocal(storyScheduleRef, setStorySchedule, 'nf_storySchedule', prev => [...prev, entry])
     return entry
   }
-  const updateScheduleEvent = (id, data) => setStorySchedule(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
-  const deleteScheduleEvent = (id) => setStorySchedule(prev => prev.filter(e => e.id !== id))
+  const updateScheduleEvent = (id, data) => commitLocal(storyScheduleRef, setStorySchedule, 'nf_storySchedule', prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
+  const deleteScheduleEvent = (id) => commitLocal(storyScheduleRef, setStorySchedule, 'nf_storySchedule', prev => prev.filter(e => e.id !== id))
 
   const addHistoryEntry = (data, options = {}) => {
     const createdAt = Date.now() // eslint-disable-line react-hooks/purity
     const timelineEventId = data.linkedTimelineEventId || data.timelineEventId || null
     const entryId = uid()
     const entry = { id: entryId, novelId: activeNovelId, createdAt, ...data, timelineEventId }
-    setWorldHistory(prev => [...prev, entry])
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => [...prev, entry])
     if (timelineEventId) {
-      setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: entry.id } : e))
+      commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: entry.id } : e))
     } else if (options.createTimeline) {
       const eventId = uid()
       const event = {
@@ -695,51 +875,53 @@ export function useStore(userId = null, options = {}) {
         worldHistoryEntryId: entryId,
       }
       const linkedEntry = { ...entry, timelineEventId: eventId }
-      setTimeline(prev => [...prev, event])
-      setWorldHistory(prev => prev.map(h => h.id === entryId ? linkedEntry : h))
+      commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => [...prev, event])
+      commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.map(h => h.id === entryId ? linkedEntry : h))
     }
     return entry
   }
   const updateHistoryEntry = (id, data) => {
     const linkedTimelineId = data.linkedTimelineEventId ?? data.timelineEventId
-    setWorldHistory(prev => prev.map(h => h.id === id ? { ...h, ...data, timelineEventId: linkedTimelineId ?? h.timelineEventId ?? null } : h))
-    setTimeline(prev => prev.map(e => {
-      if (linkedTimelineId && e.id === linkedTimelineId) return { ...e, worldHistoryEntryId: id }
-      if (e.worldHistoryEntryId === id && linkedTimelineId && e.id !== linkedTimelineId) return { ...e, worldHistoryEntryId: null }
-      if (e.worldHistoryEntryId === id) {
-        return {
-          ...e,
-          title: data.title ?? e.title,
-          date: data.dateRange ?? data.date ?? e.date,
-          description: data.content ?? data.description ?? e.description,
-          category: data.category ?? data.type ?? e.category,
-          tags: data.tags ?? e.tags,
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.map(h => h.id === id ? { ...h, ...data, timelineEventId: linkedTimelineId ?? h.timelineEventId ?? null } : h))
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => {
+      return prev.map(e => {
+        if (linkedTimelineId && e.id === linkedTimelineId) return { ...e, worldHistoryEntryId: id }
+        if (e.worldHistoryEntryId === id && linkedTimelineId && e.id !== linkedTimelineId) return { ...e, worldHistoryEntryId: null }
+        if (e.worldHistoryEntryId === id) {
+          return {
+            ...e,
+            title: data.title ?? e.title,
+            date: data.dateRange ?? data.date ?? e.date,
+            description: data.content ?? data.description ?? e.description,
+            category: data.category ?? data.type ?? e.category,
+            tags: data.tags ?? e.tags,
+          }
         }
-      }
-      return e
-    }))
+        return e
+      })
+    })
   }
   const deleteHistoryEntry = (id) => {
-    setWorldHistory(prev => prev.filter(h => h.id !== id))
-    setTimeline(prev => prev.map(e => e.worldHistoryEntryId === id ? { ...e, worldHistoryEntryId: null } : e))
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.filter(h => h.id !== id))
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.map(e => e.worldHistoryEntryId === id ? { ...e, worldHistoryEntryId: null } : e))
   }
   const linkTimelineHistory = (timelineEventId, historyEntryId) => {
     if (!timelineEventId || !historyEntryId) return
-    setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: historyEntryId } : e))
-    setWorldHistory(prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId } : (h.timelineEventId === timelineEventId ? { ...h, timelineEventId: null } : h)))
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: historyEntryId } : e))
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId } : (h.timelineEventId === timelineEventId ? { ...h, timelineEventId: null } : h)))
   }
   const unlinkTimelineHistory = (timelineEventId, historyEntryId) => {
-    setTimeline(prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: null } : e))
-    setWorldHistory(prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId: null } : h))
+    commitLocal(timelineRef, setTimeline, 'nf_timeline', prev => prev.map(e => e.id === timelineEventId ? { ...e, worldHistoryEntryId: null } : e))
+    commitLocal(worldHistoryRef, setWorldHistory, 'nf_worldHistory', prev => prev.map(h => h.id === historyEntryId ? { ...h, timelineEventId: null } : h))
   }
 
   const addLoreEntry = (data) => {
     const entry = { id: uid(), novelId: activeNovelId, createdAt: Date.now(), characterIds: [], category: '', content: '', ...data } // eslint-disable-line react-hooks/purity
-    setLoreEntries(prev => [...prev, entry])
+    commitLocal(loreEntriesRef, setLoreEntries, 'nf_loreEntries', prev => [...prev, entry])
     return entry
   }
-  const updateLoreEntry = (id, data) => setLoreEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
-  const deleteLoreEntry = (id) => setLoreEntries(prev => prev.filter(e => e.id !== id))
+  const updateLoreEntry = (id, data) => commitLocal(loreEntriesRef, setLoreEntries, 'nf_loreEntries', prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
+  const deleteLoreEntry = (id) => commitLocal(loreEntriesRef, setLoreEntries, 'nf_loreEntries', prev => prev.filter(e => e.id !== id))
 
   const addIdeaEntry = (data) => {
     const entry = {
@@ -753,7 +935,7 @@ export function useStore(userId = null, options = {}) {
       group: '',
       tags: [],
       status: 'raw',
-      order: novelIdeaEntries.length,
+      order: ideaEntriesRef.current.filter(entry => entry.novelId === activeNovelId).length,
       isFavourite: false,
       isPinned: false,
       aiExpanded: false,
@@ -762,11 +944,11 @@ export function useStore(userId = null, options = {}) {
       convertedTo: null,
       ...data,
     }
-    setIdeaEntries(prev => [...prev, entry])
+    commitLocal(ideaEntriesRef, setIdeaEntries, 'nf_ideaEntries', prev => [...prev, entry])
     return entry
   }
-  const updateIdeaEntry = (id, data) => setIdeaEntries(prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
-  const deleteIdeaEntry = (id) => setIdeaEntries(prev => prev.filter(e => e.id !== id))
+  const updateIdeaEntry = (id, data) => commitLocal(ideaEntriesRef, setIdeaEntries, 'nf_ideaEntries', prev => prev.map(e => e.id === id ? { ...e, ...data } : e))
+  const deleteIdeaEntry = (id) => commitLocal(ideaEntriesRef, setIdeaEntries, 'nf_ideaEntries', prev => prev.filter(e => e.id !== id))
 
   const addMap = (name, mapType) => {
     const map = { id: uid(), novelId: activeNovelId, name, mapType: mapType || 'regional', mapPins: [], mapRegions: [], created: Date.now() } // eslint-disable-line react-hooks/purity
@@ -901,6 +1083,33 @@ export function useStore(userId = null, options = {}) {
     setSelectedIdeaEntryId(null)
   }
 
+  const importProjectFromData = (data) => {
+    if (freeProjectId !== null) {
+      notifyReadOnly('free-limit')
+      return null
+    }
+    const oldId = data.project?.id
+    const newId = uid()
+    const remap = (item) => item?.novelId === oldId ? { ...item, novelId: newId } : item
+    const project = { ...data.project, id: newId, importedAt: new Date().toISOString(), focus: false }
+    setNovels(prev => [...prev, project])
+    setCharacters(prev => [...prev, ...(data.characters ?? []).map(remap)])
+    setFactions(prev => [...prev, ...(data.factions ?? []).map(remap)])
+    setLocations(prev => [...prev, ...(data.locations ?? []).map(remap)])
+    setTimeline(prev => [...prev, ...(data.timeline ?? []).map(remap)])
+    setWorldHistory(prev => [...prev, ...(data.worldHistory ?? []).map(remap)])
+    setActs(prev => [...prev, ...(data.acts ?? []).map(remap)])
+    setChapters(prev => [...prev, ...(data.chapters ?? []).map(remap)])
+    setScenes(prev => [...prev, ...(data.scenes ?? []).map(remap)])
+    setLoreEntries(prev => [...prev, ...(data.loreEntries ?? []).map(remap)])
+    setIdeaEntries(prev => [...prev, ...(data.ideaEntries ?? []).map(remap)])
+    setMaps(prev => [...prev, ...(data.maps ?? []).map(remap)])
+    setWhiteboards(prev => [...prev, ...(data.whiteboards ?? []).map(remap)])
+    setStorySchedule(prev => [...prev, ...(data.storySchedule ?? []).map(remap)])
+    setActiveNovelId(newId)
+    return project
+  }
+
   // Per-project read-only: free tier users can only edit their chosen project
   const readOnly = globalReadOnly || (
     freeProjectId !== null && activeNovelId !== null && activeNovelId !== freeProjectId
@@ -922,7 +1131,7 @@ export function useStore(userId = null, options = {}) {
   const api = {
     readOnly,
     freeProjectId,
-    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, getProjectExportData, getProjectContextData,
+    novels, activeNovelId, activeNovel, setActiveNovelId, addNovel, updateNovel, deleteNovel, importProjectFromData, getProjectExportData, getProjectContextData,
     series, addSeries, deleteSeries, updateSeries, reorderSeries, reorderNovels,
     allProjectStats, activeProjectStats,
     characters: seriesScope(characters, 'characters'),
@@ -962,7 +1171,7 @@ export function useStore(userId = null, options = {}) {
   if (!readOnly) return api
 
   const guardedMethods = [
-    'addNovel', 'updateNovel', 'deleteNovel', 'addSeries', 'deleteSeries', 'updateSeries', 'reorderSeries', 'reorderNovels',
+    'addNovel', 'updateNovel', 'deleteNovel', 'importProjectFromData', 'addSeries', 'deleteSeries', 'updateSeries', 'reorderSeries', 'reorderNovels',
     'saveCharacter', 'deleteCharacter', 'setFactions', 'saveLocation', 'deleteLocation',
     'addEvent', 'updateEvent', 'deleteEvent', 'linkTimelineHistory', 'unlinkTimelineHistory', 'addHistoryEntry', 'updateHistoryEntry', 'deleteHistoryEntry',
     'updateCurrentYear', 'addLoreEntry', 'updateLoreEntry', 'deleteLoreEntry',
