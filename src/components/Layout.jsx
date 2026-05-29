@@ -726,13 +726,25 @@ function ProjectSettings({ store, onClose }) {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-export default function Layout({ store, section, setSection, onOpenAccount, onOpenHelp, onOpenLegal, onOpenAbout, membership, viewMode, setViewMode }) {
+export default function Layout({
+  store,
+  section,
+  setSection,
+  onOpenAccount,
+  onOpenHelp,
+  onOpenLegal,
+  onOpenAbout,
+  membership,
+  viewMode,
+  setViewMode,
+  projectSettingsOpen,
+  setProjectSettingsOpen,
+}) {
   const projectTypeCfg = getProjectType(store.activeNovel?.type)
   const enabledSectionIds = new Set(getEnabledSections(store.activeNovel))
   const planningSections = ALL_SECTIONS.filter(s => s.id === 'dashboard' || enabledSectionIds.has(s.id))
 
   const [aiOpen, setAiOpen] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
 
   // Redirect away from a section that just got disabled
@@ -750,14 +762,14 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
         if (ALL_SECTIONS.find(s => s.id === e.detail.section)) setViewMode('planning')
       }
     }
-    const handleOpenProjectSettings = () => setShowSettings(true)
+    const handleOpenProjectSettings = () => setProjectSettingsOpen(true)
     window.addEventListener('switch-section', handleTeleport)
     window.addEventListener('open-project-settings', handleOpenProjectSettings)
     return () => {
       window.removeEventListener('switch-section', handleTeleport)
       window.removeEventListener('open-project-settings', handleOpenProjectSettings)
     }
-  }, [setSection, setViewMode])
+  }, [setSection, setViewMode, setProjectSettingsOpen])
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 860px)')
@@ -856,10 +868,10 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
         utilityContent={(
           <div className="studio-utility-btns">
             <button
-              className={`studio-utility-btn${showSettings ? ' is-active' : ''}`}
-              onClick={() => setShowSettings(v => !v)}
+              className={`studio-utility-btn${projectSettingsOpen ? ' is-active' : ''}`}
+              onClick={() => setProjectSettingsOpen(v => !v)}
               aria-label="Project settings"
-              aria-pressed={showSettings}
+              aria-pressed={projectSettingsOpen}
             >
               <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -933,10 +945,10 @@ export default function Layout({ store, section, setSection, onOpenAccount, onOp
         </StudioWorkspace>
       </StudioFrame>
 
-      {showSettings && (
+      {projectSettingsOpen && (
         <ProjectSettings
           store={store}
-          onClose={() => setShowSettings(false)}
+          onClose={() => setProjectSettingsOpen(false)}
         />
       )}
 

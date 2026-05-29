@@ -756,13 +756,15 @@ function ProfileDetails({ user, updateProfile }) {
   )
 }
 
-export default function AccountSettings({ open, onClose, storageUsedBytes = 0 }) {
+export default function AccountSettings({ open, onClose, storageUsedBytes = 0, activeTab = 'profile', onTabChange }) {
   const { user, getAccessToken, updateProfile, refreshUser } = useAuth()
   const membership = useMemo(() => getMembership(user), [user])
   const [billingBusy, setBillingBusy] = useState('')
   const [billingError, setBillingError] = useState('')
   const [billingMessage, setBillingMessage] = useState('')
-  const [activeTab, setActiveTab] = useState('profile')
+  const [fallbackTab, setFallbackTab] = useState('profile')
+  const selectedTab = onTabChange ? activeTab : fallbackTab
+  const setActiveTab = onTabChange || setFallbackTab
 
   useEffect(() => {
     if (!open) return
@@ -770,7 +772,7 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0 })
     const billingResult = new URLSearchParams(window.location.search).get('billing')
     if (!billingResult) return
 
-    setActiveTab('membership')
+    onTabChange?.('membership')
     const nextUrl = new URL(window.location.href)
     nextUrl.searchParams.delete('billing')
     window.history.replaceState({}, '', nextUrl)
@@ -784,7 +786,7 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0 })
     refreshUser()
       .then(() => setBillingMessage('Membership details refreshed.'))
       .catch(() => setBillingMessage('Checkout finished. Membership may take a moment to update.'))
-  }, [open, refreshUser])
+  }, [open, refreshUser, onTabChange])
 
   if (!open || !user) return null
 
@@ -838,8 +840,8 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0 })
             <button
               key={tab.id}
               type="button"
-              className={`account-settings-tab${activeTab === tab.id ? ' is-active' : ''}`}
-              aria-current={activeTab === tab.id ? true : undefined}
+              className={`account-settings-tab${selectedTab === tab.id ? ' is-active' : ''}`}
+              aria-current={selectedTab === tab.id ? true : undefined}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
@@ -848,19 +850,19 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0 })
         </nav>
 
         <main className="account-settings-grid account-settings-tab-panel">
-          {activeTab === 'profile' && (
+          {selectedTab === 'profile' && (
             <ProfileDetails key={user.id} user={user} updateProfile={updateProfile} />
           )}
 
-          {activeTab === 'appearance' && (
+          {selectedTab === 'appearance' && (
             <AppearancePanel user={user} updateProfile={updateProfile} />
           )}
 
-          {activeTab === 'preferences' && (
+          {selectedTab === 'preferences' && (
             <PreferencesPanel />
           )}
 
-          {activeTab === 'membership' && (
+          {selectedTab === 'membership' && (
           <section className="account-settings-panel account-membership-panel">
             <div className="account-panel-heading">
               <div>

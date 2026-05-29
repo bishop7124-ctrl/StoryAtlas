@@ -169,6 +169,139 @@ const buildCharacterFocus = stats => {
     .slice(0, 8)
 }
 
+const getSceneWords = scene => countWords(scene.content || '')
+
+const compareByOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0)
+
+const buildStructureInsights = stats => {
+  const chaptersByAct = new Map()
+  stats.chapters.forEach(chapter => {
+    const key = chapter.actId || chapter.parentId || 'unassigned'
+    if (!chaptersByAct.has(key)) chaptersByAct.set(key, [])
+    chaptersByAct.get(key).push(chapter)
+  })
+
+  const scenesByChapter = new Map()
+  stats.scenes.forEach(scene => {
+    const key = scene.chapterId || scene.parentId || 'unassigned'
+    if (!scenesByChapter.has(key)) scenesByChapter.set(key, [])
+    scenesByChapter.get(key).push(scene)
+  })
+
+  const rows = [...stats.acts].sort(compareByOrder).map((act, index) => {
+    const chapters = (chaptersByAct.get(act.id) || []).sort(compareByOrder)
+    const scenes = chapters.flatMap(chapter => scenesByChapter.get(chapter.id) || [])
+    const words = scenes.reduce((sum, scene) => sum + getSceneWords(scene), 0)
+    return {
+      id: act.id,
+      label: act.title || `${stats.projectType.structure?.level1 || 'Act'} ${index + 1}`,
+      detail: `${formatNumber(scenes.length)} ${stats.projectType.structure?.level3?.toLowerCase() || 'scenes'}`,
+      value: words,
+    }
+  })
+
+  const unassignedScenes = stats.scenes.filter(scene => {
+    if (!scene.chapterId && !scene.parentId) return true
+    return !stats.chapters.some(chapter => chapter.id === (scene.chapterId || scene.parentId))
+  })
+  if (unassignedScenes.length) {
+    rows.push({
+      id: 'unassigned',
+      label: 'Unassigned scenes',
+      detail: `${formatNumber(unassignedScenes.length)} ${stats.projectType.structure?.level3?.toLowerCase() || 'scenes'}`,
+      value: unassignedScenes.reduce((sum, scene) => sum + getSceneWords(scene), 0),
+    })
+  }
+
+  return rows.sort((a, b) => b.value - a.value).slice(0, 6)
+}
+
+const buildSceneInsights = stats => {
+  const scenes = stats.scenes.map(scene => ({
+    id: scene.id,
+    title: scene.title || 'Untitled scene',
+    words: getSceneWords(scene),
+  }))
+  const nonEmpty = scenes.filter(scene => scene.words > 0)
+  const average = nonEmpty.length
+    ? Math.round(nonEmpty.reduce((sum, scene) => sum + scene.words, 0) / nonEmpty.length)
+    : 0
+
+  return {
+    average,
+    empty: scenes.filter(scene => scene.words === 0).length,
+    short: scenes.filter(scene => scene.words > 0 && scene.words < 250).length,
+    long: scenes.filter(scene => scene.words >= 2500).length,
+    longest: [...nonEmpty].sort((a, b) => b.words - a.words).slice(0, 5),
+  }
+}
+
+const buildCoverageInsights = stats => {
+  const manuscript = stats.scenes.map(scene => scene.content || '').join(' ')
+  const countMentioned = items => items.filter(item => {
+    const terms = [item.name, item.title, ...(item.keywords || [])]
+      .filter(Boolean)
+      .map(escapeRegExp)
+    if (!terms.length) return false
+    return new RegExp(`\\b(${terms.join('|')})\\b`, 'i').test(manuscript)
+  }).length
+
+  const characterMentions = countMentioned(stats.characters)
+  const locationMentions = countMentioned(stats.locations)
+  const loreWithLinks = stats.loreEntries.filter(entry =>
+    (entry.characterIds && entry.characterIds.length) ||
+    (entry.locationIds && entry.locationIds.length)
+  ).length
+  const referenceTotal = stats.characters.length + stats.locations.length + stats.loreEntries.length
+
+  return [
+    {
+      label: 'Characters in draft',
+      value: characterMentions,
+      total: stats.characters.length,
+      detail: `${formatNumber(characterMentions)} of ${formatNumber(stats.characters.length)} referenced`,
+    },
+    {
+      label: 'Locations in draft',
+      value: locationMentions,
+      total: stats.locations.length,
+      detail: `${formatNumber(locationMentions)} of ${formatNumber(stats.locations.length)} referenced`,
+    },
+    {
+      label: 'Linked lore',
+      value: loreWithLinks,
+      total: stats.loreEntries.length,
+      detail: `${formatNumber(loreWithLinks)} of ${formatNumber(stats.loreEntries.length)} connected`,
+    },
+    {
+      label: 'Reference library',
+      value: referenceTotal,
+      total: Math.max(1, stats.planningItems),
+      detail: `${formatNumber(referenceTotal)} reusable project records`,
+    },
+  ]
+}
+
+const buildMomentumInsights = (analytics, dailyGoal) => {
+  const entries = Object.entries(analytics.dailyWords)
+  const last7 = entries.slice(-7)
+  const last14 = entries.slice(-14, -7)
+  const last7Words = last7.reduce((sum, [, words]) => sum + words, 0)
+  const last14Words = last14.reduce((sum, [, words]) => sum + words, 0)
+  const activeDays = last7.filter(([, words]) => words > 0).length
+  const activeAverage = activeDays ? Math.round(last7Words / activeDays) : 0
+  const change = last14Words ? Math.round(((last7Words - last14Words) / last14Words) * 100) : null
+  const goal = Math.max(0, Number(dailyGoal) || 0)
+
+  return {
+    last7Words,
+    activeDays,
+    activeAverage,
+    goalDays: goal ? last7.filter(([, words]) => words >= goal).length : 0,
+    change,
+  }
+}
+
 const NAV_ROOMS = [
   {
     id: 'outline',
@@ -295,14 +428,6 @@ const LedgerRow = ({ label, value }) => (
   </div>
 )
 
-const Stat = ({ label, value, detail }) => (
-  <div className="overview-stat">
-    <span>{label}</span>
-    <strong>{value}</strong>
-    {detail && <small>{detail}</small>}
-  </div>
-)
-
 const Sparkline = ({ points }) => {
   const max = Math.max(1, ...points.map(point => point.words))
   return (
@@ -330,12 +455,42 @@ const ActivityHeatmap = ({ dailyWords, heatmapMax }) => (
   </div>
 )
 
+const InsightMetric = ({ label, value, detail }) => (
+  <div className="analytics-metric">
+    <span>{label}</span>
+    <strong>{value}</strong>
+    {detail && <small>{detail}</small>}
+  </div>
+)
+
+const MiniBarList = ({ items, max, emptyText }) => (
+  <div className="analytics-bar-list">
+    {items.length ? items.map(item => (
+      <div key={item.id || item.label} className="analytics-bar-row">
+        <div>
+          <strong>{item.label || item.title}</strong>
+          <small>{item.detail || `${formatNumber(item.value ?? item.words)} words`}</small>
+        </div>
+        <span>{formatNumber(item.value ?? item.words)}</span>
+        <i style={{ width: `${Math.max(5, ((item.value ?? item.words) / Math.max(1, max)) * 100)}%` }} />
+      </div>
+    )) : (
+      <p className="analytics-empty">{emptyText}</p>
+    )}
+  </div>
+)
+
 export default function ProjectDashboard({ store }) {
   const stats = store.activeProjectStats
   const [dailyGoal, setDailyGoal] = useState(() => localStorage.getItem('nf-daily-word-goal') || '500')
+  const [viewMode, setViewMode] = useState('overview')
   const analytics = useMemo(() => stats ? buildWritingAnalytics(stats, dailyGoal) : null, [stats, dailyGoal])
   const readability = useMemo(() => stats ? buildReadability(stats.scenes) : null, [stats])
   const characterFocus = useMemo(() => stats ? buildCharacterFocus(stats) : [], [stats])
+  const structureInsights = useMemo(() => stats ? buildStructureInsights(stats) : [], [stats])
+  const sceneInsights = useMemo(() => stats ? buildSceneInsights(stats) : null, [stats])
+  const coverageInsights = useMemo(() => stats ? buildCoverageInsights(stats) : [], [stats])
+  const momentumInsights = useMemo(() => analytics ? buildMomentumInsights(analytics, dailyGoal) : null, [analytics, dailyGoal])
   if (!stats) {
     return (
       <StudioBoard className="overview-board">
@@ -363,6 +518,8 @@ export default function ProjectDashboard({ store }) {
     .slice(0, 5)
   const hasPlanning = stats.planningItems > 0 || stats.acts.length > 0 || stats.scenes.length > 0
   const maxCharacterWords = Math.max(1, ...characterFocus.map(item => item.words))
+  const maxStructureWords = Math.max(1, ...structureInsights.map(item => item.value))
+  const maxLongestSceneWords = Math.max(1, ...(sceneInsights?.longest || []).map(item => item.words))
 
   const updateDailyGoal = value => {
     const next = value.replace(/[^\d]/g, '')
@@ -382,77 +539,107 @@ export default function ProjectDashboard({ store }) {
               <button type="button" onClick={openProjectSettings}>Project settings</button>
             </div>
           </div>
-          <div className="overview-status">
-            <span>{formatNumber(stats.manuscriptWords)} words</span>
-            <span>{stats.updatedLabel}</span>
+          <div className="overview-hero-side">
+            <div className="overview-status">
+              <span>{viewMode === 'overview' ? stats.updatedLabel : `${formatNumber(stats.manuscriptWords)} words`}</span>
+              <span>{viewMode === 'overview' ? project.status || 'Drafting' : `${analytics.activeDays} active days`}</span>
+            </div>
+            <div className="overview-view-switch" aria-label="Dashboard view">
+              <button
+                type="button"
+                className={viewMode === 'overview' ? 'is-active' : ''}
+                onClick={() => setViewMode('overview')}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                className={viewMode === 'insights' ? 'is-active' : ''}
+                onClick={() => setViewMode('insights')}
+              >
+                Insights
+              </button>
+            </div>
           </div>
         </header>
 
-        <section className="overview-strip">
-          <Stat label="Words" value={formatNumber(stats.manuscriptWords)} detail="Draft total" />
-          <Stat label="Scenes" value={formatNumber(stats.scenes.length)} detail={`${stats.acts.length} acts, ${stats.chapters.length} chapters`} />
-          <Stat label="Characters" value={formatNumber(stats.characters.length)} detail={`${stats.factions.length} factions`} />
-          <Stat label="Atlas" value={formatNumber(stats.locations.length)} detail={`${stats.maps.length} maps`} />
-        </section>
+        {viewMode === 'overview' ? (
+          <>
+            {visibleRooms.length > 0 && (
+              <nav className="overview-nav" aria-label="Project areas">
+                {visibleRooms.map(room => (
+                  <NavCard key={room.id} room={room} stats={stats} />
+                ))}
+              </nav>
+            )}
 
-        {visibleRooms.length > 0 && (
-          <nav className="overview-nav" aria-label="Project areas">
-            {visibleRooms.map(room => (
-              <NavCard key={room.id} room={room} stats={stats} />
-            ))}
-          </nav>
-        )}
-
-        <div className="overview-columns">
-          <section className="overview-section panel-soft">
-            <div className="overview-section-head">
-              <div>
-                <p className="studio-kicker">Project</p>
-                <h2>Details</h2>
-              </div>
-            </div>
-            <div className="overview-list">
-            <LedgerRow label="Created" value={stats.createdLabel} />
-            <LedgerRow label="Updated" value={stats.updatedLabel} />
-            <LedgerRow label="Project type" value={stats.projectType.label} />
-            <LedgerRow label="Words" value={formatNumber(stats.manuscriptWords)} />
-            </div>
-          </section>
-
-          <section className="overview-section panel-soft">
-            <div className="overview-section-head">
-              <div>
-                <p className="studio-kicker">Reference</p>
-                <h2>World Material</h2>
-              </div>
-            </div>
-            <div className="overview-list">
-              <LedgerRow label="Lore entries" value={formatNumber(stats.loreEntries.length)} />
-              <LedgerRow label="History events" value={formatNumber(stats.worldHistory.length)} />
-              <LedgerRow label="Notes" value={formatNumber(stats.ideaEntries.length)} />
-            </div>
-          </section>
-
-          <section className="overview-section overview-section-wide panel-soft">
-            <div className="overview-section-head">
-              <div>
-                <p className="studio-kicker">Recent Draft</p>
-                <h2>Scenes</h2>
-              </div>
-            </div>
-            <div className="overview-scene-list">
-              {recentScenes.length > 0 ? recentScenes.map(scene => (
-                <div key={scene.id} className="overview-scene">
-                  <span>{scene.title || 'Untitled scene'}</span>
-                  <small>{formatNumber((scene.content || '').trim().match(/\S+/g)?.length || 0)} words</small>
+            <div className="overview-columns">
+              <section className="overview-section panel-soft">
+                <div className="overview-section-head">
+                  <div>
+                    <p className="studio-kicker">Project</p>
+                    <h2>Basics</h2>
+                  </div>
                 </div>
-              )) : (
-                <StudioEmpty title="No manuscript scenes yet" />
-              )}
-            </div>
-          </section>
+                <div className="overview-list">
+                  <LedgerRow label="Created" value={stats.createdLabel} />
+                  <LedgerRow label="Project type" value={stats.projectType.label} />
+                  <LedgerRow label="Status" value={project.status || 'Drafting'} />
+                </div>
+              </section>
 
-          <section className="overview-section overview-section-wide panel-soft analytics-dashboard">
+              <section className="overview-section panel-soft">
+                <div className="overview-section-head">
+                  <div>
+                    <p className="studio-kicker">Manuscript</p>
+                    <h2>Structure</h2>
+                  </div>
+                </div>
+                <div className="overview-list">
+                  <LedgerRow label={stats.projectType.structure?.level1 || 'Acts'} value={formatNumber(stats.acts.length)} />
+                  <LedgerRow label={stats.projectType.structure?.level2 || 'Chapters'} value={formatNumber(stats.chapters.length)} />
+                  <LedgerRow label={stats.projectType.structure?.level3 || 'Scenes'} value={formatNumber(stats.scenes.length)} />
+                </div>
+              </section>
+
+              <section className="overview-section panel-soft">
+                <div className="overview-section-head">
+                  <div>
+                    <p className="studio-kicker">Reference</p>
+                    <h2>World Material</h2>
+                  </div>
+                </div>
+                <div className="overview-list">
+                  <LedgerRow label="Characters" value={formatNumber(stats.characters.length)} />
+                  <LedgerRow label="Locations" value={formatNumber(stats.locations.length)} />
+                  <LedgerRow label="Lore entries" value={formatNumber(stats.loreEntries.length)} />
+                  <LedgerRow label="History events" value={formatNumber(stats.worldHistory.length)} />
+                  <LedgerRow label="Notes" value={formatNumber(stats.ideaEntries.length)} />
+                </div>
+              </section>
+
+              <section className="overview-section overview-section-wide panel-soft">
+                <div className="overview-section-head">
+                  <div>
+                    <p className="studio-kicker">Recent Draft</p>
+                    <h2>Scenes</h2>
+                  </div>
+                </div>
+                <div className="overview-scene-list">
+                  {recentScenes.length > 0 ? recentScenes.map(scene => (
+                    <div key={scene.id} className="overview-scene">
+                      <span>{scene.title || 'Untitled scene'}</span>
+                      <small>{formatNumber((scene.content || '').trim().match(/\S+/g)?.length || 0)} words</small>
+                    </div>
+                  )) : (
+                    <StudioEmpty title="No manuscript scenes yet" />
+                  )}
+                </div>
+              </section>
+            </div>
+          </>
+        ) : (
+          <section className="overview-section overview-insights panel-soft analytics-dashboard">
             <div className="overview-section-head">
               <div>
                 <p className="studio-kicker">Writing Analytics</p>
@@ -510,6 +697,80 @@ export default function ProjectDashboard({ store }) {
                 </div>
               </div>
 
+              <div className="analytics-card analytics-card-wide">
+                <div className="analytics-card-head">
+                  <span>Momentum</span>
+                  <strong>{formatNumber(momentumInsights.last7Words)}</strong>
+                </div>
+                <div className="analytics-metric-grid">
+                  <InsightMetric label="Last 7 days" value={`${formatNumber(momentumInsights.last7Words)} words`} detail={`${momentumInsights.activeDays} active days`} />
+                  <InsightMetric label="Active-day avg" value={formatNumber(momentumInsights.activeAverage)} detail="Words per writing day" />
+                  <InsightMetric label="Goal days" value={`${momentumInsights.goalDays}/7`} detail="Days at or above goal" />
+                  <InsightMetric
+                    label="Vs prior week"
+                    value={momentumInsights.change === null ? 'New' : `${momentumInsights.change > 0 ? '+' : ''}${momentumInsights.change}%`}
+                    detail="Based on recorded scene history"
+                  />
+                </div>
+              </div>
+
+              <div className="analytics-card">
+                <div className="analytics-card-head">
+                  <span>Scene health</span>
+                  <strong>{formatNumber(sceneInsights.average)}</strong>
+                </div>
+                <div className="analytics-metric-stack">
+                  <InsightMetric label="Average scene" value={`${formatNumber(sceneInsights.average)} words`} />
+                  <InsightMetric label="Empty scenes" value={formatNumber(sceneInsights.empty)} />
+                  <InsightMetric label="Short scenes" value={formatNumber(sceneInsights.short)} detail="Under 250 words" />
+                  <InsightMetric label="Long scenes" value={formatNumber(sceneInsights.long)} detail="2,500+ words" />
+                </div>
+              </div>
+
+              <div className="analytics-card analytics-card-wide">
+                <div className="analytics-card-head">
+                  <span>Draft balance</span>
+                  <strong>{structureInsights.length}</strong>
+                </div>
+                <MiniBarList
+                  items={structureInsights}
+                  max={maxStructureWords}
+                  emptyText="Create structure sections to see draft balance."
+                />
+              </div>
+
+              <div className="analytics-card analytics-card-wide">
+                <div className="analytics-card-head">
+                  <span>Longest scenes</span>
+                  <strong>{sceneInsights.longest.length}</strong>
+                </div>
+                <MiniBarList
+                  items={sceneInsights.longest}
+                  max={maxLongestSceneWords}
+                  emptyText="Write scene content to see length outliers."
+                />
+              </div>
+
+              <div className="analytics-card analytics-card-wide">
+                <div className="analytics-card-head">
+                  <span>Worldbuilding coverage</span>
+                  <strong>{formatNumber(stats.planningItems)}</strong>
+                </div>
+                <div className="analytics-coverage-grid">
+                  {coverageInsights.map(item => (
+                    <div key={item.label} className="analytics-coverage-item">
+                      <div>
+                        <span>{item.label}</span>
+                        <strong>{item.detail}</strong>
+                      </div>
+                      <div className="analytics-goal-meter">
+                        <span style={{ width: `${item.total ? Math.min(100, (item.value / item.total) * 100) : 0}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="analytics-card analytics-card-wide character-focus-card">
                 <div className="analytics-card-head">
                   <span>Character focus</span>
@@ -534,9 +795,9 @@ export default function ProjectDashboard({ store }) {
               </div>
             </div>
           </section>
-        </div>
+        )}
 
-        {!hasPlanning && (
+        {viewMode === 'overview' && !hasPlanning && (
           <StudioEmpty title="Nothing here yet" body="Add the first characters, locations, scenes, or notes when you are ready." />
         )}
       </div>

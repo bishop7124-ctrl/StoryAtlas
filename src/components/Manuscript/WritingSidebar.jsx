@@ -110,12 +110,19 @@ const AIIcon = () => (
   </svg>
 )
 
+const FormatIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" />
+  </svg>
+)
+
 const TABS = [
   { id: 'structure', label: 'Structure', Icon: StructureIcon },
   { id: 'goals',     label: 'Goals',     Icon: GoalsIcon },
   { id: 'progress',  label: 'Progress',  Icon: ProgressIcon },
   { id: 'notes',     label: 'Notes',     Icon: NotesIcon },
   { id: 'ai',        label: 'AI',        Icon: AIIcon },
+  { id: 'format',    label: 'Format',    Icon: FormatIcon },
 ]
 
 // ─── Goal row ─────────────────────────────────────────────────────────────────
@@ -504,6 +511,7 @@ export default function WritingSidebar({
   onUpdateGoals,
 
   // Pre-rendered slots
+  formatSlot,
   notesSlot,
   aiSlot,
 }) {
@@ -608,6 +616,13 @@ export default function WritingSidebar({
           {activePanelId === 'ai' && (
             <div className="flex flex-col flex-1 overflow-hidden">
               {aiSlot}
+            </div>
+          )}
+
+          {/* Format */}
+          {activePanelId === 'format' && (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              {formatSlot}
             </div>
           )}
         </div>

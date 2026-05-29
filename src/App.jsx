@@ -37,21 +37,44 @@ function isPricingPath(path) {
   return path === '/pricing' || path === '/pricing/'
 }
 
+const ACCOUNT_SETTINGS_TABS = new Set(['profile', 'appearance', 'preferences', 'membership'])
+
 function parseRoute() {
   const path = window.location.pathname
+  const params = new URLSearchParams(window.location.search)
+  const accountTab = params.get('tab')
   const m = path.match(/^\/project\/([^/]+)(?:\/(.+))?$/)
-  if (!m) return { novelId: null, section: 'dashboard', layoutViewMode: 'planning' }
+  const settings = params.get('settings')
+  const overlay = {
+    accountOpen: settings === 'account',
+    accountTab: ACCOUNT_SETTINGS_TABS.has(accountTab) ? accountTab : 'profile',
+    projectSettingsOpen: settings === 'project',
+  }
+  if (!m) return { novelId: null, section: 'dashboard', layoutViewMode: 'planning', ...overlay, projectSettingsOpen: false }
   const novelId = decodeURIComponent(m[1])
   const sub = m[2]
-  if (sub === 'writing') return { novelId, section: 'dashboard', layoutViewMode: 'writing' }
-  return { novelId, section: sub || 'dashboard', layoutViewMode: 'planning' }
+  if (sub === 'writing') return { novelId, section: 'dashboard', layoutViewMode: 'writing', ...overlay }
+  return { novelId, section: sub || 'dashboard', layoutViewMode: 'planning', ...overlay }
 }
 
-function buildRoute(viewMode, novelId, section, layoutViewMode) {
-  if (viewMode !== 'editor' || !novelId) return '/'
-  if (layoutViewMode === 'writing') return `/project/${encodeURIComponent(novelId)}/writing`
-  if (!section || section === 'dashboard') return `/project/${encodeURIComponent(novelId)}`
-  return `/project/${encodeURIComponent(novelId)}/${section}`
+function buildRoute(viewMode, novelId, section, layoutViewMode, overlays = {}) {
+  let path = '/'
+  if (viewMode === 'editor' && novelId) {
+    if (layoutViewMode === 'writing') path = `/project/${encodeURIComponent(novelId)}/writing`
+    else if (!section || section === 'dashboard') path = `/project/${encodeURIComponent(novelId)}`
+    else path = `/project/${encodeURIComponent(novelId)}/${section}`
+  }
+  const params = new URLSearchParams()
+  if (overlays.accountOpen) {
+    params.set('settings', 'account')
+    if (ACCOUNT_SETTINGS_TABS.has(overlays.accountTab) && overlays.accountTab !== 'profile') {
+      params.set('tab', overlays.accountTab)
+    }
+  } else if (overlays.projectSettingsOpen && viewMode === 'editor' && novelId) {
+    params.set('settings', 'project')
+  }
+  const query = params.toString()
+  return query ? `${path}?${query}` : path
 }
 
 class ErrorBoundary extends Component {
@@ -91,13 +114,16 @@ function AppInner() {
   const store = useStore(userId, { readOnly: membership.isReadOnly, freeProjectId: membership.freeProjectId })
   const { importData, finishRemoteLoad } = store
   const [dataLoading, setDataLoading] = useState(false)
-  const initialRoute = useRef(parseRoute())
-  const [section, setSection] = useState(() => initialRoute.current.section)
-  const [viewMode, setViewMode] = useState(() => initialRoute.current.novelId ? 'editor' : 'manager')
-  const [layoutViewMode, setLayoutViewMode] = useState(() => initialRoute.current.layoutViewMode)
+  const initialRouteSnapshot = useMemo(() => parseRoute(), [])
+  const initialRoute = useRef(initialRouteSnapshot)
+  const [section, setSection] = useState(() => initialRouteSnapshot.section)
+  const [viewMode, setViewMode] = useState(() => initialRouteSnapshot.novelId ? 'editor' : 'manager')
+  const [layoutViewMode, setLayoutViewMode] = useState(() => initialRouteSnapshot.layoutViewMode)
   const [showPricing, setShowPricing] = useState(() => isPricingPath(window.location.pathname))
   const [libraryAiOpen, setLibraryAiOpen] = useState(false)
-  const [accountOpen, setAccountOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(() => initialRouteSnapshot.accountOpen)
+  const [accountTab, setAccountTab] = useState(() => initialRouteSnapshot.accountTab)
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(() => initialRouteSnapshot.projectSettingsOpen)
   const [helpOpen, setHelpOpen] = useState(false)
   const [readOnlyNotice, setReadOnlyNotice] = useState('')
   const [freeProjectBusy, setFreeProjectBusy] = useState(false)
@@ -114,9 +140,10 @@ function AppInner() {
 
   useEffect(() => {
     const savedTheme = loadThemeChoice()
-    let customColors = {}
-    try { customColors = JSON.parse(localStorage.getItem('nf-custom-colors') || '{}') }
-    catch {}
+    const customColors = (() => {
+      try { return JSON.parse(localStorage.getItem('nf-custom-colors') || '{}') }
+      catch { return {} }
+    })()
     applyThemeToDocument(savedTheme, customColors)
     applyThemeTuning(loadThemeTuning(), getThemeColors(savedTheme, customColors))
     const fontChoice = localStorage.getItem('nf-font') || 'system'
@@ -125,7 +152,11 @@ function AppInner() {
   }, [])
 
   useEffect(() => {
-    if (!store.activeNovelId) { setViewMode('manager'); setLayoutViewMode('planning') }
+    if (!store.activeNovelId) {
+      setViewMode('manager')
+      setLayoutViewMode('planning')
+      setProjectSettingsOpen(false)
+    }
   }, [store.activeNovelId])
 
   useEffect(() => {
@@ -145,9 +176,14 @@ function AppInner() {
   // Sync browser URL with navigation state
   useEffect(() => {
     if (firstUrlSync.current) { firstUrlSync.current = false; return }
-    const url = buildRoute(viewMode, store.activeNovelId, section, layoutViewMode)
-    if (window.location.pathname !== url) history.pushState(null, '', url)
-  }, [viewMode, store.activeNovelId, section, layoutViewMode])
+    const url = buildRoute(viewMode, store.activeNovelId, section, layoutViewMode, {
+      accountOpen,
+      accountTab,
+      projectSettingsOpen,
+    })
+    const current = `${window.location.pathname}${window.location.search}`
+    if (current !== url) history.pushState(null, '', url)
+  }, [viewMode, store.activeNovelId, section, layoutViewMode, accountOpen, accountTab, projectSettingsOpen])
 
   // Restore state from browser back/forward navigation (including /pricing)
   useEffect(() => {
@@ -161,6 +197,9 @@ function AppInner() {
       const route = parseRoute()
       setSection(route.section)
       setLayoutViewMode(route.layoutViewMode)
+      setAccountOpen(route.accountOpen)
+      setAccountTab(route.accountTab)
+      setProjectSettingsOpen(route.projectSettingsOpen)
       if (route.novelId) {
         store.setActiveNovelId(route.novelId)
         setViewMode('editor')
@@ -171,10 +210,14 @@ function AppInner() {
     }
     window.addEventListener('popstate', handlePop)
     return () => window.removeEventListener('popstate', handlePop)
-  }, [store]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [store])
 
   useEffect(() => {
-    const handleOpenAccount = () => setAccountOpen(true)
+    const handleOpenAccount = (event) => {
+      const tab = event.detail?.tab
+      if (ACCOUNT_SETTINGS_TABS.has(tab)) setAccountTab(tab)
+      setAccountOpen(true)
+    }
     window.addEventListener('open-account-settings', handleOpenAccount)
     return () => window.removeEventListener('open-account-settings', handleOpenAccount)
   }, [])
@@ -241,6 +284,7 @@ function AppInner() {
           store.setActiveNovelId(urlNovelId)
           setViewMode('editor')
           setLayoutViewMode(initialRoute.current.layoutViewMode)
+          setProjectSettingsOpen(initialRoute.current.projectSettingsOpen)
         }
       })
       .catch(error => {
@@ -304,7 +348,13 @@ function AppInner() {
 
   const accountPage = (
     <>
-      <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} storageUsedBytes={storageUsedBytes} />
+      <AccountSettings
+        open={accountOpen}
+        onClose={() => setAccountOpen(false)}
+        storageUsedBytes={storageUsedBytes}
+        activeTab={accountTab}
+        onTabChange={setAccountTab}
+      />
       <HelpContact open={helpOpen} onClose={() => setHelpOpen(false)} />
       {readOnlyNotice && (
         <div role="alert" className="membership-toast">{readOnlyNotice}</div>
@@ -324,6 +374,7 @@ function AppInner() {
     setSection('dashboard')
     setViewMode('editor')
     setLayoutViewMode('planning')
+    setProjectSettingsOpen(false)
   }
 
   const globalOverlays = (
@@ -337,7 +388,7 @@ function AppInner() {
   return (viewMode === 'editor' && store.activeNovel)
     ? (
       <>
-        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} viewMode={layoutViewMode} setViewMode={setLayoutViewMode} />
+        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} viewMode={layoutViewMode} setViewMode={setLayoutViewMode} projectSettingsOpen={projectSettingsOpen} setProjectSettingsOpen={setProjectSettingsOpen} />
         {accountPage}
         {globalOverlays}
       </>

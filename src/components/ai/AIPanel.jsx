@@ -329,12 +329,25 @@ function Message({ msg }) {
   )
 }
 
-function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
-  const [input, setInput]     = useState('')
+function ChatView({ session, store, aiSettings, onUpdate, onBack, onPin, onSetCategory }) {
+  const [input, setInput]         = useState('')
   const [streaming, setStreaming] = useState(false)
-  const bottomRef = useRef(null)
-  const abortRef  = useRef(false)
-  const inputRef = useRef(null)
+  const [editingCategory, setEditingCategory] = useState(false)
+  const [categoryDraft, setCategoryDraft]     = useState('')
+  const bottomRef      = useRef(null)
+  const abortRef       = useRef(false)
+  const inputRef       = useRef(null)
+  const categoryInputRef = useRef(null)
+
+  const startEditCategory = () => {
+    setCategoryDraft(session.category || '')
+    setEditingCategory(true)
+    setTimeout(() => categoryInputRef.current?.focus(), 10)
+  }
+  const commitCategory = () => {
+    onSetCategory(session.id, categoryDraft.trim())
+    setEditingCategory(false)
+  }
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [session.messages])
   useEffect(() => { inputRef.current?.focus() }, [session.id])
@@ -422,10 +435,47 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
         </button>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-[var(--text-main)] truncate">{session.title}</div>
-          <div className="text-[10px] text-[var(--text-muted)]">
-            {provLabel} · {modelLabel}{contextCount > 0 ? ` · ${contextCount} context item${contextCount !== 1 ? 's' : ''}` : ''}
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            <div className="text-[10px] text-[var(--text-muted)]">
+              {provLabel} · {modelLabel}{contextCount > 0 ? ` · ${contextCount} context item${contextCount !== 1 ? 's' : ''}` : ''}
+            </div>
+            {editingCategory ? (
+              <input
+                ref={categoryInputRef}
+                value={categoryDraft}
+                onChange={e => setCategoryDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') commitCategory(); if (e.key === 'Escape') setEditingCategory(false) }}
+                onBlur={commitCategory}
+                placeholder="Category…"
+                className="text-[10px] bg-[var(--bg-main)] border border-[var(--accent)]/40 rounded px-1.5 py-0.5 text-[var(--text-main)] outline-none w-24"
+              />
+            ) : session.category ? (
+              <button type="button" onClick={startEditCategory}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-fade)] text-[var(--accent)] border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors">
+                {session.category}
+              </button>
+            ) : (
+              <button type="button" onClick={startEditCategory}
+                className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors">
+                + category
+              </button>
+            )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => onPin(session.id)}
+          title={session.pinned ? 'Unpin' : 'Pin'}
+          className={`h-7 w-7 inline-flex items-center justify-center border rounded transition-colors flex-shrink-0 ${
+            session.pinned
+              ? 'border-[var(--accent)]/40 text-[var(--accent)]'
+              : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--accent)]'
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill={session.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -494,10 +544,42 @@ function ChatView({ session, store, aiSettings, onUpdate, onBack }) {
 
 // ── Session List ──────────────────────────────────────────────────────────────
 
-function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
+function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete, onPin, onSetCategory }) {
   const provider  = aiSettings.activeProvider
   const provLabel = PROVIDERS[provider]?.name || provider
   const model     = aiSettings[provider]?.model || PROVIDERS[provider]?.defaultModel
+
+  const [categoryFilter, setCategoryFilter]     = useState('')
+  const [editingCategoryFor, setEditingCategoryFor] = useState(null)
+  const [categoryDraft, setCategoryDraft]           = useState('')
+  const categoryInputRef = useRef(null)
+
+  const categories = useMemo(
+    () => [...new Set(sessions.map(s => s.category).filter(Boolean))].sort(),
+    [sessions]
+  )
+
+  const sorted = useMemo(() =>
+    [...sessions].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+      return (b.createdAt || 0) - (a.createdAt || 0)
+    }),
+    [sessions]
+  )
+
+  const filtered = categoryFilter ? sorted.filter(s => s.category === categoryFilter) : sorted
+
+  const startEditCategory = (e, id, current) => {
+    e.stopPropagation()
+    setEditingCategoryFor(id)
+    setCategoryDraft(current || '')
+    setTimeout(() => categoryInputRef.current?.focus(), 20)
+  }
+
+  const commitCategory = (id) => {
+    onSetCategory(id, categoryDraft.trim())
+    setEditingCategoryFor(null)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -514,6 +596,36 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
         </button>
       </div>
 
+      {categories.length > 0 && (
+        <div className="px-3 py-2 border-b border-[var(--border)] flex gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('')}
+            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+              !categoryFilter
+                ? 'bg-[var(--accent)] text-[var(--bg-main)] border-[var(--accent)]'
+                : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
+          >
+            All
+          </button>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat === categoryFilter ? '' : cat)}
+              className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                categoryFilter === cat
+                  ? 'bg-[var(--accent)] text-[var(--bg-main)] border-[var(--accent)]'
+                  : 'bg-[var(--accent-fade)] text-[var(--accent)] border-[var(--accent)]/30 hover:border-[var(--accent)]'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6 opacity-60">
@@ -521,11 +633,18 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
             <p className="text-sm text-[var(--text-muted)]">Start a new chat to get writing help from AI.</p>
           </div>
         )}
-        {[...sessions].reverse().map(s => {
+        {filtered.length === 0 && sessions.length > 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6 opacity-60">
+            <p className="text-sm text-[var(--text-muted)]">No chats in this category.</p>
+          </div>
+        )}
+        {filtered.map(s => {
           const lastMsg = s.messages[s.messages.length - 1]
           const preview = lastMsg?.content?.slice(0, 70) || 'No messages yet'
           const total   = (s.context.characterIds?.length || 0) + (s.context.locationIds?.length || 0) +
             (s.context.loreEntryIds?.length || 0) + (s.context.chapterIds?.length || 0)
+          const isEditingCat = editingCategoryFor === s.id
+
           return (
             <div
               key={s.id}
@@ -533,17 +652,73 @@ function SessionList({ sessions, aiSettings, onSelect, onNew, onDelete }) {
               className="px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--bg-hover)] cursor-pointer group transition-colors"
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-[var(--text-main)] truncate">{s.title}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    {s.pinned && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-[var(--accent)] flex-shrink-0">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                      </svg>
+                    )}
+                    <div className="text-sm font-medium text-[var(--text-main)] truncate">{s.title}</div>
+                  </div>
                   <div className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">{preview}</div>
-                  {total > 0 && <div className="text-[10px] text-[var(--accent)] mt-1">{total} context item{total !== 1 ? 's' : ''}</div>}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {total > 0 && <div className="text-[10px] text-[var(--accent)]">{total} context item{total !== 1 ? 's' : ''}</div>}
+                    {isEditingCat ? (
+                      <input
+                        ref={categoryInputRef}
+                        value={categoryDraft}
+                        onChange={e => setCategoryDraft(e.target.value)}
+                        onKeyDown={e => {
+                          e.stopPropagation()
+                          if (e.key === 'Enter') commitCategory(s.id)
+                          if (e.key === 'Escape') setEditingCategoryFor(null)
+                        }}
+                        onBlur={() => commitCategory(s.id)}
+                        onClick={e => e.stopPropagation()}
+                        placeholder="Category…"
+                        className="text-[10px] bg-[var(--bg-main)] border border-[var(--accent)]/40 rounded px-1.5 py-0.5 text-[var(--text-main)] outline-none w-24"
+                      />
+                    ) : s.category ? (
+                      <button
+                        type="button"
+                        onClick={e => startEditCategory(e, s.id, s.category)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent-fade)] text-[var(--accent)] border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors"
+                      >
+                        {s.category}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={e => startEditCategory(e, s.id, '')}
+                        className="text-[10px] text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        + category
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={e => { e.stopPropagation(); onDelete(s.id) }}
-                  className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>
-                </button>
+                <div className="flex items-center gap-0.5 flex-shrink-0">
+                  <button
+                    onClick={e => { e.stopPropagation(); onPin(s.id) }}
+                    title={s.pinned ? 'Unpin' : 'Pin'}
+                    className={`h-6 w-6 flex items-center justify-center rounded transition-all ${
+                      s.pinned
+                        ? 'text-[var(--accent)]'
+                        : 'text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--text-main)]'
+                    }`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill={s.pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDelete(s.id) }}
+                    className="opacity-0 group-hover:opacity-100 text-[var(--text-muted)] hover:text-red-400 transition-all h-6 w-6 flex items-center justify-center"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" /></svg>
+                  </button>
+                </div>
               </div>
             </div>
           )
@@ -665,6 +840,7 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
     const session = {
       id: uid(), novelId, title: `Chat ${sessions.length + 1}`,
       context: ctx, messages: [], createdAt: Date.now(),
+      pinned: false, category: '',
     }
     setSessions(prev => [...prev, session])
     setActiveId(session.id)
@@ -673,6 +849,12 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
 
   const updateSession = (id, patch) =>
     setSessions(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s))
+
+  const pinSession = (id) =>
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, pinned: !s.pinned } : s))
+
+  const setCategorySession = (id, category) =>
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, category } : s))
 
   const deleteSession = (id) => {
     setSessions(prev => prev.filter(s => s.id !== id))
@@ -808,6 +990,8 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
               aiSettings={aiSettings}
               onUpdate={updateSession}
               onBack={() => { setActiveId(null); setView('sessions') }}
+              onPin={pinSession}
+              onSetCategory={setCategorySession}
             />
           )}
           {view === 'sessions' && (
@@ -817,6 +1001,8 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
               onSelect={(id) => { setActiveId(id); setView('chat') }}
               onNew={handleNewChat}
               onDelete={deleteSession}
+              onPin={pinSession}
+              onSetCategory={setCategorySession}
             />
           )}
         </div>

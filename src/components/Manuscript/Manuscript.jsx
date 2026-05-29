@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { getProjectType } from '../../constants/projectTypes'
 import WritingSidebar from './WritingSidebar'
 import TemplateModal from './TemplateModal'
+import DocxImportModal from './DocxImportModal'
 import AISuggestionPanel from './AISuggestionPanel'
 
 // ─── Debounce hook ────────────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ const DEFAULT_FORMAT = {
   fontSize: 19,
   lineHeight: 2,
   textAlign: 'left',
-  autoIndent: false,
+  autoIndent: true,
   indentSize: 4,
 }
 
@@ -136,6 +137,268 @@ const SCENE_STATUSES = [
 const nextStatus = (current) => {
   const idx = SCENE_STATUSES.findIndex(s => s.value === current)
   return SCENE_STATUSES[(idx + 1) % SCENE_STATUSES.length].value
+}
+
+// ─── Final draft reader helpers ──────────────────────────────────────────────
+
+function wordCountForScenes(scenes) {
+  return scenes.reduce((sum, scene) => sum + countWords(scene.content || ''), 0)
+}
+
+function buildFinalizedDraft({ novel, acts, chapters, scenes, labels, title }) {
+  const sortedActs = [...acts].sort((a, b) => a.order - b.order)
+  const snapshotActs = sortedActs.map((act, actIndex) => {
+    const actChapters = chapters
+      .filter(chapter => chapter.actId === act.id)
+      .sort((a, b) => a.order - b.order)
+      .map((chapter, chapterIndex) => {
+        const chapterScenes = scenes
+          .filter(scene => scene.chapterId === chapter.id)
+          .sort((a, b) => a.order - b.order)
+          .map((scene, sceneIndex) => ({
+            id: scene.id,
+            title: scene.title || `${labels.level3} ${sceneIndex + 1}`,
+            content: scene.content || '',
+            textMode: scene.textMode || 'prose',
+          }))
+
+        return {
+          id: chapter.id,
+          title: chapter.title || `${labels.level2} ${chapterIndex + 1}`,
+          order: chapterIndex,
+          scenes: chapterScenes,
+        }
+      })
+
+    return {
+      id: act.id,
+      title: act.title || `${labels.level1} ${actIndex + 1}`,
+      order: actIndex,
+      chapters: actChapters,
+    }
+  })
+
+  return {
+    id: uid(),
+    title,
+    projectTitle: novel?.title || 'Untitled',
+    finalizedAt: new Date().toISOString(),
+    wordCount: wordCountForScenes(scenes),
+    structure: labels,
+    acts: snapshotActs,
+  }
+}
+
+function formatFinalizedDate(value) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(value))
+  } catch {
+    return 'Final draft'
+  }
+}
+
+const FINAL_PAGE_WORD_TARGET = 230
+
+function getFinalizedContentBlocks(draft) {
+  const blocks = [{ type: 'cover', id: 'cover' }]
+  const visibleActs = (draft.acts || []).filter(act =>
+    (act.chapters || []).some(chapter => (chapter.scenes || []).some(scene => scene.content?.trim()))
+  )
+
+  visibleActs.forEach((act, actIndex) => {
+    if (visibleActs.length > 1) {
+      blocks.push({ type: 'act', id: `act-${act.id || actIndex}`, text: act.title })
+    }
+
+    ;(act.chapters || []).forEach((chapter, chapterIndex) => {
+      const scenesWithText = (chapter.scenes || []).filter(scene => scene.content?.trim())
+      if (!scenesWithText.length) return
+      blocks.push({ type: 'chapter', id: `chapter-${chapter.id || chapterIndex}`, text: chapter.title })
+
+      scenesWithText.forEach((scene, sceneIndex) => {
+        if (sceneIndex > 0) blocks.push({ type: 'break', id: `break-${scene.id || sceneIndex}` })
+        scene.content.trim().split(/\n{2,}/).forEach((block, blockIndex) => {
+          const text = block.split('\n').map(line => line.trim()).filter(Boolean).join(' ')
+          if (text) blocks.push({ type: 'paragraph', id: `p-${scene.id || sceneIndex}-${blockIndex}`, text })
+        })
+      })
+    })
+  })
+
+  if (blocks.length === 1) blocks.push({ type: 'empty', id: 'empty' })
+  return blocks
+}
+
+function paginateFinalizedDraft(draft) {
+  const blocks = getFinalizedContentBlocks(draft)
+  const pages = [{ id: 'page-cover', blocks: [blocks[0]] }]
+  let current = []
+  let currentWords = 0
+
+  const pushCurrent = () => {
+    if (!current.length) return
+    pages.push({ id: `page-${pages.length + 1}`, blocks: current })
+    current = []
+    currentWords = 0
+  }
+
+  blocks.slice(1).forEach(block => {
+    if (block.type === 'act' || block.type === 'chapter') {
+      if (currentWords > FINAL_PAGE_WORD_TARGET * 0.68) pushCurrent()
+      current.push(block)
+      return
+    }
+
+    if (block.type === 'break') {
+      current.push(block)
+      return
+    }
+
+    const words = countWords(block.text || '')
+    if (currentWords && currentWords + words > FINAL_PAGE_WORD_TARGET) pushCurrent()
+    current.push(block)
+    currentWords += words
+  })
+
+  pushCurrent()
+  return pages
+}
+
+function FinalPage({ page, draft, pageNumber }) {
+  if (!page) return <div className="ms-final-page ms-final-page-blank" aria-hidden="true" />
+
+  return (
+    <section className="ms-final-page" aria-label={`Page ${pageNumber}`}>
+      <div className="ms-final-page-content">
+        {page.blocks.map(block => {
+          if (block.type === 'cover') return (
+            <div key={block.id} className="ms-final-page-cover">
+              <p className="ms-final-kicker">Finalized draft</p>
+              <h1>{draft.projectTitle || 'Untitled'}</h1>
+              <p>{draft.title}</p>
+              <span>{formatFinalizedDate(draft.finalizedAt)}</span>
+            </div>
+          )
+          if (block.type === 'act') return <h2 key={block.id}>{block.text}</h2>
+          if (block.type === 'chapter') return <h3 key={block.id}>{block.text}</h3>
+          if (block.type === 'break') return <div key={block.id} className="ms-final-break" aria-hidden="true">* * *</div>
+          if (block.type === 'empty') return <div key={block.id} className="ms-final-empty">This finalized draft does not contain any manuscript text.</div>
+          return <p key={block.id}>{renderInlineMarkdown(block.text, block.id)}</p>
+        })}
+      </div>
+      <footer>{pageNumber}</footer>
+    </section>
+  )
+}
+
+function FinalizedPageReader({ draft, pageIndex, onPageIndexChange }) {
+  const pages = useMemo(() => paginateFinalizedDraft(draft), [draft])
+  const maxIndex = Math.max(0, pages.length - 1)
+  const currentIndex = Math.min(Math.max(0, pageIndex), maxIndex)
+  const leftPage = pages[currentIndex]
+  const rightPage = pages[currentIndex + 1] || null
+  const canGoPrev = currentIndex > 0
+  const canGoNext = currentIndex + 2 < pages.length
+  const currentLabel = rightPage
+    ? `${currentIndex + 1}-${currentIndex + 2}`
+    : `${currentIndex + 1}`
+
+  return (
+    <main className="manuscript-page ms-final-reader ms-final-reader-paged workspace-page flex-1 overflow-y-auto min-w-0">
+      <div className="ms-final-page-shell">
+        <div className="ms-final-page-controls font-sans">
+          <button
+            className="ms-final-page-btn"
+            onClick={() => onPageIndexChange(Math.max(0, currentIndex - 2))}
+            disabled={!canGoPrev}
+            aria-label="Previous pages"
+          >
+            Previous
+          </button>
+          <span>Pages {currentLabel} of {pages.length}</span>
+          <button
+            className="ms-final-page-btn"
+            onClick={() => onPageIndexChange(Math.min(maxIndex, currentIndex + 2))}
+            disabled={!canGoNext}
+            aria-label="Next pages"
+          >
+            Next
+          </button>
+        </div>
+
+        <div className="ms-final-book-spread">
+          <FinalPage page={leftPage} draft={draft} pageNumber={currentIndex + 1} />
+          <FinalPage page={rightPage} draft={draft} pageNumber={currentIndex + 2} />
+        </div>
+      </div>
+    </main>
+  )
+}
+
+function FinalizedReader({ draft, viewMode, pageIndex, onPageIndexChange }) {
+  if (!draft) return null
+
+  if (viewMode === 'pages') {
+    return (
+      <FinalizedPageReader
+        draft={draft}
+        pageIndex={pageIndex}
+        onPageIndexChange={onPageIndexChange}
+      />
+    )
+  }
+
+  const visibleActs = (draft.acts || []).filter(act =>
+    (act.chapters || []).some(chapter => (chapter.scenes || []).some(scene => scene.content?.trim()))
+  )
+
+  return (
+    <main className="manuscript-page ms-final-reader workspace-page flex-1 overflow-y-auto scroll-smooth min-w-0">
+      <article className="ms-final-book" aria-label="Finalized manuscript">
+        <header className="ms-final-title-page">
+          <p className="ms-final-kicker">Finalized draft</p>
+          <h1>{draft.projectTitle || 'Untitled'}</h1>
+          <p>{draft.title}</p>
+          <span>{formatFinalizedDate(draft.finalizedAt)}</span>
+        </header>
+
+        {visibleActs.length === 0 && (
+          <div className="ms-final-empty">This finalized draft does not contain any manuscript text.</div>
+        )}
+
+        {visibleActs.map((act, actIndex) => (
+          <section key={act.id || actIndex} className="ms-final-act">
+            {visibleActs.length > 1 && <h2>{act.title}</h2>}
+            {(act.chapters || []).map((chapter, chapterIndex) => {
+              const scenesWithText = (chapter.scenes || []).filter(scene => scene.content?.trim())
+              if (!scenesWithText.length) return null
+              return (
+                <section key={chapter.id || chapterIndex} className="ms-final-chapter">
+                  <h3>{chapter.title}</h3>
+                  {scenesWithText.map((scene, sceneIndex) => (
+                    <div key={scene.id || sceneIndex} className="ms-final-scene">
+                      {sceneIndex > 0 && <div className="ms-final-break" aria-hidden="true">* * *</div>}
+                      {scene.content.trim().split(/\n{2,}/).map((block, blockIndex) => {
+                        const text = block.split('\n').map(line => line.trim()).filter(Boolean).join(' ')
+                        if (!text) return null
+                        return <p key={blockIndex}>{renderInlineMarkdown(text, `${scene.id}-${blockIndex}`)}</p>
+                      })}
+                    </div>
+                  ))}
+                </section>
+              )
+            })}
+          </section>
+        ))}
+      </article>
+    </main>
+  )
 }
 
 // ─── Export ──────────────────────────────────────────────────────────────────
@@ -434,22 +697,6 @@ const SceneEditor = ({
   const hasMetadata = !!(scene.pov || scene.locationTag || (scene.status && scene.status !== 'draft'))
 
   useEffect(() => {
-    if (!innerRef) return
-    innerRef({
-      focus: () => { setFocused(true); setTimeout(() => textareaRef.current?.focus(), 0) },
-      scrollIntoView: opts => wrapperRef.current?.scrollIntoView(opts),
-      appendContent: (text) => {
-        const cur = localContentRef.current ?? ''
-        const next = cur.trimEnd() + (cur.trim() ? '\n\n' : '') + text
-        localContentRef.current = next
-        persistSceneDraftToLocalStorage(scene, next)
-        setLocalContent(next)
-        debouncedUpdate.schedule(next)
-      },
-    })
-  }, [innerRef]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
     if (focused) return undefined
     const sync = window.requestAnimationFrame(() => setLocalContent(scene.content || ''))
     return () => window.cancelAnimationFrame(sync)
@@ -490,6 +737,22 @@ const SceneEditor = ({
   }, [localContent, focused])
 
   const debouncedUpdate = useDebouncedCallback(text => onUpdate(scene.id, text), 400)
+
+  useEffect(() => {
+    if (!innerRef) return
+    innerRef({
+      focus: () => { setFocused(true); setTimeout(() => textareaRef.current?.focus(), 0) },
+      scrollIntoView: opts => wrapperRef.current?.scrollIntoView(opts),
+      appendContent: (text) => {
+        const cur = localContentRef.current ?? ''
+        const next = cur.trimEnd() + (cur.trim() ? '\n\n' : '') + text
+        localContentRef.current = next
+        persistSceneDraftToLocalStorage(scene, next)
+        setLocalContent(next)
+        debouncedUpdate.schedule(next)
+      },
+    })
+  }, [innerRef, scene, debouncedUpdate])
 
   useEffect(() => {
     localContentRef.current = localContent
@@ -711,24 +974,11 @@ const SceneEditor = ({
 
 // ─── Format settings panel ────────────────────────────────────────────────────
 
-const FormatSettingsPanel = ({ settings, onChange, onClose }) => {
-  const panelRef = useRef(null)
-
-  useEffect(() => {
-    const handler = e => { if (panelRef.current && !panelRef.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
-
+const FormatContent = ({ settings, onChange }) => {
   const set = (key, value) => onChange({ ...settings, [key]: value })
 
   return (
-    <div ref={panelRef} className="ms-format-panel font-sans" onMouseDown={e => e.stopPropagation()}>
-      <div className="ms-format-panel-header">
-        <span>Format</span>
-        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-main)] leading-none">✕</button>
-      </div>
-
+    <div className="ms-panel-scroll">
       <div className="ms-format-section">
         <div className="ms-format-label">Font</div>
         <div className="ms-format-row flex-wrap gap-1">
@@ -901,16 +1151,29 @@ export default function Manuscript({ store }) {
   const [highlightedNoteSeq, setHighlightedNoteSeq] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [formatSettings, setFormatSettings] = useState(loadFormat)
-  const [formatOpen, setFormatOpen] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [saveState, setSaveState] = useState('saved') // 'saving' | 'saved'
   const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [readerDraft, setReaderDraft] = useState({ projectId: null, draftId: null })
+  const [finalizedReaderView, setFinalizedReaderView] = useState('scroll')
+  const [finalizedPageIndex, setFinalizedPageIndex] = useState(0)
 
   const containerRef = useRef(null)
   const saveTimer = useRef(null)
   const editorRefs = useRef({})
 
   const activeScene = scenes.find(s => s.id === activeSceneId) ?? null
+  const isNovelProject = (activeNovel?.type || 'novel') === 'novel'
+  const finalizedDrafts = useMemo(
+    () => Array.isArray(activeNovel?.finalizedDrafts) ? activeNovel.finalizedDrafts : [],
+    [activeNovel]
+  )
+  const readerDraftId = readerDraft.projectId === activeNovel?.id ? readerDraft.draftId : null
+  const activeFinalizedDraft = useMemo(
+    () => finalizedDrafts.find(draft => draft.id === readerDraftId) || null,
+    [finalizedDrafts, readerDraftId]
+  )
 
   // Derived entity lists for autocomplete
   const characterNames = useMemo(() => characters.map(c => c.name).filter(Boolean), [characters])
@@ -983,6 +1246,36 @@ export default function Manuscript({ store }) {
   const totalWordCount = useMemo(() =>
     scenes.reduce((acc, s) => acc + (s.content?.trim().split(/\s+/).filter(Boolean).length || 0), 0)
   , [scenes])
+
+  const handleFinaliseDraft = useCallback(() => {
+    if (!activeNovel?.id || !isNovelProject) return
+    const now = new Date()
+    const defaultTitle = `Final draft ${now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    const title = window.prompt('Name this finalized draft copy', defaultTitle)
+    if (title === null) return
+
+    const draft = buildFinalizedDraft({
+      novel: activeNovel,
+      acts,
+      chapters,
+      scenes,
+      labels,
+      title: title.trim() || defaultTitle,
+    })
+
+    const confirmed = window.confirm(
+      `Create an uneditable reading copy of the current manuscript?\n\nThis will not lock your working draft.`
+    )
+    if (!confirmed) return
+
+    updateNovel(activeNovel.id, {
+      finalizedDrafts: [draft, ...finalizedDrafts].slice(0, 20),
+      lastFinalizedDraftAt: draft.finalizedAt,
+    })
+    setReaderDraft({ projectId: activeNovel.id, draftId: draft.id })
+    setFinalizedReaderView('pages')
+    setFinalizedPageIndex(0)
+  }, [activeNovel, isNovelProject, acts, chapters, scenes, labels, finalizedDrafts, updateNovel])
 
   const orderedContent = useMemo(() => {
     const result = []
@@ -1072,6 +1365,25 @@ export default function Manuscript({ store }) {
     }
   }, [addAct, addChapter, addScene, updateAct, updateChapter, labels.level3, writingGoals, handleUpdateGoals])
 
+  const handleDocxImport = useCallback(async (importedActs) => {
+    for (const tAct of importedActs) {
+      const newAct = addAct(tAct.title)
+      for (const tChap of tAct.chapters) {
+        const newChap = addChapter(newAct.id, tChap.title)
+        for (const tScene of tChap.scenes) {
+          const newScene = addScene(newChap.id, tScene.title || labels.level3)
+          if (tScene.content?.trim()) {
+            updateSceneContent(newScene.id, tScene.content)
+          }
+        }
+        // Ensure at least one empty scene per chapter
+        if (tChap.scenes.length === 0) {
+          addScene(newChap.id, labels.level3)
+        }
+      }
+    }
+  }, [addAct, addChapter, addScene, updateSceneContent, labels.level3])
+
   const handleExport = async () => {
     setExporting(true)
     try {
@@ -1107,22 +1419,38 @@ export default function Manuscript({ store }) {
       {/* ── Toolbar ─────────────────────────────────────────── */}
       <div className="ms-toolbar font-sans flex items-center gap-2 flex-shrink-0 px-3">
 
-        {/* Template picker */}
-        <button
-          onClick={() => setTemplateModalOpen(true)}
-          className="ms-toolbar-btn"
-          title="Choose a structural template"
-        >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="0.9" y="0.9" width="3.5" height="3.5" rx="0.8" />
-            <rect x="6.6" y="0.9" width="3.5" height="3.5" rx="0.8" />
-            <rect x="0.9" y="6.6" width="3.5" height="3.5" rx="0.8" />
-            <rect x="6.6" y="6.6" width="3.5" height="3.5" rx="0.8" />
-          </svg>
-          Template
-        </button>
+        {!activeFinalizedDraft && (
+          <>
+            {/* Template picker */}
+            <button
+              onClick={() => setTemplateModalOpen(true)}
+              className="ms-toolbar-btn"
+              title="Choose a structural template"
+            >
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="0.9" y="0.9" width="3.5" height="3.5" rx="0.8" />
+                <rect x="6.6" y="0.9" width="3.5" height="3.5" rx="0.8" />
+                <rect x="0.9" y="6.6" width="3.5" height="3.5" rx="0.8" />
+                <rect x="6.6" y="6.6" width="3.5" height="3.5" rx="0.8" />
+              </svg>
+              Template
+            </button>
 
-        <div className="w-px h-4 bg-[var(--border)] mx-1" />
+            {/* Import */}
+            <button
+              onClick={() => setImportModalOpen(true)}
+              className="ms-toolbar-btn"
+              title="Import a .docx manuscript"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Import
+            </button>
+
+            <div className="w-px h-4 bg-[var(--border)] mx-1" />
+          </>
+        )}
 
         {/* Save state */}
         <SaveIndicator state={saveState} />
@@ -1134,61 +1462,103 @@ export default function Manuscript({ store }) {
 
         <div className="flex-1" />
 
-        {/* Notes toggle */}
-        <button
-          onClick={() => setActiveSidebarTab(v => v === 'notes' ? null : 'notes')}
-          className={`ms-toolbar-btn${activeSidebarTab === 'notes' ? ' is-active' : ''}`}
-          title="Scene notes"
-        >
-          Notes{activeScene?.notes?.length ? ` (${activeScene.notes.length})` : ''}
-        </button>
+        {isNovelProject && finalizedDrafts.length > 0 && (
+          <select
+            className="ms-toolbar-select"
+            value={readerDraftId || ''}
+            onChange={event => {
+              setReaderDraft({ projectId: activeNovel?.id || null, draftId: event.target.value || null })
+              setFinalizedPageIndex(0)
+            }}
+            title="View a finalized draft"
+            aria-label="View a finalized draft"
+          >
+            <option value="">Working draft</option>
+            {finalizedDrafts.map(draft => (
+              <option key={draft.id} value={draft.id}>
+                {draft.title || 'Final draft'}
+              </option>
+            ))}
+          </select>
+        )}
 
-        {/* AI assistant */}
-        <button
-          onClick={() => setActiveSidebarTab(v => v === 'ai' ? null : 'ai')}
-          className={`ms-toolbar-btn${activeSidebarTab === 'ai' ? ' is-active' : ''}`}
-          title="AI writing assistant"
-        >
-          AI
-        </button>
-
-        {/* Format */}
-        <div className="relative">
+        {isNovelProject && !activeFinalizedDraft && (
           <button
-            onClick={() => setFormatOpen(v => !v)}
-            className={`ms-toolbar-btn flex items-center gap-1.5${formatOpen ? ' is-active' : ''}`}
-            title="Text formatting"
+            onClick={handleFinaliseDraft}
+            className="ms-toolbar-btn"
+            title="Copy this manuscript into an uneditable reader view"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" />
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z" />
+              <path d="M8 7h8" /><path d="M8 11h6" />
             </svg>
-            Format
+            Finalise
           </button>
-          {formatOpen && (
-            <FormatSettingsPanel
-              settings={formatSettings}
-              onChange={handleFormatChange}
-              onClose={() => setFormatOpen(false)}
-            />
-          )}
-        </div>
+        )}
+
+        {activeFinalizedDraft && (
+          <div className="ms-toolbar-segment" role="group" aria-label="Finalized reader view">
+            <button
+              type="button"
+              className={finalizedReaderView === 'scroll' ? 'is-active' : ''}
+              onClick={() => setFinalizedReaderView('scroll')}
+            >
+              Scroll
+            </button>
+            <button
+              type="button"
+              className={finalizedReaderView === 'pages' ? 'is-active' : ''}
+              onClick={() => {
+                setFinalizedReaderView('pages')
+                setFinalizedPageIndex(0)
+              }}
+            >
+              Pages
+            </button>
+          </div>
+        )}
+
+        {/* Notes toggle */}
+        {!activeFinalizedDraft && (
+          <button
+            onClick={() => setActiveSidebarTab(v => v === 'notes' ? null : 'notes')}
+            className={`ms-toolbar-btn${activeSidebarTab === 'notes' ? ' is-active' : ''}`}
+            title="Scene notes"
+          >
+            Notes{activeScene?.notes?.length ? ` (${activeScene.notes.length})` : ''}
+          </button>
+        )}
+
+        {/* AI assistant */}
+        {!activeFinalizedDraft && (
+          <button
+            onClick={() => setActiveSidebarTab(v => v === 'ai' ? null : 'ai')}
+            className={`ms-toolbar-btn${activeSidebarTab === 'ai' ? ' is-active' : ''}`}
+            title="AI writing assistant"
+          >
+            AI
+          </button>
+        )}
 
         {/* Export */}
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="ms-toolbar-btn disabled:opacity-50"
-          title="Export as .docx"
-        >
-          {exporting ? 'Exporting…' : (
-            <span className="flex items-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Export
-            </span>
-          )}
-        </button>
+        {!activeFinalizedDraft && (
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="ms-toolbar-btn disabled:opacity-50"
+            title="Export as .docx"
+          >
+            {exporting ? 'Exporting…' : (
+              <span className="flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Fullscreen toggle */}
         <button
@@ -1210,6 +1580,16 @@ export default function Manuscript({ store }) {
       </div>
 
       {/* ── Body: writing area + right sidebar ──────────────── */}
+      {activeFinalizedDraft ? (
+        <div className="flex flex-1 overflow-hidden">
+          <FinalizedReader
+            draft={activeFinalizedDraft}
+            viewMode={finalizedReaderView}
+            pageIndex={finalizedPageIndex}
+            onPageIndexChange={setFinalizedPageIndex}
+          />
+        </div>
+      ) : (
       <div className="flex flex-1 overflow-hidden">
 
         {/* Writing area */}
@@ -1349,6 +1729,7 @@ export default function Manuscript({ store }) {
           totalWordCount={totalWordCount}
           writingGoals={writingGoals}
           onUpdateGoals={handleUpdateGoals}
+          formatSlot={<FormatContent settings={formatSettings} onChange={handleFormatChange} />}
           notesSlot={
             <NotesPanel
               scene={activeScene}
@@ -1368,6 +1749,7 @@ export default function Manuscript({ store }) {
           }
         />
       </div>
+      )}
 
       {/* Template modal */}
       {templateModalOpen && (
@@ -1375,6 +1757,15 @@ export default function Manuscript({ store }) {
           hasExistingContent={acts.length > 0}
           onClose={() => setTemplateModalOpen(false)}
           onApply={handleApplyTemplate}
+        />
+      )}
+
+      {/* Import modal */}
+      {importModalOpen && (
+        <DocxImportModal
+          hasExistingContent={acts.length > 0}
+          onClose={() => setImportModalOpen(false)}
+          onImport={handleDocxImport}
         />
       )}
     </div>

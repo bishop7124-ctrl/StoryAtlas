@@ -1,161 +1,103 @@
+import { BUILT_IN_THEMES, DEFAULT_THEME } from './theme.js'
+
 const serifStack = 'Georgia, "Times New Roman", serif'
 const sansStack = 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 
-export const EXPORT_PDF_THEMES = {
-  obsidian: {
-    id: 'obsidian',
-    name: 'Obsidian Codex',
-    tagline: 'Soft candlelit encyclopedia',
-    palette: {
-      page: '#1c1b19',
-      pageAlt: '#26231f',
-      panel: '#2c2924',
-      panelSoft: '#342f27',
-      text: '#f2ead9',
-      muted: '#cfc2a8',
-      faint: '#9d8e74',
-      accent: '#d7b86f',
-      accent2: '#a98756',
-      border: '#7b6a4d',
-      shadow: 'rgba(24,20,14,.28)',
-    },
-    typography: {
-      display: serifStack,
-      body: serifStack,
-      ui: sansStack,
-    },
-    cover: {
-      overlay: 'linear-gradient(125deg, rgba(28,27,25,.22), rgba(215,184,111,.16) 48%, rgba(28,27,25,.58))',
-      marker: 'CODEX',
-    },
-    texture:
-      'radial-gradient(circle at 18% 12%, rgba(215,184,111,.11), transparent 25%), linear-gradient(rgba(255,255,255,.024) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px)',
-  },
-  royal: {
-    id: 'royal',
-    name: 'Royal Archive',
-    tagline: 'Misty blue historical manuscript',
-    palette: {
-      page: '#172331',
-      pageAlt: '#203044',
-      panel: '#25384d',
-      panelSoft: '#2d4054',
-      text: '#edf3f5',
-      muted: '#c6d1d8',
-      faint: '#92a3af',
-      accent: '#c9d6df',
-      accent2: '#93aabd',
-      border: '#708698',
-      shadow: 'rgba(12,20,29,.28)',
-    },
-    typography: {
-      display: serifStack,
-      body: serifStack,
-      ui: sansStack,
-    },
-    cover: {
-      overlay: 'linear-gradient(130deg, rgba(23,35,49,.2), rgba(201,214,223,.15) 50%, rgba(23,35,49,.55))',
-      marker: 'ARCHIVE',
-    },
-    texture:
-      'radial-gradient(circle at 80% 20%, rgba(201,214,223,.11), transparent 27%), linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px)',
-  },
-  verdant: {
-    id: 'verdant',
-    name: 'Verdant Chronicle',
-    tagline: 'Muted woodland world lore',
-    palette: {
-      page: '#1a271f',
-      pageAlt: '#233328',
-      panel: '#2b3d30',
-      panelSoft: '#344737',
-      text: '#edf0df',
-      muted: '#c8cfad',
-      faint: '#8e9a72',
-      accent: '#c3a06d',
-      accent2: '#8fa36f',
-      border: '#7f875e',
-      shadow: 'rgba(14,24,16,.27)',
-    },
-    typography: {
-      display: serifStack,
-      body: serifStack,
-      ui: sansStack,
-    },
-    cover: {
-      overlay: 'linear-gradient(135deg, rgba(26,39,31,.18), rgba(195,160,109,.15) 45%, rgba(26,39,31,.55))',
-      marker: 'CHRONICLE',
-    },
-    texture:
-      'radial-gradient(circle at 25% 25%, rgba(143,163,111,.16), transparent 24%), radial-gradient(circle at 78% 72%, rgba(195,160,109,.11), transparent 24%), linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px)',
-  },
-  ivory: {
-    id: 'ivory',
-    name: 'Ivory Manuscript',
-    tagline: 'Warm printed encyclopedia',
-    palette: {
-      page: '#f5ecdc',
-      pageAlt: '#fff8ed',
-      panel: '#fffaf2',
-      panelSoft: '#efe4d2',
-      text: '#2d261f',
-      muted: '#786855',
-      faint: '#aa9679',
-      accent: '#8b6040',
-      accent2: '#b99768',
-      border: '#d0bea0',
-      shadow: 'rgba(111,82,50,.16)',
-    },
-    typography: {
-      display: serifStack,
-      body: serifStack,
-      ui: sansStack,
-    },
-    cover: {
-      overlay: 'linear-gradient(130deg, rgba(255,250,242,.42), rgba(185,151,104,.18) 52%, rgba(114,83,52,.15))',
-      marker: 'MANUSCRIPT',
-    },
-    texture:
-      'radial-gradient(circle at 15% 18%, rgba(139,96,64,.09), transparent 24%), linear-gradient(rgba(80,55,30,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(80,55,30,.022) 1px, transparent 1px)',
-  },
-  crimson: {
-    id: 'crimson',
-    name: 'Crimson Empire',
-    tagline: 'Dusty rose war chronicle',
-    palette: {
-      page: '#21191b',
-      pageAlt: '#2b2023',
-      panel: '#33262a',
-      panelSoft: '#3d2b30',
-      text: '#f4e8e2',
-      muted: '#d6b9b1',
-      faint: '#9d7d78',
-      accent: '#d16f73',
-      accent2: '#a9535b',
-      border: '#87565a',
-      shadow: 'rgba(26,16,18,.3)',
-    },
-    typography: {
-      display: serifStack,
-      body: serifStack,
-      ui: sansStack,
-    },
-    cover: {
-      overlay: 'linear-gradient(130deg, rgba(33,25,27,.22), rgba(209,111,115,.16) 48%, rgba(33,25,27,.58))',
-      marker: 'EMPIRE',
-    },
-    texture:
-      'radial-gradient(circle at 80% 18%, rgba(209,111,115,.14), transparent 24%), linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.014) 1px, transparent 1px)',
-  },
+const hexToRgb = (hex) => {
+  const clean = String(hex || '#000000').replace('#', '')
+  const normalized = clean.length === 3
+    ? clean.split('').map(char => `${char}${char}`).join('')
+    : clean.padEnd(6, '0').slice(0, 6)
+  const value = parseInt(normalized, 16)
+  if (Number.isNaN(value)) return { r: 0, g: 0, b: 0 }
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
+  }
 }
 
-export const DEFAULT_EXPORT_PDF_THEME_ID = 'obsidian'
+const rgbToHex = ({ r, g, b }) =>
+  `#${[r, g, b].map(channel => Math.round(Math.max(0, Math.min(255, channel))).toString(16).padStart(2, '0')).join('')}`
 
-export const EXPORT_PDF_THEME_OPTIONS = Object.values(EXPORT_PDF_THEMES).map(theme => ({
+const mixHex = (from, to, weight = 0.5) => {
+  const a = hexToRgb(from)
+  const b = hexToRgb(to)
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * weight,
+    g: a.g + (b.g - a.g) * weight,
+    b: a.b + (b.b - a.b) * weight,
+  })
+}
+
+const luminance = (hex) => {
+  const { r, g, b } = hexToRgb(hex)
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+}
+
+const createPdfTheme = (theme) => {
+  const swatches = theme.swatches
+  const isLight = luminance(swatches.bgMain) > 0.58
+  const marker = theme.label
+    .split(/\s+/)
+    .map(part => part[0])
+    .join('')
+    .slice(0, 5)
+    .toUpperCase()
+
+  return {
+    id: theme.id,
+    name: theme.label,
+    tagline: theme.description,
+    palette: {
+      page: swatches.bgMain,
+      pageAlt: swatches.bgNav,
+      panel: isLight ? mixHex(swatches.bgNav, '#ffffff', 0.5) : mixHex(swatches.bgNav, '#ffffff', 0.06),
+      panelSoft: isLight ? mixHex(swatches.border, '#ffffff', 0.42) : mixHex(swatches.bgNav, swatches.border, 0.55),
+      text: swatches.textMain,
+      muted: swatches.textMuted,
+      faint: mixHex(swatches.textMuted, swatches.border, isLight ? 0.48 : 0.36),
+      accent: swatches.accent,
+      accent2: mixHex(swatches.accent, swatches.textMuted, 0.42),
+      border: swatches.border,
+      shadow: isLight ? 'rgba(20,24,28,.16)' : 'rgba(0,0,0,.3)',
+    },
+    typography: {
+      display: serifStack,
+      body: serifStack,
+      ui: sansStack,
+    },
+    cover: {
+      overlay: `linear-gradient(130deg, ${isLight ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.18)'}, ${mixHex(swatches.accent, swatches.bgMain, 0.45)}33 52%, ${isLight ? 'rgba(20,24,28,.12)' : 'rgba(0,0,0,.5)'})`,
+      marker,
+    },
+    texture:
+      `radial-gradient(circle at ${theme.glowPos || '80% 12%'}, ${swatches.accent}22, transparent 27%), linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.016) 1px, transparent 1px)`,
+  }
+}
+
+export const EXPORT_PDF_THEMES = BUILT_IN_THEMES.reduce((themes, theme) => {
+  themes[theme.id] = createPdfTheme(theme)
+  return themes
+}, {})
+
+const LEGACY_THEME_ALIASES = {
+  obsidian: 'industrial-loft',
+  royal: 'ocean-depth',
+  verdant: 'tropical',
+  ivory: 'caramel-latte',
+  crimson: 'tropical',
+}
+
+export const DEFAULT_EXPORT_PDF_THEME_ID = DEFAULT_THEME
+
+export const EXPORT_PDF_THEME_OPTIONS = BUILT_IN_THEMES.map(theme => ({
   id: theme.id,
-  name: theme.name,
-  tagline: theme.tagline,
+  name: theme.label,
+  tagline: theme.description,
 }))
 
-export const getExportPdfTheme = (themeId = DEFAULT_EXPORT_PDF_THEME_ID) =>
-  EXPORT_PDF_THEMES[themeId] ?? EXPORT_PDF_THEMES[DEFAULT_EXPORT_PDF_THEME_ID]
+export const getExportPdfTheme = (themeId = DEFAULT_EXPORT_PDF_THEME_ID) => {
+  const normalizedThemeId = LEGACY_THEME_ALIASES[themeId] ?? themeId
+  return EXPORT_PDF_THEMES[normalizedThemeId] ?? EXPORT_PDF_THEMES[DEFAULT_EXPORT_PDF_THEME_ID]
+}

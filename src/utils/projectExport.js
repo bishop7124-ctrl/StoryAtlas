@@ -912,16 +912,16 @@ const makePdfCanvas = (theme) => {
 
 const pdfContent = (pdf) => ({ content: pdf.content(), images: pdf.images() })
 
-const drawMetricGrid = (pdf, stats, x, y, cols = 2, cellW = 142, cellH = 64) => {
+const drawMetricGrid = (pdf, stats, x, y, cols = 2, cellW = 142, cellH = 64, theme = getExportPdfTheme()) => {
   stats.forEach(([label, value], index) => {
     const col = index % cols
     const row = Math.floor(index / cols)
     const px = x + col * (cellW + 12)
     const py = y - row * (cellH + 12)
-    pdf.rect(px, py - cellH, cellW, cellH, '#1f1d18', null)
-    pdf.rect(px, py - cellH, cellW, cellH, null, '#6e5a34', 0.8)
-    pdf.text(String(value), px + 14, py - 24, 22, { bold: true, color: '#d6ad54', maxWidth: cellW - 28 })
-    pdf.text(String(label).toUpperCase(), px + 14, py - 43, 7, { bold: true, color: '#c4b692', tracking: 0.7, maxWidth: cellW - 28 })
+    pdf.rect(px, py - cellH, cellW, cellH, theme.palette.panel, null)
+    pdf.rect(px, py - cellH, cellW, cellH, null, theme.palette.border, 0.8)
+    pdf.text(String(value), px + 14, py - 24, 22, { bold: true, color: theme.palette.accent, maxWidth: cellW - 28 })
+    pdf.text(String(label).toUpperCase(), px + 14, py - 43, 7, { bold: true, color: theme.palette.muted, tracking: 0.7, maxWidth: cellW - 28 })
   })
 }
 
@@ -1027,7 +1027,7 @@ const createCoverPage = (projectData, theme) => {
     pdf.rect(76, 185, 230, 34, theme.palette.panel, theme.palette.border, 0.8)
     pdf.text(projectData.series.name.toUpperCase(), 92, 197, 9, { bold: true, color: theme.palette.accent, tracking: 1.2, maxWidth: 198 })
   }
-  drawMetricGrid(pdf, buildSummaryStats(projectData), 76, 160, 5, 130, 68)
+  drawMetricGrid(pdf, buildSummaryStats(projectData), 76, 160, 5, 130, 68, theme)
   return pdfContent(pdf)
 }
 
