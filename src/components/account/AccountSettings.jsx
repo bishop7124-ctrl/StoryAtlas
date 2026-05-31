@@ -4,6 +4,7 @@ import { PLANS, getMembership } from '../../utils/membership'
 import { getStorageQuota } from '../../utils/storageQuota'
 import StorageCard from './StorageCard'
 import { getCookieConsent, setCookieConsent } from '../../utils/cookieConsent'
+import { PROVIDERS } from '../../utils/aiApi'
 import {
   BUILT_IN_THEMES,
   DEFAULT_CUSTOM_COLORS,
@@ -514,6 +515,190 @@ function AppearancePanel({ user, updateProfile }) {
   )
 }
 
+function AISettingsPanel() {
+  const load = (key, def) => { try { return JSON.parse(localStorage.getItem(key)) ?? def } catch { return def } }
+  const save = (key, val) => localStorage.setItem(key, JSON.stringify(val))
+
+  const DEFAULT_SETTINGS = {
+    activeProvider: 'openrouter',
+    google:      { apiKey: '', model: 'gemini-2.0-flash' },
+    anthropic:   { apiKey: '', model: 'claude-sonnet-4-6' },
+    openrouter:  { apiKey: '', model: 'google/gemma-3-27b-it' },
+    openai:      { apiKey: '', model: '', baseUrl: 'https://api.openai.com/v1' },
+  }
+
+  const [settings, setSettings] = useState(() => {
+    const stored = load('nf_aiSettings', {})
+    return { ...DEFAULT_SETTINGS, ...stored }
+  })
+  const [saved, setSaved] = useState(false)
+
+  const active = settings.activeProvider
+  const prov = PROVIDERS[active]
+  const cfg = settings[active] || {}
+
+  const update = (field, val) =>
+    setSettings(prev => ({ ...prev, [active]: { ...prev[active], [field]: val } }))
+
+  const handleSave = () => {
+    save('nf_aiSettings', settings)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const activeModelLabel = (() => {
+    const model = cfg.model || prov?.defaultModel || ''
+    const found = prov?.models?.find(m => m.id === model)
+    return found ? found.label : model || 'Not set'
+  })()
+
+  return (
+    <section className="account-settings-panel">
+      <div className="account-panel-heading">
+        <div>
+          <p className="eyebrow">AI Integration</p>
+          <h2>Model &amp; API keys</h2>
+        </div>
+        <div className="account-actions account-heading-actions">
+          <button type="button" onClick={handleSave} className="account-primary-button">
+            Save settings
+          </button>
+          {saved && <span className="account-inline-success">Saved</span>}
+        </div>
+      </div>
+
+      {/* Active model callout */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 18px', borderRadius: 10,
+        background: 'var(--accent-fade)',
+        border: '1.5px solid color-mix(in srgb, var(--accent) 40%, var(--border))',
+        marginBottom: 24,
+      }}>
+        <span style={{ fontSize: 22, lineHeight: 1, color: 'var(--accent)', flexShrink: 0 }}>✦</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 3 }}>Active model — used for all AI features</p>
+          <p style={{ margin: 0, fontSize: 17, fontWeight: 900, color: 'var(--text-main)', lineHeight: 1.2 }}>{activeModelLabel}</p>
+          <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{prov?.name}</p>
+        </div>
+        {(cfg.apiKey?.trim()) && (
+          <span style={{
+            flexShrink: 0, fontSize: 10, fontWeight: 900, letterSpacing: '.06em', textTransform: 'uppercase',
+            color: 'var(--accent)', background: 'var(--accent-fade)',
+            border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+            borderRadius: 4, padding: '3px 8px',
+          }}>Connected</span>
+        )}
+      </div>
+
+      {/* Provider selector */}
+      <div style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>Provider</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {Object.entries(PROVIDERS).map(([id, p]) => {
+            const isActive = active === id
+            const connected = !!settings[id]?.apiKey?.trim()
+            const provModel = settings[id]?.model || p.defaultModel
+            const provModelLabel = p.models?.find(m => m.id === provModel)?.label || provModel || '—'
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSettings(prev => ({ ...prev, activeProvider: id }))}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                  border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                  background: isActive ? 'var(--accent-fade)' : 'var(--bg-main)',
+                  textAlign: 'left', width: '100%',
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>{p.name}</span>
+                    {isActive && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 900, letterSpacing: '.07em', textTransform: 'uppercase',
+                        color: 'var(--accent)', padding: '2px 6px',
+                        background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                        borderRadius: 3,
+                      }}>Active</span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{provModelLabel}</span>
+                </div>
+                {connected ? (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>● Connected</span>
+                ) : (
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>No key</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Model selector for active provider */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>
+          Model — {prov?.name}
+        </p>
+        <select
+          value={cfg.model || prov?.defaultModel || ''}
+          onChange={e => update('model', e.target.value)}
+          className="account-appearance-input"
+          style={{ width: '100%' }}
+        >
+          {prov?.models?.map(m => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
+        </select>
+        {prov?.models?.length === 0 && (
+          <input
+            value={cfg.model || ''}
+            onChange={e => update('model', e.target.value)}
+            placeholder={`e.g. ${prov?.defaultModel}`}
+            className="account-appearance-input"
+            style={{ width: '100%', marginTop: 4 }}
+          />
+        )}
+      </div>
+
+      {/* Base URL for OpenAI-compatible */}
+      {prov?.hasBaseUrl && (
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Base URL</p>
+          <input
+            value={cfg.baseUrl || ''}
+            onChange={e => update('baseUrl', e.target.value)}
+            placeholder={PROVIDERS.openai.defaultBaseUrl}
+            className="account-appearance-input"
+            style={{ width: '100%' }}
+          />
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Works with Groq, Together, Mistral, Ollama, and any OpenAI-compatible endpoint.</p>
+        </div>
+      )}
+
+      {/* API key */}
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>
+          API Key
+          {cfg.apiKey?.trim() && <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--accent)', marginLeft: 6 }}>· saved</span>}
+        </p>
+        <input
+          type="password"
+          value={cfg.apiKey || ''}
+          onChange={e => update('apiKey', e.target.value)}
+          placeholder={prov?.keyPlaceholder}
+          className="account-appearance-input"
+          style={{ width: '100%' }}
+        />
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Keys are stored locally in your browser and sent only to the chosen provider.</p>
+      </div>
+    </section>
+  )
+}
+
 const formatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
 const billingEndpoints = {
@@ -835,6 +1020,7 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0, a
             { id: 'profile', label: 'Profile' },
             { id: 'appearance', label: 'Appearance' },
             { id: 'preferences', label: 'Preferences' },
+            { id: 'ai', label: 'AI' },
             { id: 'membership', label: 'Membership' },
           ].map(tab => (
             <button
@@ -860,6 +1046,10 @@ export default function AccountSettings({ open, onClose, storageUsedBytes = 0, a
 
           {selectedTab === 'preferences' && (
             <PreferencesPanel />
+          )}
+
+          {selectedTab === 'ai' && (
+            <AISettingsPanel />
           )}
 
           {selectedTab === 'membership' && (

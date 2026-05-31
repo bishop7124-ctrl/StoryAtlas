@@ -4,6 +4,10 @@ import WritingSidebar from './WritingSidebar'
 import TemplateModal from './TemplateModal'
 import DocxImportModal from './DocxImportModal'
 import AISuggestionPanel from './AISuggestionPanel'
+import SceneVersionHistory from './SceneVersionHistory'
+import ManuscriptSearch from './ManuscriptSearch'
+import PacingChart from './PacingChart'
+import { saveSceneVersion } from '../../utils/sceneVersions'
 
 // ─── Debounce hook ────────────────────────────────────────────────────────────
 
@@ -84,6 +88,11 @@ function persistSceneDraftToLocalStorage(scene, content) {
       nextScenes.push({ ...scene, content, lastModified: now, wordHistory: [{ date: today, words: countWords(content), timestamp: now }] })
     }
     localStorage.setItem('nf_scenes', JSON.stringify(nextScenes))
+
+    // Save a version snapshot on blur/page-hide so history builds up naturally
+    import('../../utils/sceneVersions').then(m => {
+      m.saveSceneVersion({ ...scene, content })
+    }).catch(() => {})
   } catch (error) {
     console.warn('Could not save latest scene draft before leaving the page.', error)
   }
@@ -685,6 +694,7 @@ const SceneEditor = ({
   onOpenNotes, onNoteClick,
   formatSettings, characterNames, locationNames,
   onPersistDraft,
+  onOpenVersionHistory,
 }) => {
   const [localContent, setLocalContent] = useState(scene.content || '')
   const [focused, setFocused] = useState(false)
@@ -917,6 +927,14 @@ const SceneEditor = ({
             onClick={handleAddNote}
             className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
           >+ Note</button>
+
+          {onOpenVersionHistory && (
+            <button
+              onClick={() => onOpenVersionHistory(scene.id)}
+              className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 border border-[var(--border)] rounded text-[var(--text-muted)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition-colors"
+              title="View and restore previous versions of this scene"
+            >History</button>
+          )}
         </div>
 
         {/* Scene metadata row */}
@@ -1158,6 +1176,9 @@ export default function Manuscript({ store }) {
   const [readerDraft, setReaderDraft] = useState({ projectId: null, draftId: null })
   const [finalizedReaderView, setFinalizedReaderView] = useState('scroll')
   const [finalizedPageIndex, setFinalizedPageIndex] = useState(0)
+  const [versionHistorySceneId, setVersionHistorySceneId] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [pacingOpen, setPacingOpen] = useState(false)
 
   const containerRef = useRef(null)
   const saveTimer = useRef(null)
@@ -1198,6 +1219,21 @@ export default function Manuscript({ store }) {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => setSaveState('saved'), 2000)
   }, [updateSceneContent])
+
+  const handleRestoreVersion = useCallback((version) => {
+    const scene = scenes.find(s => s.id === version.sceneId)
+    if (!scene) return
+    // Snapshot current state before restoring
+    saveSceneVersion(scene)
+    updateScene(scene.id, { content: version.content, title: version.title })
+    setSaveState('saving')
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => setSaveState('saved'), 2000)
+  }, [scenes, updateScene])
+
+  const handleReplaceInScene = useCallback((sceneId, newContent) => {
+    handleContentUpdate(sceneId, newContent)
+  }, [handleContentUpdate])
 
   // Fullscreen management
   const toggleFullscreen = useCallback(async () => {
@@ -1519,6 +1555,34 @@ export default function Manuscript({ store }) {
           </div>
         )}
 
+        {/* Search */}
+        {!activeFinalizedDraft && (
+          <button
+            onClick={() => setSearchOpen(v => !v)}
+            className={`ms-toolbar-btn${searchOpen ? ' is-active' : ''}`}
+            title="Search and replace across all scenes"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            Search
+          </button>
+        )}
+
+        {/* Pacing */}
+        {!activeFinalizedDraft && (
+          <button
+            onClick={() => setPacingOpen(v => !v)}
+            className={`ms-toolbar-btn${pacingOpen ? ' is-active' : ''}`}
+            title="Pacing chart — word count by scene or chapter"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 17V13M12 17v-6M16 17V9" />
+            </svg>
+            Pacing
+          </button>
+        )}
+
         {/* Notes toggle */}
         {!activeFinalizedDraft && (
           <button
@@ -1682,6 +1746,7 @@ export default function Manuscript({ store }) {
                       characterNames={characterNames}
                       locationNames={locationNames}
                       onPersistDraft={persistSceneDraftToLocalStorage}
+                      onOpenVersionHistory={setVersionHistorySceneId}
                     />
 
                     {isLastInChapter && (
@@ -1766,6 +1831,40 @@ export default function Manuscript({ store }) {
           hasExistingContent={acts.length > 0}
           onClose={() => setImportModalOpen(false)}
           onImport={handleDocxImport}
+        />
+      )}
+
+      {/* Version history modal */}
+      {versionHistorySceneId && (
+        <SceneVersionHistory
+          scene={scenes.find(s => s.id === versionHistorySceneId) ?? null}
+          onRestore={handleRestoreVersion}
+          onClose={() => setVersionHistorySceneId(null)}
+        />
+      )}
+
+      {/* Global search & replace */}
+      {searchOpen && (
+        <ManuscriptSearch
+          scenes={scenes}
+          chapters={chapters}
+          acts={acts}
+          activeNovelId={activeNovel?.id}
+          onOpenScene={handleSelectScene}
+          onReplaceInScene={handleReplaceInScene}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
+      {/* Pacing chart */}
+      {pacingOpen && (
+        <PacingChart
+          scenes={scenes}
+          chapters={chapters}
+          acts={acts}
+          activeNovelId={activeNovel?.id}
+          onOpenScene={handleSelectScene}
+          onClose={() => setPacingOpen(false)}
         />
       )}
     </div>

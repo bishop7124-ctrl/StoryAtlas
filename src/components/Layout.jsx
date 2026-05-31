@@ -15,6 +15,7 @@ import Manuscript from './Manuscript/Manuscript'
 import StoryOutline from './outline/StoryOutline'
 import ProjectDashboard from './dashboard/ProjectDashboard'
 import ScheduleCalendar from './schedule/ScheduleCalendar'
+import AITools from './aitools/AITools'
 import { getProjectType, getEnabledSections, ALL_SECTION_IDS } from '../constants/projectTypes'
 import { StudioFrame, StudioWorkspace, StudioTab, StudioButton, StudioEmpty } from './presentation/Studio'
 import {
@@ -51,6 +52,7 @@ function Icon({ name, size = 16 }) {
     map: <><path d="M3 7l6-3 6 3 6-3v13l-6 3-6-3-6 3z" /><path d="M9 4v13" /><path d="M15 7v13" /></>,
     note: <><path d="M5 4h14v16H5z" /><path d="M8 8h8" /><path d="M8 12h8" /><path d="M8 16h5" /></>,
     schedule: <><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /><path d="M8 14h.01" /><path d="M12 14h.01" /><path d="M16 14h.01" /><path d="M8 18h.01" /><path d="M12 18h.01" /></>,
+    aitools:  <><circle cx={12} cy={12} r={9} /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></>,
   }
   return <svg {...common}>{paths[name] || paths.note}</svg>
 }
@@ -113,6 +115,7 @@ const ALL_SECTIONS = [
   { id: 'timeline',     label: 'Timeline',     icon: 'timeline' },
   { id: 'worldhistory', label: 'History',      icon: 'worldhistory' },
   { id: 'map',          label: 'Map',          icon: 'map' },
+  { id: 'aitools',     label: 'AI Tools',     icon: 'aitools' },
 ]
 
 const STUDIO_ROOMS = [
@@ -121,6 +124,7 @@ const STUDIO_ROOMS = [
   { id: 'characters',  label: 'Characters',  icon: 'characters',  sections: ['characters', 'familytree', 'factions'] },
   { id: 'atlas',       label: 'Atlas',       icon: 'atlas',       sections: ['locations', 'map'] },
   { id: 'lore',        label: 'Lore',        icon: 'lore',        sections: ['lore', 'timeline', 'worldhistory'] },
+  { id: 'aitools',     label: 'AI Tools',    icon: 'aitools',     sections: ['aitools'] },
 ]
 
 const SETTINGS_GROUPS = [
@@ -128,6 +132,7 @@ const SETTINGS_GROUPS = [
   { label: 'Characters', sections: ['characters', 'familytree', 'factions'] },
   { label: 'Atlas',      sections: ['locations', 'map'] },
   { label: 'Lore',       sections: ['lore', 'timeline', 'worldhistory'] },
+  { label: 'AI',         sections: ['aitools'] },
 ]
 
 const BACKUP_DEFAULTS = {
@@ -728,6 +733,7 @@ function ProjectSettings({ store, onClose }) {
 
 export default function Layout({
   store,
+  userId,
   section,
   setSection,
   onOpenAccount,
@@ -810,6 +816,7 @@ export default function Layout({
     timeline:     <Timeline store={store} />,
     worldhistory: <WorldHistory store={store} />,
     map:          <MapBuilder store={store} />,
+    aitools:      <AITools store={store} userId={userId} />,
   }
 
   const activeSection = planningSections.find(s => s.id === section) || planningSections[0]
@@ -922,8 +929,15 @@ export default function Layout({
               : <AIAssistant store={store} section="manuscript" onOpenChat={() => setAiOpen(v => !v)} aiOpen={aiOpen} />
           }
         >
-          <div className="h-full overflow-hidden">
-            {viewMode === 'planning' ? (
+          <div className="h-full overflow-hidden" style={{ position: 'relative' }}>
+            {/* AI Tools stays mounted so analyses survive navigation */}
+            <div style={{ position: 'absolute', inset: 0, display: viewMode === 'planning' && section === 'aitools' ? 'block' : 'none', zIndex: 1 }}>
+              <SectionErrorBoundary key="aitools">
+                <AITools store={store} userId={userId} />
+              </SectionErrorBoundary>
+            </div>
+
+            {viewMode === 'planning' && section !== 'aitools' ? (
               <SectionErrorBoundary key={section}>
                 {section === 'map' && isMobileViewport ? (
                   <div className="workspace-page grid h-full place-items-center p-6">
@@ -936,11 +950,11 @@ export default function Layout({
                   databaseContent[section] || databaseContent['characters']
                 )}
               </SectionErrorBoundary>
-            ) : (
+            ) : viewMode === 'writing' ? (
               <SectionErrorBoundary key="manuscript">
                 <Manuscript store={store} />
               </SectionErrorBoundary>
-            )}
+            ) : null}
           </div>
         </StudioWorkspace>
       </StudioFrame>

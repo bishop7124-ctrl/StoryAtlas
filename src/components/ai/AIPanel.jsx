@@ -31,6 +31,20 @@ function ProviderSettings({ settings, onSave, onCancel }) {
       <div className="px-4 py-3 border-b border-[var(--border)] flex-shrink-0">
         <h3 className="font-bold text-[var(--text-main)] text-sm">AI Settings</h3>
         <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Keys are stored locally and sent only to the chosen provider.</p>
+        {/* Active model callout */}
+        <div className="mt-3 flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[var(--accent-fade)] border border-[var(--accent)]/30">
+          <span className="text-[var(--accent)] text-sm flex-shrink-0">✦</span>
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] mb-0.5">Active model</p>
+            <p className="text-xs font-bold text-[var(--text-main)] leading-tight truncate">
+              {(() => {
+                const model = local[active]?.model || prov?.defaultModel || ''
+                return prov?.models?.find(m => m.id === model)?.label || model || 'Not set'
+              })()}
+            </p>
+            <p className="text-[10px] text-[var(--text-muted)] leading-tight">{prov?.name}</p>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
@@ -64,16 +78,22 @@ function ProviderSettings({ settings, onSave, onCancel }) {
         {/* Model */}
         <div>
           <label className="block text-xs text-[var(--text-muted)] uppercase tracking-widest mb-2">Model</label>
-          <input
-            list={`models-${active}`}
-            value={cfg.model}
-            onChange={e => update('model', e.target.value)}
-            placeholder={`e.g. ${prov.defaultModel}`}
-            className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
-          />
-          <datalist id={`models-${active}`}>
-            {prov.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </datalist>
+          {prov.models.length > 0 ? (
+            <select
+              value={cfg.model || prov.defaultModel}
+              onChange={e => update('model', e.target.value)}
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--accent)]"
+            >
+              {prov.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          ) : (
+            <input
+              value={cfg.model}
+              onChange={e => update('model', e.target.value)}
+              placeholder={`e.g. ${prov.defaultModel}`}
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded px-3 py-2 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+            />
+          )}
         </div>
 
         {/* Base URL (OpenAI-compatible only) */}
@@ -944,7 +964,12 @@ export default function AIPanel({ store, open, onClose, initialContext, membersh
                   : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-main)]'
               }`}
             >
-              {PROVIDERS[activeProvider]?.name.split(' ')[0] || 'Settings'}
+              {(() => {
+              const p = PROVIDERS[activeProvider]
+              const model = aiSettings[activeProvider]?.model || p?.defaultModel || ''
+              const modelLabel = p?.models?.find(m => m.id === model)?.label || model
+              return modelLabel ? `${p?.name?.split(' ')[0] || 'AI'} · ${modelLabel}` : (p?.name?.split(' ')[0] || 'Settings')
+            })()}
             </button>
             <button
               type="button"

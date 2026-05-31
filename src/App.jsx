@@ -388,7 +388,7 @@ function AppInner() {
   return (viewMode === 'editor' && store.activeNovel)
     ? (
       <>
-        <Layout key={store.activeNovelId} store={store} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} viewMode={layoutViewMode} setViewMode={setLayoutViewMode} projectSettingsOpen={projectSettingsOpen} setProjectSettingsOpen={setProjectSettingsOpen} />
+        <Layout key={store.activeNovelId} store={store} userId={userId} section={section} setSection={setSection} onOpenAccount={() => setAccountOpen(true)} onOpenHelp={() => setHelpOpen(true)} onOpenLegal={setLegalPage} onOpenAbout={() => setAboutOpen(true)} membership={membership} viewMode={layoutViewMode} setViewMode={setLayoutViewMode} projectSettingsOpen={projectSettingsOpen} setProjectSettingsOpen={setProjectSettingsOpen} />
         {accountPage}
         {globalOverlays}
       </>

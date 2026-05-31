@@ -21,7 +21,7 @@ export const PROJECT_TYPES = {
     writingTab: 'WRITING',
     defaultSections: [
       'outline','characters','familytree','factions',
-      'locations','lore','ideas','schedule','timeline','worldhistory',
+      'locations','lore','ideas','schedule','timeline','worldhistory','aitools',
     ],
     // map available but not default — enable via project settings
   },
@@ -41,7 +41,7 @@ export const PROJECT_TYPES = {
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
     defaultSections: [
-      'outline','characters','locations','lore','ideas','schedule','timeline',
+      'outline','characters','locations','lore','ideas','schedule','timeline','aitools',
     ],
     // familytree, factions, map, worldhistory available but not default
   },
@@ -61,7 +61,7 @@ export const PROJECT_TYPES = {
     planningTab: 'PLANNING',
     writingTab: 'WRITING',
     defaultSections: [
-      'outline','characters','locations','lore','ideas','schedule','timeline',
+      'outline','characters','locations','lore','ideas','schedule','timeline','aitools',
     ],
     // heavy sections (factions, map, worldhistory) available but not default
   },
@@ -82,7 +82,7 @@ export const PROJECT_TYPES = {
     planningTab: 'PLANNING',
     writingTab: 'SCRIPT',
     defaultSections: [
-      'outline','characters','familytree','locations','lore','ideas','schedule',
+      'outline','characters','familytree','locations','lore','ideas','schedule','aitools',
     ],
     // map, timeline, factions not default — locations kept for stage settings
   },
@@ -104,7 +104,7 @@ export const PROJECT_TYPES = {
     writingTab: 'SCRIPT',
     defaultSections: [
       'outline','characters','familytree','factions',
-      'locations','lore','ideas','schedule','timeline',
+      'locations','lore','ideas','schedule','timeline','aitools',
     ],
     // relationships enabled by default for character-heavy scripts
   },
@@ -126,7 +126,7 @@ export const PROJECT_TYPES = {
     writingTab: 'EPISODES',
     defaultSections: [
       'outline','characters','familytree','factions',
-      'locations','lore','ideas','schedule','timeline','worldhistory',
+      'locations','lore','ideas','schedule','timeline','worldhistory','aitools',
     ],
     // map available but not default
   },
@@ -149,7 +149,7 @@ export const PROJECT_TYPES = {
     writingTab: 'SESSIONS',
     defaultSections: [
       'outline','characters','familytree','factions',
-      'locations','lore','ideas','schedule','timeline','worldhistory','map',
+      'locations','lore','ideas','schedule','timeline','worldhistory','map','aitools',
     ],
   },
   tabletop_rpg: {
@@ -171,7 +171,7 @@ export const PROJECT_TYPES = {
     writingTab: 'SESSIONS',
     defaultSections: [
       'outline','characters','familytree','factions',
-      'locations','lore','ideas','schedule','timeline','worldhistory','map',
+      'locations','lore','ideas','schedule','timeline','worldhistory','map','aitools',
     ],
   },
   comic: {
@@ -191,7 +191,7 @@ export const PROJECT_TYPES = {
     writingTab: 'PAGES',
     defaultSections: [
       'outline','characters','familytree','locations',
-      'lore','ideas','schedule','timeline','map',
+      'lore','ideas','schedule','timeline','map','aitools',
     ],
     // worldhistory available but not default for comics
   },
@@ -214,7 +214,7 @@ export const PROJECT_TYPES = {
     writingTab: 'LEVELS',
     defaultSections: [
       'outline','characters','factions',
-      'locations','lore','ideas','schedule','timeline','worldhistory','map',
+      'locations','lore','ideas','schedule','timeline','worldhistory','map','aitools',
     ],
     // familytree intentionally not default for party/faction relationships
     // TODO: quests, missions, dialogue trees, branching paths, choice consequences
@@ -231,7 +231,7 @@ export const DEFAULT_TYPE = 'novel'
 // All section IDs that exist in the app — used to validate enabledSections overrides.
 export const ALL_SECTION_IDS = [
   'outline','characters','familytree','factions',
-  'locations','lore','ideas','schedule','timeline','worldhistory','map',
+  'locations','lore','ideas','schedule','timeline','worldhistory','map','aitools',
 ]
 
 // Returns the active section list for a project, supporting per-project overrides.
