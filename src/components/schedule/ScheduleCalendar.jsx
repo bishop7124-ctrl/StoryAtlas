@@ -429,6 +429,8 @@ export default function ScheduleCalendar({ store }) {
                     className="schedule-day-cell"
                     onClick={() => isReal && openCreate(day)}
                     style={{
+                      gridColumn: (idx % 7) + 1,
+                      gridRow: Math.floor(idx / 7) + 1,
                       background: isReal ? 'var(--bg-nav)' : 'transparent',
                       border: isReal ? '1px solid var(--border)' : 'none',
                       borderRadius: 8,
