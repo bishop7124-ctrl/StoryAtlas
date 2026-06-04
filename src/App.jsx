@@ -9,6 +9,7 @@ import AIPanel from './components/ai/AIPanel'
 import AccountSettings from './components/account/AccountSettings'
 import HelpContact from './components/help/HelpContact'
 import CookieBanner from './components/legal/CookieBanner'
+import BetaBanner from './components/legal/BetaBanner'
 import LegalModal from './components/legal/LegalModal'
 import AboutPage from './components/about/AboutPage'
 import YOWLogo from './components/brand/YOWLogo'
@@ -311,6 +312,7 @@ function AppInner() {
         />
         <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
         <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
+        <BetaBanner />
       </>
     )
   }
@@ -330,6 +332,7 @@ function AppInner() {
       <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
       <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
       <AboutPage open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <BetaBanner />
     </>
   )
 
@@ -382,6 +385,7 @@ function AppInner() {
       <CookieBanner onOpenPolicy={() => setLegalPage('cookies')} />
       <LegalModal page={legalPage} onClose={() => setLegalPage(null)} onNavigate={setLegalPage} />
       <AboutPage open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <BetaBanner />
     </>
   )
 
